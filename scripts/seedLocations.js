@@ -18,7 +18,7 @@ async function resolveNwsPoint({ lat, lon }) {
     nws_office: p.gridId,
     grid_x: p.gridX,
     grid_y: p.gridY,
-    timezone: p.timeZone,
+    nws_timezone: p.timeZone,   // cross-check only; `timezone` comes from cities.js
     nws_forecast_url: p.forecast,
     nws_forecast_hourly_url: p.forecastHourly,
     nws_forecast_zone: zoneId(p.forecastZone),
@@ -49,6 +49,10 @@ try {
         grid = {};
       }
     }
+    const nwsZone = grid?.nws_timezone ?? known?.nws_timezone;
+    if (nwsZone && nwsZone !== city.timezone) {
+      console.warn(`[seed] ${city.id}: timezone ${city.timezone} differs from NWS ${nwsZone}`);
+    }
     docs.push({ ...city, ...grid, updated_at: new Date() });
   }
 
@@ -56,6 +60,8 @@ try {
   const rows = await store.find(LOCATIONS, {}, { sort: { region: 1, state: 1, name: 1 } });
   console.table(rows.map(({ id, region, nws_office, grid_x, grid_y, timezone }) =>
     ({ id, region, nws_office, grid: nws_office ? `${grid_x},${grid_y}` : null, timezone })));
+  const noZone = rows.filter((r) => !r.timezone).map((r) => r.id);
+  if (noZone.length) throw new Error(`locations without timezone: ${noZone.join(", ")}`);
   console.log(`[seed] ${rows.length} locations`, result, failed.length ? { failed } : "");
   if (failed.length) process.exitCode = 1;
 } finally {
