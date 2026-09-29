@@ -12,6 +12,7 @@ import { fetchHistory, archiveEndDay } from "./src/stage1/openMeteoHistory.js";
 import { fetchForecasts } from "./src/stage1/nwsForecast.js";
 import { fetchOpenMeteoForecasts } from "./src/stage1/openMeteoForecast.js";
 import { fetchAlerts } from "./src/stage1/nwsAlerts.js";
+import { checkForecastGap } from "./src/stage1/forecastGap.js";
 
 const HELP = `
 Usage: node fetchWeather.js [mode] [options]
@@ -165,8 +166,16 @@ async function watch(opts) {
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
 
+  // Was collection down (Docker stopped, laptop off)? Warn and record the gap before catching up.
+  await checkForecastGap(store, notifier, opts.modes);
+
   // Run once right away so data starts flowing without waiting for the first tick.
-  for (const mode of opts.modes) await runMode(mode, store, notifier, jobOpts);
+  // Forecasts first: a missed forecast snapshot is lost for good, history can be fetched any time.
+  const startupOrder = ["forecast", "om-forecast", "alerts", "history"].filter((m) => opts.modes.includes(m));
+  for (const mode of startupOrder) {
+    if (stopping) break;
+    await runMode(mode, store, notifier, jobOpts);
+  }
   if (!stopping) await scheduler.start();
 }
 

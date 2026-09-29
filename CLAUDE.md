@@ -42,11 +42,12 @@ TanStack Table, Zustand (filters synced to the URL), Tailwind CSS + shadcn/ui. A
 ## Commands
 
 ```bash
-docker compose up -d        # MongoDB :27017, ClickHouse :8123, Redis :6379
+docker compose up -d        # MongoDB :27017, ClickHouse :8123, Redis :6379, fetcher (Stage 1 watcher)
+docker compose logs -f fetcher   # watcher logs; `docker compose up -d --build fetcher` after code changes
 npm install
 npm run seed:locations      # upsert cities + resolve NWS grid points
 npm run fetch               # Stage 1 (all modes); see `node fetchWeather.js --help`
-npm run fetch:watch         # Stage 1 on a schedule (forecasts every 3h, alerts every 15m)
+npm run fetch:watch         # Stage 1 watcher outside Docker (don't run it while the fetcher container runs)
 npm run etl:clickhouse      # Stage 2
 npm run etl:redis           # Stage 3
 npm start                   # API + dashboard on :3000

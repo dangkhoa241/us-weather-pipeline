@@ -59,6 +59,7 @@ export const config = Object.freeze({
     historyCron: env.HISTORY_CRON || "30 6 * * *",
     openMeteoForecastModels: (env.OPEN_METEO_FORECAST_MODELS || "best_match,gfs_seamless,ecmwf_ifs025,icon_seamless").split(",").map((s) => s.trim()).filter(Boolean),
     openMeteoForecastCron: env.OPEN_METEO_FORECAST_CRON || "0 */3 * * *",
+    forecastGapWarnHours: int(env.FORECAST_GAP_WARN_HOURS, 6),
   },
 
   discord: {

@@ -100,7 +100,8 @@ Cost follow-ups (must be done before expanding to ~150 cities):
 - [x] Run metadata: `etl_batch_id, source_timestamp, status, rows_fetched`
 - [x] Open-Meteo forecasts (best_match, gfs_seamless, ecmwf_ifs025, icon_seamless) as snapshots with a `model` field
 - [x] IANA `timezone` per location
-- [ ] **Start collecting forecasts today** (accuracy data needed by Friday)
+- [x] **Start collecting forecasts today** (accuracy data needed by Friday): `fetcher` service in Docker Compose
+      (`restart: unless-stopped`); on start it warns and records a `gap_detected` run if the newest snapshot is > 6 h old
 
 ## Stage 2 – MongoDB → ClickHouse (`etlToClickHouse.js`) (Tue)
 

@@ -15,7 +15,7 @@ Requirements: Node.js 18+, Docker Desktop.
 ```bash
 npm install
 cp .env.example .env          # then adjust values if needed
-docker compose up -d          # MongoDB, ClickHouse, Redis
+docker compose up -d          # MongoDB, ClickHouse, Redis + fetcher (Stage 1 watcher)
 
 npm run fetch                 # 1. APIs → MongoDB
 npm run etl:clickhouse        # 2. MongoDB → ClickHouse

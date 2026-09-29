@@ -50,6 +50,27 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # Stage 1 watcher: NWS/Open-Meteo forecasts, alerts and daily history on the cron schedules in .env.
+  # Restarts with Docker Desktop, so forecast collection keeps going without a terminal open.
+  # Logs: docker compose logs -f fetcher
+  fetcher:
+    build: .
+    container_name: weather-fetcher
+    command: ["node", "fetchWeather.js", "--watch"]
+    env_file:
+      - path: .env
+        required: false          # defaults from src/config.js apply when .env is missing
+    environment:
+      MONGO_URI: mongodb://mongo:27017   # service name on the compose network (overrides localhost from .env)
+    depends_on:
+      mongo:
+        condition: service_healthy
+    init: true                   # forwards SIGTERM so `docker compose stop` shuts the watcher down cleanly
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }   # cap log disk use
+
 volumes:
   mongo-data:
   clickhouse-data:
