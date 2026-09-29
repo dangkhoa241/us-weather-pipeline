@@ -56,10 +56,11 @@ npm start                   # API + dashboard on :3000
 
 - **ESM only** (`import`/`export`, `"type": "module"`). **Node 18+** (uses global `fetch`).
 - **Config:** read environment variables only in `src/config.js`. Every variable must be listed in `.env.example`.
-- **Adapter rule:** never import `mongodb`, `redis`, `node-cron`, or a notification SDK directly in pipeline or API code.
-  Go through `src/adapters/` (`RawStore`, `CacheStore`, `Scheduler`, `Notifier`). The implementation is picked by
-  `.env` (`RAW_STORE=mongo`, `CACHE_STORE=redis`, …) so AWS versions (S3, DynamoDB, EventBridge, SNS) can be added later
-  as one new file per adapter.
+- **Adapter rule:** never import `mongodb`, `redis`, `@clickhouse/client`, `node-cron`, or a notification SDK directly in
+  pipeline or API code. Go through `src/adapters/` (`RawStore`, `CacheStore`, `Warehouse`, `Scheduler`, `Notifier`).
+  The implementation is picked by `.env` (`RAW_STORE=mongo`, `CACHE_STORE=redis`, `WAREHOUSE=clickhouse`, …) so cloud versions (S3, DynamoDB,
+  BigQuery, EventBridge, SNS) can be added later as one new file per adapter. All SQL (table creation, inserts, queries,
+  the period builder) lives inside the warehouse adapter, e.g. `src/adapters/warehouse/clickhouseWarehouse.js`.
 - **No string-built SQL.** Pass values with ClickHouse `query_params` (`{name:Type}` placeholders). Never interpolate
   user input into a query string.
 - **Idempotent writes.** Every collection/table has a natural unique key; use upserts / `ReplacingMergeTree`.

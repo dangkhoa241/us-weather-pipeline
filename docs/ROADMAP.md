@@ -46,10 +46,11 @@ Cost follow-ups (must be done before expanding to ~150 cities):
 
 **Adapter rule:** every external service sits behind a small interface chosen via `.env`, so AWS can be added later without touching pipeline code.
 
-| Interface | Local (now) | AWS (optional later phase) |
+| Interface | Local (now) | Cloud (optional later phase) |
 |---|---|---|
 | RawStore | MongoDB | S3 |
 | CacheStore | Redis | DynamoDB |
+| Warehouse | ClickHouse | BigQuery (free tier) |
 | Scheduler | node-cron | EventBridge |
 | Notifier | Console / Discord | SNS |
 
@@ -68,6 +69,8 @@ Cost follow-ups (must be done before expanding to ~150 cities):
 - [x] `docs/ROADMAP.md` + `CLAUDE.md`
 - [x] `docker-compose.yml` (MongoDB, ClickHouse, Redis) + `.env.example`
 - [x] Adapter interfaces in `src/adapters/` with local implementations (Mongo, Redis, node-cron, console)
+- [x] `Warehouse` adapter (`WAREHOUSE=clickhouse`): schema, inserts, watermark, period builder; nothing else imports `@clickhouse/client`
+      (legacy `etlToClickHouse.js`, `clickhouseToRedis.js`, `backend/config/clickhouse.js` still do until Stages 2–4 rewrite them)
 - [x] Seed `locations` with 20 test cities
 - [ ] Expand `locations` to ~150 cities
 
@@ -102,8 +105,10 @@ Cost follow-ups (must be done before expanding to ~150 cities):
 ## Stage 2 – MongoDB → ClickHouse (`etlToClickHouse.js`) (Tue)
 
 - [ ] True incremental load (watermark)
-- [ ] **Daily aggregates group by each city's local day**, not the UTC day: `toDate(time, timezone)` using
-      `locations.timezone` (storage stays UTC). Same for week/month/…; a "day" in Honolulu starts 10 h after UTC midnight.
+- [ ] **Daily aggregates group by each city's local day**, not the UTC day (storage stays UTC). ClickHouse needs a
+      constant time zone in `toDate(time, tz)`, so Stage 2 writes a `local_time` column (wall-clock time from
+      `locations.timezone`, via `src/lib/time.js`) and the period builder groups on it. Same for week/month/…;
+      a "day" in Honolulu starts 10 h after UTC midnight.
 - [ ] `hourly_weather` with Nullable columns, `ReplacingMergeTree`
 - [ ] Materialized views: day / week / month / quarter / half-year / year
 - [ ] `forecast_snapshots`
@@ -176,8 +181,10 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
 - [ ] README with Mermaid architecture diagram (Sun)
 - [ ] Screenshots + demo GIF, polish (Sun)
 
-## Optional later phase – AWS
+## Optional later phase – cloud (free tiers only, $1 budget alert first)
 
+- [ ] BigQueryWarehouse (deploy target, free tier): one new file in `src/adapters/warehouse/` with its own SQL;
+      sandbox tables expire after 60 days
 - [ ] RawStore → S3
 - [ ] CacheStore → DynamoDB
 - [ ] Scheduler → EventBridge

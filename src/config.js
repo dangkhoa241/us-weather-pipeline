@@ -22,6 +22,7 @@ export const config = Object.freeze({
     cacheStore: env.CACHE_STORE || "redis",
     scheduler: env.SCHEDULER || "node-cron",
     notifier: env.NOTIFIER || "console",
+    warehouse: env.WAREHOUSE || "clickhouse",
   },
 
   mongo: {
