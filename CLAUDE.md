@@ -49,6 +49,7 @@ npm run seed:locations      # upsert cities + resolve NWS grid points
 npm run fetch               # Stage 1 (all modes); see `node fetchWeather.js --help`
 npm run fetch:watch         # Stage 1 watcher outside Docker (don't run it while the fetcher container runs)
 npm run sync:atlas          # copy NWS data collected by GitHub Actions on Atlas (setup: docs/SETUP_CLOUD_COLLECTION.md)
+npm run check:secrets       # pre-push check: secrets in history/working tree, tracked .env, commit emails
 npm run etl:clickhouse      # Stage 2
 npm run etl:redis           # Stage 3
 npm start                   # API + dashboard on :3000
@@ -76,3 +77,16 @@ npm start                   # API + dashboard on :3000
 - External HTTP goes through `src/lib/http.js` (retry with backoff, rate limit, `User-Agent` header).
 - No team/author names in code or data; use `PIPELINE_NAME` for pipeline identity.
 - Small commits with clear messages.
+
+## Git workflow
+
+Public repository: <https://github.com/dangkhoa241/us-weather-pipeline>. At the end of each stage, and at least once a day:
+
+1. Run the tests, if there are any (`npm test`).
+2. Update `docs/ROADMAP.md` (tick finished items, add known limitations).
+3. Commit (small commits, clear messages).
+4. Run the secret check: `npm run check:secrets` (history + working tree, `.env` not tracked, noreply email on every commit).
+   Push only when it passes.
+5. `git push`.
+
+Never push `.env` (or any file with real credentials), and never force-push `main`.
