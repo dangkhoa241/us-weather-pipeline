@@ -14,6 +14,8 @@ const int = (value, fallback) => {
 
 export const config = Object.freeze({
   pipelineName: env.PIPELINE_NAME || "us-weather-pipeline",
+  logLevel: env.LOG_LEVEL || "info",
+  // TZ is read by Node itself (process time zone); it is listed in .env.example only.
 
   adapters: {
     rawStore: env.RAW_STORE || "mongo",
@@ -53,5 +55,12 @@ export const config = Object.freeze({
     archiveLagDays: int(env.ARCHIVE_LAG_DAYS, 5),
     forecastCron: env.FORECAST_CRON || "0 */3 * * *",
     alertsCron: env.ALERTS_CRON || "*/15 * * * *",
+    historyCron: env.HISTORY_CRON || "30 6 * * *",
+    openMeteoForecastModels: (env.OPEN_METEO_FORECAST_MODELS || "best_match").split(",").map((s) => s.trim()).filter(Boolean),
+    openMeteoForecastCron: env.OPEN_METEO_FORECAST_CRON || "0 */3 * * *",
+  },
+
+  discord: {
+    webhookUrl: env.DISCORD_WEBHOOK_URL || null,
   },
 });
