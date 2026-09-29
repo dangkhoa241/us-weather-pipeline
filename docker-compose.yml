@@ -1,0 +1,56 @@
+# Local infrastructure for the pipeline: MongoDB (raw store), ClickHouse (warehouse), Redis (cache).
+# Usage: docker compose up -d   |   docker compose ps   |   docker compose down (add -v to wipe data)
+services:
+  mongo:
+    image: mongo:7
+    container_name: weather-mongo
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: weather-clickhouse
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-weather_dw}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-weather}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-weather}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ports:
+      - "127.0.0.1:8123:8123"   # HTTP interface (used by @clickhouse/client)
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: weather-redis
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  mongo-data:
+  clickhouse-data:
+  redis-data:

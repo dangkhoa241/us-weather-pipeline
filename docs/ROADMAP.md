@@ -27,8 +27,8 @@ Portfolio project for Data Engineer / Software Engineer roles. Focus: US weather
 
 - [x] Fresh repository, team leftovers removed (TEAM_NAME key prefix, hard-coded author filter, team author metadata → `PIPELINE_NAME`, team names)
 - [x] `docs/ROADMAP.md` + `CLAUDE.md`
-- [ ] `docker-compose.yml` (MongoDB, ClickHouse, Redis) + `.env.example`
-- [ ] Adapter interfaces in `src/adapters/` with local implementations (Mongo, Redis, node-cron, console)
+- [x] `docker-compose.yml` (MongoDB, ClickHouse, Redis) + `.env.example`
+- [x] Adapter interfaces in `src/adapters/` with local implementations (Mongo, Redis, node-cron, console)
 - [ ] Seed `locations` with 20 test cities
 - [ ] Expand `locations` to ~150 cities
 
