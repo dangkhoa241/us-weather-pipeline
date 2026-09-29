@@ -21,6 +21,7 @@
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "mongodb": "^7.0.0",
+    "node-cron": "^4.6.0",
     "redis": "^4.7.1"
   },
   "license": "ISC"
