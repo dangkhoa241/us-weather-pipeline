@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Database System - Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>Weather Database System</h1>
+            <p class="subtitle">Stockton, California - Monthly Weather Analytics</p>
+        </header>
+
+        <div class="status-panel">
+            <div class="status-item">
+                <span class="status-label">Data Source:</span>
+                <span id="dataSource" class="status-value source-indicator">Loading...</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Last Updated:</span>
+                <span id="lastUpdated" class="status-value">Loading...</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Cache Status:</span>
+                <span id="cacheStatus" class="status-value cache-indicator">Loading...</span>
+            </div>
+            <button id="syncBtn" class="sync-button" onclick="syncNow()">
+                Sync Now
+            </button>
+        </div>
+
+        <div class="charts-container">
+            <div class="chart-card">
+                <h2>Monthly Average Temperature</h2>
+                <div class="chart-wrapper">
+                    <canvas id="temperatureChart"></canvas>
+                </div>
+                <p class="chart-note">Average temperature in Celsius (°C) per month</p>
+            </div>
+
+            <div class="chart-card">
+                <h2>Monthly Total Rainfall</h2>
+                <div class="chart-wrapper">
+                    <canvas id="rainfallChart"></canvas>
+                </div>
+                <p class="chart-note">Total rainfall in millimeters (mm) per month</p>
+            </div>
+        </div>
+
+        <div id="loadingIndicator" class="loading">
+            <p>Loading weather data...</p>
+        </div>
+
+        <div id="errorMessage" class="error-message" style="display: none;">
+            <p id="errorText"></p>
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>
+

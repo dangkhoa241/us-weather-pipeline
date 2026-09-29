@@ -1,0 +1,27 @@
+{
+  "name": "us-weather-pipeline",
+  "version": "1.0.0",
+  "description": "US weather data pipeline: weather APIs -> MongoDB -> ClickHouse -> Redis -> API -> dashboard",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "fetch": "node fetchStocktonWeather.js",
+    "etl:clickhouse": "node etlToClickHouse.js",
+    "etl:redis": "node clickhouseToRedis.js",
+    "start": "node backend/server.js",
+    "dev": "node backend/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@clickhouse/client": "^1.14.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^4.21.2",
+    "mongodb": "^7.0.0",
+    "redis": "^4.7.1"
+  },
+  "license": "ISC"
+}
