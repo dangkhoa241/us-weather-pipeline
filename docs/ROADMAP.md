@@ -87,6 +87,20 @@ Cost follow-ups (must be done before expanding to ~150 cities):
 - [ ] 8. Sync status computed from Redis TTL in two places; `/api/sync-now` only runs the Redis step; `/health` checks nothing
 - [ ] 9. `etlToClickHouse.js` never closes the ClickHouse client, skips closing Mongo on early return; uses `host:` while backend uses `url:`
 
+## Known limitations
+
+Accepted for now (personal project: good enough beats perfect). Revisit only if they break something visible.
+- `best_match` baseline: `issued_at` is approximate (target − N days) and `lead_hours` is null; compare it by lead day only.
+- HRRR is backfilled for 00/06/12/18Z runs only (Single Runs doesn't keep the hourly runs in between).
+- `precipitation_probability` is missing from backfilled model forecasts (ensemble-only in Single Runs).
+- `gfs_seamless` snapshots from the first day are tagged `legacy` / `exclude_from_accuracy`; live `best_match` snapshots
+  from the first day (`issued_at_basis: fetch_hour`) remain but aren't used for accuracy.
+- Live `om-forecast` reads the run time from `meta.json` before fetching; if a model publishes a new run mid-fetch the run is
+  marked partial and some snapshots may mix runs.
+- NWS sometimes serves old forecasts (e.g. Philadelphia issued the day before); stored as-is with their `issued_at`.
+- GitHub Actions cron runs can start 10–30+ min late; alerts are checked hourly, so short alerts can be missed.
+- Observed history lags ~5 days (archive), so accuracy for the most recent days fills in later.
+
 ## Stage 1 – API → MongoDB (`fetchWeather.js`, replaces `fetchStocktonWeather.js`) (Mon)
 
 - [x] Locations seed (NWS office + grid resolved from `/points`)
@@ -98,7 +112,8 @@ Cost follow-ups (must be done before expanding to ~150 cities):
 - [x] Retry with backoff + rate limiting
 - [x] Unique indexes (no duplicates on re-run)
 - [x] Run metadata: `etl_batch_id, source_timestamp, status, rows_fetched`
-- [x] Open-Meteo forecasts (best_match, gfs_seamless, ecmwf_ifs025, icon_seamless) as snapshots with a `model` field
+- [x] Open-Meteo forecasts as snapshots with a `model` field: gfs_hrrr, gfs_global, ecmwf_ifs025, icon_global (backfilled
+      from Single Runs) + best_match baseline (Previous Runs); live `om-forecast` is manual only
 - [x] IANA `timezone` per location
 - [x] `om-backfill`: past 00/06/12/18Z runs of gfs_hrrr, gfs_global, ecmwf_ifs025, icon_global from the Single Runs API
       (exact `issued_at`, run-horizon caps, progress marker per model + city); 90-day backfill spread over ~5 days

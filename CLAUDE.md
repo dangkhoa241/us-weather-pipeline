@@ -55,6 +55,9 @@ npm start                   # API + dashboard on :3000
 
 ## Conventions
 
+- **Good enough beats perfect.** This is a personal project. Don't investigate small data-accuracy details, edge cases
+  or proofs unless they break something visible. Note them in `docs/ROADMAP.md` under "Known limitations" and move on.
+  Time-box any investigation to ~15 minutes, then pick the simple option and tell me.
 - **ESM only** (`import`/`export`, `"type": "module"`). **Node 18+** (uses global `fetch`).
 - **Config:** read environment variables only in `src/config.js`. Every variable must be listed in `.env.example`.
 - **Adapter rule:** never import `mongodb`, `redis`, `@clickhouse/client`, `node-cron`, or a notification SDK directly in
