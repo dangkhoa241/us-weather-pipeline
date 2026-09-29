@@ -2,6 +2,28 @@
 
 US weather data pipeline (portfolio project). Plan and progress: `docs/ROADMAP.md` — tick items off there as they are finished.
 
+## Cost rule (personal project)
+This is a personal portfolio project with a $0 budget. Use only free tools, free APIs and free tiers.
+- Never add a paid service, a paid plan, or anything that needs a paid upgrade to keep working.
+- Before adding any external service, check its free-tier limits and write them in docs/ROADMAP.md
+  (limit, what happens when it is exceeded, and whether a credit card is required).
+- Prefer self-hosted open-source tools (Docker) over managed services.
+- Stay far below free limits: add rate limits, batch sizes and data retention so usage can't grow past them.
+- If a feature can't be done for free, stop and ask me instead of choosing a paid option.
+
+Approved free stack:
+- Data: NWS API (free, public), Open-Meteo (free for non-commercial use)
+- Local: Docker Compose with MongoDB, ClickHouse, Redis (all open source)
+- Deploy: one always-free VM (e.g. Oracle Cloud Always Free) running the same Docker Compose stack,
+  or MongoDB Atlas M0 + Upstash/Redis Cloud free plans; dashboard on Cloudflare Pages / Netlify / Vercel free plans
+- CI: GitHub Actions (free for public repos)
+- Alerts: Discord webhook (free)
+- Optional later: BigQuery free tier (10 GB storage, 1 TB queries/month), AWS free tier.
+  Both need a budget alert set to $1 before any use.
+- Not allowed: ClickHouse Cloud (trial only), NAT Gateway, paid EC2/RDS, any paid API.
+
+Free-tier limits of the services in use, and cost follow-ups: `docs/ROADMAP.md`.
+
 ## Flow (keep these script names)
 
 ```
