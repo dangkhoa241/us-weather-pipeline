@@ -19,17 +19,20 @@ export class HttpError extends Error {
   }
 }
 
-/** Keeps at least `minIntervalMs` between request starts. Calls are queued in order. */
+/**
+ * Keeps at least `minIntervalMs * cost` between request starts. Calls are queued in order.
+ * `cost` lets heavy requests (e.g. a year of Open-Meteo data, billed as many calls) reserve more time.
+ */
 export class RateLimiter {
   constructor(minIntervalMs) {
     this.minIntervalMs = minIntervalMs;
     this.next = 0;
   }
 
-  async wait() {
+  async wait(cost = 1) {
     const now = Date.now();
     const at = Math.max(now, this.next);
-    this.next = at + this.minIntervalMs;
+    this.next = at + this.minIntervalMs * cost;
     if (at > now) await sleep(at - now);
   }
 }
@@ -51,11 +54,11 @@ function backoffMs(attempt) {
 /**
  * GET a URL and parse JSON. Retries network errors and 408/429/5xx; other 4xx fail at once.
  * @param {string|URL} url
- * @param {{ limiter?: RateLimiter, headers?: object, maxRetries?: number }} [options]
+ * @param {{ limiter?: RateLimiter, cost?: number, headers?: object, maxRetries?: number }} [options]
  */
-export async function getJson(url, { limiter, headers = {}, maxRetries = config.http.maxRetries } = {}) {
+export async function getJson(url, { limiter, cost = 1, headers = {}, maxRetries = config.http.maxRetries } = {}) {
   for (let attempt = 0; ; attempt += 1) {
-    await limiter?.wait();
+    await limiter?.wait(cost);
     let delay;
     try {
       const res = await fetch(url, {
