@@ -60,6 +60,15 @@ export const config = Object.freeze({
     openMeteoForecastModels: (env.OPEN_METEO_FORECAST_MODELS || "best_match,gfs_hrrr,gfs_global,ecmwf_ifs025,icon_global").split(",").map((s) => s.trim()).filter(Boolean),
     openMeteoForecastCron: env.OPEN_METEO_FORECAST_CRON || "0 */3 * * *",
     forecastGapWarnHours: int(env.FORECAST_GAP_WARN_HOURS, 6),
+    omBackfillDays: int(env.OM_BACKFILL_DAYS, 90),
+    omBackfillModels: (env.OM_BACKFILL_MODELS || "gfs_hrrr,gfs_global,ecmwf_ifs025,icon_global").split(",").map((s) => s.trim()).filter(Boolean),
+    omBackfillCron: env.OM_BACKFILL_CRON || "15 * * * *",
+  },
+
+  // Open-Meteo free tier: 600/min, 5,000/hour, 10,000/day weighted calls. Stay well below.
+  openMeteoBudget: {
+    perHour: int(env.OPEN_METEO_BUDGET_PER_HOUR, 2000),
+    perDay: int(env.OPEN_METEO_BUDGET_PER_DAY, 6000),
   },
 
   discord: {

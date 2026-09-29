@@ -16,6 +16,7 @@ export const COLLECTIONS = Object.freeze({
   alerts: { name: "alerts", uniqueKey: ["id"], indexes: [["fetched_at"], ["states"], ["expires"]] },
   watermarks: { name: "watermarks", uniqueKey: ["source", "location_id"] },
   pipelineRuns: { name: "pipeline_runs", uniqueKey: ["etl_batch_id"], indexes: [["started_at"], ["stage"]] },
+  apiUsage: { name: "api_usage", uniqueKey: ["api", "period"] },   // weighted calls per UTC hour/day (src/lib/apiBudget.js)
 });
 
 /** Create every collection's unique index (idempotent). */

@@ -72,6 +72,10 @@ export class MongoRawStore extends RawStore {
     return res.insertedId;
   }
 
+  async increment(collection, filter, inc, set = {}) {
+    await this.db.collection(collection).updateOne(filter, { $inc: inc, $set: set }, { upsert: true });
+  }
+
   async updateOne(collection, filter, fields) {
     await this.db.collection(collection).updateOne(filter, { $set: fields });
   }

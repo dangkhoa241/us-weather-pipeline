@@ -24,6 +24,13 @@ export class RawStore {
   /** Insert one document (e.g. a run log entry). */
   async insertOne(collection, doc) { throw new Error("RawStore.insertOne not implemented"); }
 
+  /**
+   * Atomically add to numeric fields of the document matched by `filter` (created if missing).
+   * @param {object} inc     e.g. { calls: 1.5 }
+   * @param {object} [set]   fields to set at the same time
+   */
+  async increment(collection, filter, inc, set = {}) { throw new Error("RawStore.increment not implemented"); }
+
   /** Update one document matched by `filter` with the given fields. */
   async updateOne(collection, filter, fields) { throw new Error("RawStore.updateOne not implemented"); }
 

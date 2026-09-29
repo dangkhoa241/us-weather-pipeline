@@ -5,6 +5,7 @@
 import { config } from "../config.js";
 import { COLLECTIONS } from "../collections.js";
 import { openMeteoGet } from "../lib/http.js";
+import { ApiBudget, BudgetExceeded } from "../lib/apiBudget.js";
 
 const ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive";
 const SOURCE = "open-meteo-archive";
@@ -49,7 +50,8 @@ function* chunks(fromDay, toDay_) {
   }
 }
 
-async function fetchChunk(location, from, to, days) {
+async function fetchChunk(location, from, to, days, budget) {
+  await budget.reserve(requestWeight(days));
   const params = new URLSearchParams({
     latitude: location.lat,
     longitude: location.lon,
@@ -96,6 +98,7 @@ async function advanceWatermark(store, locationId, lastTime) {
  */
 export async function fetchHistory(store, locations, run, { from, to } = {}) {
   const endLimit = archiveEndDay();
+  const budget = new ApiBudget(store, "open-meteo", config.openMeteoBudget);
   for (const location of locations) {
     try {
       let start = from;
@@ -112,7 +115,7 @@ export async function fetchHistory(store, locations, run, { from, to } = {}) {
 
       for (const [chunkFrom, chunkTo, days] of chunks(start, end)) {
         const fetchedAt = new Date();
-        const hourly = await fetchChunk(location, chunkFrom, chunkTo, days);
+        const hourly = await fetchChunk(location, chunkFrom, chunkTo, days, budget);
         const meta = { etl_batch_id: run.etlBatchId, source_timestamp: fetchedAt, fetched_at: fetchedAt };
         const { rows, trimmed } = toRows(location, hourly, meta);
         const result = rows.length ? await store.upsertMany(OBS.name, rows, OBS.uniqueKey) : {};
@@ -122,6 +125,11 @@ export async function fetchHistory(store, locations, run, { from, to } = {}) {
           `${trimmed ? `, ${trimmed} trailing null hours skipped` : ""}`, result);
       }
     } catch (err) {
+      if (err instanceof BudgetExceeded) {   // stop cleanly; the watermark makes the next run resume here
+        run.skip(location.id, `stopped: ${err.message}`);
+        console.log(`[history] ${err.message}; resuming on the next run`);
+        return;
+      }
       run.error(location.id, err);
     }
   }

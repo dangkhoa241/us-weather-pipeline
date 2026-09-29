@@ -37,8 +37,8 @@ MongoDB Atlas M0 has 512 MB of storage; the raw store already holds ~260 MB (unc
 aggressive retention. The BigQuery sandbox (no card) expires tables after 60 days.
 
 Cost follow-ups (must be done before expanding to ~150 cities):
-- [ ] Open-Meteo usage budget: count weighted calls per hour/day and stop well below the limits; spread the first backfill over several days
-- [ ] Run `om-forecast` every 6 h to match model runs (halves Open-Meteo usage), or trim models/variables
+- [x] Open-Meteo usage budget: `api_usage` ledger per UTC hour/day (defaults 2,000 / 6,000 weighted calls), shared by history and om-backfill; jobs stop cleanly and resume
+- [x] Live `om-forecast` replaced by `om-backfill` (Single Runs, 1 weighted call per run/model/city)
 - [ ] Retention for raw `forecast_snapshots` / `observations_hourly` in MongoDB once they are loaded into the warehouse
 
 **Pipeline flow (keep script names):**
@@ -100,6 +100,8 @@ Cost follow-ups (must be done before expanding to ~150 cities):
 - [x] Run metadata: `etl_batch_id, source_timestamp, status, rows_fetched`
 - [x] Open-Meteo forecasts (best_match, gfs_seamless, ecmwf_ifs025, icon_seamless) as snapshots with a `model` field
 - [x] IANA `timezone` per location
+- [x] `om-backfill`: past 00/06/12/18Z runs of gfs_hrrr, gfs_global, ecmwf_ifs025, icon_global from the Single Runs API
+      (exact `issued_at`, run-horizon caps, progress marker per model + city); 90-day backfill spread over ~5 days
 - [x] **Start collecting forecasts today** (accuracy data needed by Friday): `fetcher` service in Docker Compose
       (`restart: unless-stopped`); on start it warns and records a `gap_detected` run if the newest snapshot is > 6 h old
 
@@ -183,6 +185,9 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
 - [ ] Screenshots + demo GIF, polish (Sun)
 
 ## Optional later phase – cloud (free tiers only, $1 budget alert first)
+
+- [ ] Previous Runs backfill for longer lead-day history (to 2025-03): value from the run N days earlier (N = 1–7),
+      `issued_at` derived from the run cycle; lead-day precision only
 
 - [ ] BigQueryWarehouse (deploy target, free tier): one new file in `src/adapters/warehouse/` with its own SQL;
       sandbox tables expire after 60 days

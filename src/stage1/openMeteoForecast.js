@@ -60,7 +60,7 @@ const VARIABLES = {
 };
 
 const COMPASS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
-const compass = (deg) => (deg == null ? null : COMPASS[Math.round(deg / 22.5) % 16]);
+export const compass = (deg) => (deg == null ? null : COMPASS[Math.round(deg / 22.5) % 16]);
 const floorHour = (date) => new Date(Math.floor(date.getTime() / HOUR_MS) * HOUR_MS);
 
 /** Latest run time per model, from Open-Meteo's meta.json. Missing/failed → not in the map. */
@@ -78,6 +78,12 @@ async function fetchRunTimes(models, run) {
   }
   return runTimes;
 }
+
+/** Hours a run of `model` reaches (Infinity when it reaches past what we request). */
+export const maxLeadHours = (model, runHour) => MAX_LEAD_HOURS[model]?.(runHour) ?? Infinity;
+
+/** Does `model` have data at this location? */
+export const coversLocation = (model, location) => COVERS[model]?.(location) ?? true;
 
 /** Last target time we trust for this model and issue: the run's horizon for model_run, else no cap. */
 function maxTarget(model, issued) {
@@ -130,7 +136,7 @@ export async function fetchOpenMeteoForecasts(store, locations, run) {
 
   for (const location of locations) {
     try {
-      const models = allModels.filter((m) => COVERS[m]?.(location) ?? true);
+      const models = allModels.filter((m) => coversLocation(m, location));
       for (const m of allModels.filter((x) => !models.includes(x))) run.skip(location.id, `${m}: location outside model domain`);
       const params = new URLSearchParams({
         latitude: location.lat,
