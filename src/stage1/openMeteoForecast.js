@@ -1,6 +1,7 @@
 // src/stage1/openMeteoForecast.js
 // Open-Meteo hourly forecasts for several models → `forecast_snapshots` (same shape as NWS, plus `model`).
 // issued_at is the model's run time when Open-Meteo publishes it, so lead times compare fairly with NWS.
+// Only hours within that run's horizon are kept; hours with no data are not stored.
 
 import { config } from "../config.js";
 import { COLLECTIONS } from "../collections.js";
@@ -12,12 +13,34 @@ const SNAPSHOTS = COLLECTIONS.forecastSnapshots;
 const FORECAST_DAYS = 7;
 const HOUR_MS = 3_600_000;
 
-// Model → Open-Meteo domain whose meta.json gives the run time. The seamless models blend several
-// domains; the global one is used as the run time. Models not listed (best_match) use the fetch hour.
+// Model → Open-Meteo domain whose meta.json gives the latest run time. Only models that come from ONE run
+// schedule at our locations are listed. Everything else uses the fetch hour (issued_at_basis "fetch_hour"):
+// - best_match: picks models per location.
+// - gfs_seamless (legacy): over the US it is HRRR for ~48 h, then GFS, so it has no single run time.
+//   Use gfs_hrrr + gfs_global instead.
 const RUN_DOMAIN = {
-  gfs_seamless: "ncep_gfs025",
   ecmwf_ifs025: "ecmwf_ifs025",
-  icon_seamless: "dwd_icon",
+  icon_seamless: "dwd_icon",   // ICON-EU/D2 nests don't cover the US, so here it is ICON global only
+  icon_global: "dwd_icon",
+  gfs_global: "ncep_gfs025",
+  gfs_hrrr: "ncep_hrrr_conus", // hourly runs, CONUS only
+};
+
+// How far each run reaches, by run hour (UTC). Open-Meteo fills hours past the latest run's end with an OLDER
+// run, so for model_run snapshots we keep only hours within the latest run's horizon (measured with the
+// Single Runs API on 2026-09-28). Models not listed reach past FORECAST_DAYS.
+const SYNOPTIC = new Set([0, 6, 12, 18]);
+const MAX_LEAD_HOURS = {
+  gfs_hrrr: (runHour) => (SYNOPTIC.has(runHour) ? 48 : 18),
+  ecmwf_ifs025: (runHour) => (runHour % 12 === 0 ? 360 : 144),
+  icon_global: (runHour) => (runHour % 12 === 0 ? 180 : 120),
+  icon_seamless: (runHour) => (runHour % 12 === 0 ? 180 : 120),
+};
+
+// Models with a limited domain: states they cover. Other locations skip the model (recorded, not stored).
+const CONUS_EXCLUDED = new Set(["AK", "HI", "PR", "GU", "VI", "AS", "MP"]);
+const COVERS = {
+  gfs_hrrr: (location) => !CONUS_EXCLUDED.has(location.state),
 };
 
 // Open-Meteo variable → field in `values` (names shared with NWS snapshots where they overlap).
@@ -56,15 +79,25 @@ async function fetchRunTimes(models, run) {
   return runTimes;
 }
 
+/** Last target time we trust for this model and issue: the run's horizon for model_run, else no cap. */
+function maxTarget(model, issued) {
+  const horizon = MAX_LEAD_HOURS[model];
+  if (issued.basis !== "model_run" || !horizon) return Infinity;
+  return issued.at.getTime() + horizon(issued.at.getUTCHours()) * HOUR_MS;
+}
+
 function toSnapshots(location, model, hourly, issued, meta) {
   const suffix = `_${model}`;
   const fromHour = floorHour(meta.fetched_at);
+  const lastTarget = maxTarget(model, issued);
   const docs = [];
   hourly.time.forEach((t, i) => {
     const target = new Date(`${t}Z`);
-    if (target < fromHour) return;   // today's past hours are not a forecast
+    if (target < fromHour) return;           // today's past hours are not a forecast
+    if (target.getTime() > lastTarget) return; // past the run's horizon: filled from an older run
     const values = {};
     for (const [variable, field] of Object.entries(VARIABLES)) values[field] = hourly[`${variable}${suffix}`]?.[i] ?? null;
+    if (Object.values(values).every((v) => v === null)) return;   // no data for this hour: store nothing
     values.is_daytime = values.is_daytime == null ? null : values.is_daytime === 1;
     values.wind_dir = compass(values.wind_dir_deg);
     const leadHours = Math.round((target - issued.at) / HOUR_MS);
@@ -84,17 +117,21 @@ function toSnapshots(location, model, hourly, issued, meta) {
       ...meta,
     });
   });
-  // A model with no data here (e.g. out of its domain) returns all nulls: store nothing for it.
-  return docs.some((d) => d.values.temp_c !== null) ? docs : [];
+  return docs;
 }
 
+/** Weighted Open-Meteo calls for one request (billed per 10 variables and per 14 days). */
+export const requestWeight = (modelCount) =>
+  Math.max(1, (Object.keys(VARIABLES).length * modelCount) / 10) * Math.max(1, FORECAST_DAYS / 14);
+
 export async function fetchOpenMeteoForecasts(store, locations, run) {
-  const models = config.stage1.openMeteoForecastModels;
-  const runTimes = await fetchRunTimes(models, run);
-  const weight = Math.max(1, (Object.keys(VARIABLES).length * models.length) / 10) * Math.max(1, FORECAST_DAYS / 14);
+  const allModels = config.stage1.openMeteoForecastModels;
+  const runTimes = await fetchRunTimes(allModels, run);
 
   for (const location of locations) {
     try {
+      const models = allModels.filter((m) => COVERS[m]?.(location) ?? true);
+      for (const m of allModels.filter((x) => !models.includes(x))) run.skip(location.id, `${m}: location outside model domain`);
       const params = new URLSearchParams({
         latitude: location.lat,
         longitude: location.lon,
@@ -105,7 +142,7 @@ export async function fetchOpenMeteoForecasts(store, locations, run) {
         wind_speed_unit: "ms",
       });
       const fetchedAt = new Date();
-      const data = await openMeteoGet(`${FORECAST_URL}?${params}`, { cost: weight });
+      const data = await openMeteoGet(`${FORECAST_URL}?${params}`, { cost: requestWeight(models.length) });
       const meta = { etl_batch_id: run.etlBatchId, source_timestamp: fetchedAt, fetched_at: fetchedAt };
       const counts = [];
       for (const model of models) {
@@ -113,6 +150,7 @@ export async function fetchOpenMeteoForecasts(store, locations, run) {
           ? { at: runTimes.get(model), basis: "model_run" }
           : { at: floorHour(fetchedAt), basis: "fetch_hour" };
         const docs = toSnapshots(location, model, data.hourly ?? { time: [] }, issued, meta);
+        if (!docs.length) run.skip(location.id, `${model}: no data returned`);
         const result = docs.length ? await store.upsertMany(SNAPSHOTS.name, docs, SNAPSHOTS.uniqueKey) : {};
         run.add(docs.length, result);
         counts.push(`${model} ${docs.length}`);
@@ -125,7 +163,7 @@ export async function fetchOpenMeteoForecasts(store, locations, run) {
 
   // If a model published a new run while we were fetching, some snapshots may hold the newer run
   // under the older issued_at. Rare (runs land ~4x/day); flag it so the run is marked partial.
-  const after = await fetchRunTimes(models, { error: () => {} });
+  const after = await fetchRunTimes(allModels, { error: () => {} });
   for (const [model, at] of runTimes) {
     if (after.has(model) && after.get(model).getTime() !== at.getTime()) {
       run.error(null, new Error(`${model} published a new run during this fetch; snapshots may mix runs`));

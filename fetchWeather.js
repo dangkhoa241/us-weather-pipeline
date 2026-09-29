@@ -103,9 +103,9 @@ async function runMode(mode, store, notifier, opts) {
   } catch (err) {
     summary = await run.finish(err);
   }
-  const { status, etl_batch_id, rows_fetched, inserted, updated, unchanged, error_count, duration_ms } = summary;
+  const { status, etl_batch_id, rows_fetched, inserted, updated, unchanged, error_count, skipped_count, duration_ms } = summary;
   console.log(`[stage1:${mode}] ${status} in ${(duration_ms / 1000).toFixed(1)}s`,
-    { etl_batch_id, rows_fetched, inserted, updated, unchanged, error_count });
+    { etl_batch_id, rows_fetched, inserted, updated, unchanged, error_count, skipped_count });
   if (status !== "success") {
     await notifier.notify({
       level: status === "failed" ? "error" : "warn",
