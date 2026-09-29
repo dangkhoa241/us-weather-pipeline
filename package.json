@@ -13,6 +13,7 @@
     "etl:redis": "node clickhouseToRedis.js",
     "start": "node backend/server.js",
     "dev": "node backend/server.js",
+    "smoke:adapters": "node scripts/smokeAdapters.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
