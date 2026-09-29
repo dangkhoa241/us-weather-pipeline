@@ -10,7 +10,7 @@ export const COLLECTIONS = Object.freeze({
   },
   forecastSnapshots: {
     name: "forecast_snapshots",
-    uniqueKey: ["location_id", "kind", "issued_at", "target_time"],
+    uniqueKey: ["location_id", "model", "kind", "issued_at", "target_time"],   // model: "nws" or an Open-Meteo model
     indexes: [["fetched_at"], ["location_id", "target_time"]],
   },
   alerts: { name: "alerts", uniqueKey: ["id"], indexes: [["fetched_at"], ["states"], ["expires"]] },

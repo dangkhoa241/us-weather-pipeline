@@ -29,7 +29,16 @@ export class MongoRawStore extends RawStore {
   async ensureCollection(collection, { uniqueKey, indexes = [] }) {
     const col = this.db.collection(collection);
     const toSpec = (fields) => Object.fromEntries(fields.map((f) => [f, 1]));
-    await col.createIndex(toSpec(uniqueKey), { unique: true, name: `uniq_${uniqueKey.join("_")}` });
+    const uniqueName = `uniq_${uniqueKey.join("_")}`;
+    // Drop a unique index left over from an older natural key, or it would reject valid new rows.
+    const current = await col.indexes().catch(() => []);   // collection may not exist yet
+    for (const idx of current) {
+      if (idx.unique && idx.name !== uniqueName) {
+        console.warn(`[mongo] ${collection}: dropping outdated unique index ${idx.name}`);
+        await col.dropIndex(idx.name);
+      }
+    }
+    await col.createIndex(toSpec(uniqueKey), { unique: true, name: uniqueName });
     for (const fields of indexes) await col.createIndex(toSpec(fields));
   }
 

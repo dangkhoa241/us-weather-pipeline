@@ -10,24 +10,28 @@ import { createScheduler } from "./src/adapters/scheduler/index.js";
 import { RunLog } from "./src/lib/runLog.js";
 import { fetchHistory, archiveEndDay } from "./src/stage1/openMeteoHistory.js";
 import { fetchForecasts } from "./src/stage1/nwsForecast.js";
+import { fetchOpenMeteoForecasts } from "./src/stage1/openMeteoForecast.js";
 import { fetchAlerts } from "./src/stage1/nwsAlerts.js";
 
 const HELP = `
 Usage: node fetchWeather.js [mode] [options]
 
 Modes (default: all):
-  history    Open-Meteo hourly history → observations_hourly
-             incremental from each location's watermark (first run: last ${config.stage1.historyYears} years)
-  forecast   NWS hourly + 12-hour forecasts → forecast_snapshots
-  alerts     NWS active alerts for tracked states → alerts
-  all        history, forecast and alerts
+  history      Open-Meteo hourly history → observations_hourly
+               incremental from each location's watermark (first run: last ${config.stage1.historyYears} years)
+  forecast     NWS hourly + 12-hour forecasts → forecast_snapshots (model "nws")
+  om-forecast  Open-Meteo hourly forecasts → forecast_snapshots, one per model:
+               ${config.stage1.openMeteoForecastModels.join(", ")}
+  alerts       NWS active alerts for tracked states → alerts
+  all          history, forecast, om-forecast and alerts
 
 Options:
   --location <id[,id…]>  only these locations (e.g. stockton-ca)
   --from <YYYY-MM-DD>    history backfill start (turns off incremental mode)
   --to <YYYY-MM-DD>      history backfill end (default and max: ${archiveEndDay()}, the archive lag limit)
   --watch                keep running on a schedule:
-                           forecast "${config.stage1.forecastCron}", alerts "${config.stage1.alertsCron}", history "${config.stage1.historyCron}"
+                           forecast "${config.stage1.forecastCron}", om-forecast "${config.stage1.openMeteoForecastCron}",
+                           alerts "${config.stage1.alertsCron}", history "${config.stage1.historyCron}"
   -h, --help             show this help
 
 Examples:
@@ -36,7 +40,7 @@ Examples:
   node fetchWeather.js --watch
 `;
 
-const MODES = ["history", "forecast", "alerts"];
+const MODES = ["history", "forecast", "om-forecast", "alerts"];
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function parseCli() {
@@ -50,6 +54,7 @@ function parseCli() {
       help: { type: "boolean", short: "h", default: false },
     },
   });
+  if (positionals.length > 1) throw new Error(`Give one mode, not "${positionals.join(" ")}"`);
   const mode = positionals[0] ?? "all";
   if (![...MODES, "all"].includes(mode)) throw new Error(`Unknown mode "${mode}". Use one of: ${MODES.join(", ")}, all`);
   for (const key of ["from", "to"]) {
@@ -82,6 +87,7 @@ async function loadLocations(store, locationIds) {
 const JOBS = {
   history: (store, locations, run, opts) => fetchHistory(store, locations, run, opts.range),
   forecast: (store, locations, run) => fetchForecasts(store, locations, run),
+  "om-forecast": (store, locations, run) => fetchOpenMeteoForecasts(store, locations, run),
   alerts: (store, locations, run) => fetchAlerts(store, locations, run),
 };
 
@@ -130,7 +136,12 @@ async function watch(opts) {
   const store = createRawStore();
   const notifier = createNotifier();
   const scheduler = createScheduler({ notifier });
-  const crons = { forecast: config.stage1.forecastCron, alerts: config.stage1.alertsCron, history: config.stage1.historyCron };
+  const crons = {
+    forecast: config.stage1.forecastCron,
+    "om-forecast": config.stage1.openMeteoForecastCron,
+    alerts: config.stage1.alertsCron,
+    history: config.stage1.historyCron,
+  };
   // Incremental only: an explicit backfill range makes no sense on a schedule.
   const jobOpts = { ...opts, range: {} };
 

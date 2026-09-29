@@ -38,8 +38,11 @@ function toSnapshot(location, kind, issuedAt, generatedAt, period, meta) {
   const wind = parseWind(period.windSpeed);
   return {
     location_id: location.id,
+    source: "nws",
+    model: "nws",
     kind,
     issued_at: issuedAt,
+    issued_at_basis: "nws_update_time",
     target_time: target,
     target_end_time: new Date(period.endTime),
     lead_hours: leadHours,
