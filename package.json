@@ -14,7 +14,8 @@
     "start": "node backend/server.js",
     "dev": "node backend/server.js",
     "smoke:adapters": "node scripts/smokeAdapters.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "seed:locations": "node scripts/seedLocations.js"
   },
   "dependencies": {
     "@clickhouse/client": "^1.14.0",

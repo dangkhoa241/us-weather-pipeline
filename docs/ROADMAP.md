@@ -29,7 +29,7 @@ Portfolio project for Data Engineer / Software Engineer roles. Focus: US weather
 - [x] `docs/ROADMAP.md` + `CLAUDE.md`
 - [x] `docker-compose.yml` (MongoDB, ClickHouse, Redis) + `.env.example`
 - [x] Adapter interfaces in `src/adapters/` with local implementations (Mongo, Redis, node-cron, console)
-- [ ] Seed `locations` with 20 test cities
+- [x] Seed `locations` with 20 test cities
 - [ ] Expand `locations` to ~150 cities
 
 ## Known bugs
@@ -47,7 +47,7 @@ Portfolio project for Data Engineer / Software Engineer roles. Focus: US weather
 
 ## Stage 1 – API → MongoDB (`fetchWeather.js`, replaces `fetchStocktonWeather.js`) (Mon)
 
-- [ ] Locations seed (NWS office + grid resolved from `/points`)
+- [x] Locations seed (NWS office + grid resolved from `/points`)
 - [ ] Open-Meteo history: backfill CLI (`--location --from --to`)
 - [ ] Open-Meteo history: incremental watermark per location (3+ years)
 - [ ] Skip trailing nulls (archive lag ~5 days)
