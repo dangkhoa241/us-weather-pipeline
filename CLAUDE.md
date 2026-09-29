@@ -31,10 +31,13 @@ fetchWeather.js      APIs (NWS, Open-Meteo) → MongoDB      Stage 1
 etlToClickHouse.js   MongoDB → ClickHouse                  Stage 2
 clickhouseToRedis.js ClickHouse → Redis                    Stage 3
 backend/             Express API (reads Redis, falls back to ClickHouse)   Stage 4
-dashboard/           UI (to be rebuilt with Vue 3 + ECharts)               Stage 5
+dashboard/           UI (to be rebuilt with React, see below)               Stage 5
 ```
 
 Every stage loops over the `locations` collection/table; nothing is hard-coded to one city.
+
+Stage 5 dashboard stack (not built yet): React + TypeScript + Vite, echarts-for-react, TanStack Query,
+TanStack Table, Zustand (filters synced to the URL), Tailwind CSS + shadcn/ui. All free / open source.
 
 ## Commands
 

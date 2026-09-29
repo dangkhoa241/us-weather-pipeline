@@ -138,11 +138,14 @@ Cost follow-ups (must be done before expanding to ~150 cities):
 - [ ] `GET /api/v1/pipeline/status`, `GET /api/v1/pipeline/runs`, `POST /api/v1/pipeline/run?stage=`
 - [ ] `GET /health` (checks Mongo, ClickHouse, Redis)
 
-## Stage 5 – Dashboard (`dashboard/`, rebuilt with Vue 3 + Vite + TypeScript + ECharts + Pinia) (Thu–Sat)
+## Stage 5 – Dashboard (`dashboard/`, rebuilt with React) (Thu–Sat)
+
+Stack (all free / open source): React + TypeScript + Vite, ECharts via `echarts-for-react`, TanStack Query (API data,
+caching, loading/error states), TanStack Table (tables), Zustand (filter state, synced to the URL), Tailwind CSS + shadcn/ui.
 
 **Setup & filters (Thu)**
-- [ ] Vue 3 + Vite + TypeScript + vue-echarts + Pinia scaffold
-- [ ] Filters kept in the URL; °F default
+- [ ] React + TypeScript + Vite scaffold with Tailwind + shadcn/ui, echarts-for-react, TanStack Query/Table, Zustand
+- [ ] Filters in a Zustand store kept in sync with the URL (shareable links, back/forward work); °F default
 - [ ] Global filters: location, period (Week/Month/Quarter/Half-Year/Year), date range + presets, metric, °F/°C, compare (previous period / same period last year)
 - [ ] KPI cards with delta and sparkline
 - [ ] US choropleth map (states, Albers USA with AK/HI insets, us-atlas TopoJSON)
