@@ -63,6 +63,7 @@ export const config = Object.freeze({
     omBackfillDays: int(env.OM_BACKFILL_DAYS, 90),
     omBackfillModels: (env.OM_BACKFILL_MODELS || "gfs_hrrr,gfs_global,ecmwf_ifs025,icon_global").split(",").map((s) => s.trim()).filter(Boolean),
     omBackfillCron: env.OM_BACKFILL_CRON || "15 * * * *",
+    omBaselineCron: env.OM_BASELINE_CRON || "45 6 * * *",
   },
 
   // Open-Meteo free tier: 600/min, 5,000/hour, 10,000/day weighted calls. Stay well below.

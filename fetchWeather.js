@@ -14,6 +14,7 @@ import { fetchOpenMeteoForecasts } from "./src/stage1/openMeteoForecast.js";
 import { fetchAlerts } from "./src/stage1/nwsAlerts.js";
 import { checkForecastGap } from "./src/stage1/forecastGap.js";
 import { backfillOpenMeteoRuns } from "./src/stage1/openMeteoBackfill.js";
+import { backfillBestMatchBaseline } from "./src/stage1/openMeteoBaseline.js";
 
 const HELP = `
 Usage: node fetchWeather.js [mode] [options]
@@ -25,19 +26,22 @@ Modes (default: all):
   om-backfill  past Open-Meteo model runs (Single Runs API, exact issued_at) → forecast_snapshots:
                ${config.stage1.omBackfillModels.join(", ")}; last ${config.stage1.omBackfillDays} days,
                resumes per model + location, stops at the Open-Meteo budget
+  om-baseline  best_match baseline from the Previous Runs API: value forecast 1..7 days before each past hour
+               (lead_days exact, issued_at approximate); last ${config.stage1.omBackfillDays} days, resumes per location
   om-forecast  (manual only) latest Open-Meteo forecasts, one per model:
                ${config.stage1.openMeteoForecastModels.join(", ")}
   alerts       NWS active alerts for tracked states → alerts
-  all          history, forecast, om-backfill and alerts
+  all          history, forecast, om-backfill, om-baseline and alerts
 
 Options:
   --location <id[,id…]>  only these locations (e.g. stockton-ca)
   --from <YYYY-MM-DD>    history backfill start (turns off incremental mode)
   --to <YYYY-MM-DD>      history backfill end (default and max: ${archiveEndDay()}, the archive lag limit)
-  --days <n>             om-backfill: how many days back (default ${config.stage1.omBackfillDays})
+  --days <n>             om-backfill / om-baseline: how many days back (default ${config.stage1.omBackfillDays})
   --watch                keep running on a schedule:
                            forecast "${config.stage1.forecastCron}", alerts "${config.stage1.alertsCron}",
-                           history "${config.stage1.historyCron}", om-backfill "${config.stage1.omBackfillCron}"
+                           history "${config.stage1.historyCron}", om-backfill "${config.stage1.omBackfillCron}",
+                           om-baseline "${config.stage1.omBaselineCron}"
   -h, --help             show this help
 
 Examples:
@@ -47,9 +51,9 @@ Examples:
   node fetchWeather.js --watch
 `;
 
-const MODES = ["history", "forecast", "om-backfill", "om-forecast", "alerts"];
+const MODES = ["history", "forecast", "om-backfill", "om-baseline", "om-forecast", "alerts"];
 // "all" and --watch: live Open-Meteo forecasts are replaced by om-backfill (no machine needs to stay on).
-const DEFAULT_MODES = ["history", "forecast", "om-backfill", "alerts"];
+const DEFAULT_MODES = ["history", "forecast", "om-backfill", "om-baseline", "alerts"];
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function parseCli() {
@@ -102,6 +106,7 @@ const JOBS = {
   forecast: (store, locations, run) => fetchForecasts(store, locations, run),
   "om-forecast": (store, locations, run) => fetchOpenMeteoForecasts(store, locations, run),
   "om-backfill": (store, locations, run, opts) => backfillOpenMeteoRuns(store, locations, run, { days: opts.days }),
+  "om-baseline": (store, locations, run, opts) => backfillBestMatchBaseline(store, locations, run, { days: opts.days }),
   alerts: (store, locations, run) => fetchAlerts(store, locations, run),
 };
 
@@ -154,6 +159,7 @@ async function watch(opts) {
     forecast: config.stage1.forecastCron,
     "om-forecast": config.stage1.openMeteoForecastCron,
     "om-backfill": config.stage1.omBackfillCron,
+    "om-baseline": config.stage1.omBaselineCron,
     alerts: config.stage1.alertsCron,
     history: config.stage1.historyCron,
   };
@@ -185,7 +191,7 @@ async function watch(opts) {
 
   // Run once right away so data starts flowing without waiting for the first tick.
   // Forecasts first: a missed forecast snapshot is lost for good, history can be fetched any time.
-  const startupOrder = ["forecast", "om-forecast", "alerts", "history", "om-backfill"].filter((m) => opts.modes.includes(m));
+  const startupOrder = ["forecast", "om-forecast", "alerts", "history", "om-baseline", "om-backfill"].filter((m) => opts.modes.includes(m));
   for (const mode of startupOrder) {
     if (stopping) break;
     await runMode(mode, store, notifier, jobOpts);

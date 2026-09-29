@@ -102,6 +102,8 @@ Cost follow-ups (must be done before expanding to ~150 cities):
 - [x] IANA `timezone` per location
 - [x] `om-backfill`: past 00/06/12/18Z runs of gfs_hrrr, gfs_global, ecmwf_ifs025, icon_global from the Single Runs API
       (exact `issued_at`, run-horizon caps, progress marker per model + city); 90-day backfill spread over ~5 days
+- [x] `om-baseline`: best_match baseline from the Previous Runs API (value forecast 1–7 days before each past hour;
+      `lead_days` exact, `issued_at` approximate, `lead_hours` null); live best_match collection stopped
 - [x] **Start collecting forecasts today** (accuracy data needed by Friday): `fetcher` service in Docker Compose
       (`restart: unless-stopped`); on start it warns and records a `gap_detected` run if the newest snapshot is > 6 h old
 
