@@ -72,10 +72,14 @@ const DDL = {
       target_time DateTime('UTC'),
       target_end_time DateTime('UTC'),
       local_target_time DateTime('UTC') COMMENT 'wall-clock target time in the location time zone',
-      lead_hours Int32,
+      lead_hours Nullable(Int32) COMMENT 'null when the run time is only approximate (best_match baseline)',
       lead_days Int16,
+      fetch_method LowCardinality(Nullable(String)),
+      exclude_from_accuracy UInt8 DEFAULT 0,
       temp_c Nullable(Float32),
+      apparent_temp_c Nullable(Float32),
       dew_point_c Nullable(Float32),
+      cloud_cover_pct Nullable(Float32),
       rel_humidity_pct Nullable(Float32),
       precip_prob_pct Nullable(Float32),
       precip_mm Nullable(Float32),
@@ -127,7 +131,76 @@ const DDL = {
       updated_at DateTime64(3, 'UTC') DEFAULT now64(3)
     ) ENGINE = ReplacingMergeTree(updated_at)
     ORDER BY etl_batch_id`,
+
+  quarantine: `
+    CREATE TABLE IF NOT EXISTS quarantine (
+      table_name LowCardinality(String),
+      record_key String,
+      reason String,
+      payload String COMMENT 'the rejected row as JSON',
+      etl_batch_id String,
+      quarantined_at DateTime64(3, 'UTC') DEFAULT now64(3)
+    ) ENGINE = ReplacingMergeTree(quarantined_at)
+    ORDER BY (table_name, record_key)`,
 };
+
+// Rollups and views: derived from the tables above, so they are not insert targets.
+const DERIVED_DDL = [
+  `CREATE TABLE IF NOT EXISTS weather_daily (
+      location_id LowCardinality(String),
+      day Date COMMENT 'local day in the location time zone',
+      temp_min_c Nullable(Float32),
+      temp_max_c Nullable(Float32),
+      temp_avg_c Nullable(Float32),
+      precip_sum_mm Nullable(Float32),
+      snowfall_sum_cm Nullable(Float32),
+      wind_max_ms Nullable(Float32),
+      gust_max_ms Nullable(Float32),
+      rel_humidity_avg_pct Nullable(Float32),
+      hours UInt8 COMMENT 'hours present (24 = complete day; 23/25 on DST days)',
+      computed_at DateTime64(3, 'UTC')
+    ) ENGINE = ReplacingMergeTree(computed_at)
+    PARTITION BY toYear(day)
+    ORDER BY (location_id, day)`,
+
+  `CREATE TABLE IF NOT EXISTS weather_monthly (
+      location_id LowCardinality(String),
+      month Date COMMENT 'first local day of the month',
+      temp_min_c Nullable(Float32),
+      temp_max_c Nullable(Float32),
+      temp_avg_c Nullable(Float32),
+      precip_sum_mm Nullable(Float32),
+      snowfall_sum_cm Nullable(Float32),
+      wind_max_ms Nullable(Float32),
+      gust_max_ms Nullable(Float32),
+      hours UInt16,
+      computed_at DateTime64(3, 'UTC')
+    ) ENGINE = ReplacingMergeTree(computed_at)
+    ORDER BY (location_id, month)`,
+
+  `CREATE VIEW IF NOT EXISTS forecast_accuracy AS
+    SELECT
+      f.location_id AS location_id, f.source AS source, f.model AS model, f.kind AS kind,
+      f.issued_at AS issued_at, f.issued_at_basis AS issued_at_basis, f.target_time AS target_time,
+      f.lead_hours AS lead_hours, f.lead_days AS lead_days,
+      f.temp_c AS forecast_temp_c, o.temp_c AS observed_temp_c,
+      f.temp_c - o.temp_c AS temp_error_c, abs(f.temp_c - o.temp_c) AS temp_abs_error_c,
+      f.precip_mm AS forecast_precip_mm, o.precip_mm AS observed_precip_mm
+    FROM (
+      SELECT * FROM forecast_snapshots FINAL
+      WHERE kind = 'hourly' AND exclude_from_accuracy = 0 AND temp_c IS NOT NULL
+    ) AS f
+    INNER JOIN (
+      SELECT location_id, time, temp_c, precip_mm FROM hourly_weather FINAL WHERE temp_c IS NOT NULL
+    ) AS o ON f.location_id = o.location_id AND f.target_time = o.time`,
+];
+
+// Aggregates shared by the daily and monthly rollups (NULL when a day/month has no values).
+const ROLLUP_AGGREGATES = `
+      min(temp_c), max(temp_c), round(avg(temp_c), 2),
+      if(count(precip_mm) = 0, NULL, round(sum(precip_mm), 2)),
+      if(count(snowfall_cm) = 0, NULL, round(sum(snowfall_cm), 2)),
+      max(wind_speed_ms), max(wind_gust_ms)`;
 
 // Period builder: start of each period, from a location's local wall-clock time.
 // Half-year = Jan 1 or Jul 1. Weeks start on Monday (ISO).
@@ -178,6 +251,47 @@ export class ClickHouseWarehouse extends Warehouse {
       await admin.close();
     }
     for (const table of TABLES) await this.client.command({ query: DDL[table] });
+    for (const query of DERIVED_DDL) await this.client.command({ query });
+  }
+
+  async refreshRollups({ locationIds, from, to }) {
+    if (!locationIds.length) return;
+    if (!DAY.test(from) || !DAY.test(to)) throw new Error("from/to must be dates like 2024-01-31");
+    const params = { ids: locationIds, from, to };
+    await this.client.command({
+      query: `
+        INSERT INTO weather_daily
+        SELECT location_id, toDate(local_time) AS day, ${ROLLUP_AGGREGATES},
+          round(avg(rel_humidity_pct), 1), count(), now64(3)
+        FROM hourly_weather FINAL
+        WHERE location_id IN {ids:Array(String)} AND toDate(local_time) BETWEEN {from:Date} AND {to:Date}
+        GROUP BY location_id, day`,
+      query_params: params,
+    });
+    // Whole months that contain any refreshed day.
+    await this.client.command({
+      query: `
+        INSERT INTO weather_monthly
+        SELECT location_id, toStartOfMonth(local_time) AS month, ${ROLLUP_AGGREGATES}, count(), now64(3)
+        FROM hourly_weather FINAL
+        WHERE location_id IN {ids:Array(String)}
+          AND toStartOfMonth(local_time) BETWEEN toStartOfMonth({from:Date}) AND toStartOfMonth({to:Date})
+        GROUP BY location_id, month`,
+      query_params: params,
+    });
+  }
+
+  async accuracySummary({ from, to, locationIds }) {
+    if (!DAY.test(from) || !DAY.test(to)) throw new Error("from/to must be dates like 2024-01-31");
+    return this.#rows(`
+      SELECT model, lead_days, count() AS n,
+        round(avg(temp_abs_error_c), 2) AS mae_c, round(avg(temp_error_c), 2) AS bias_c
+      FROM forecast_accuracy
+      WHERE toDate(target_time) BETWEEN {from:Date} AND {to:Date}
+        AND (empty({ids:Array(String)}) OR location_id IN {ids:Array(String)})
+      GROUP BY model, lead_days
+      ORDER BY model, lead_days`,
+    { from, to, ids: locationIds ?? [] });
   }
 
   async insert(table, rows) {

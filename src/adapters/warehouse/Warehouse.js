@@ -2,7 +2,7 @@
 // Pipeline and API code only call these methods; all SQL lives inside the implementation.
 
 /** Logical table names. Implementations map them to their own tables. */
-export const TABLES = Object.freeze(["locations", "hourly_weather", "forecast_snapshots", "alerts", "pipeline_runs"]);
+export const TABLES = Object.freeze(["locations", "hourly_weather", "forecast_snapshots", "alerts", "pipeline_runs", "quarantine"]);
 
 /** Periods the stats query can group by (all use each city's local time). */
 export const PERIODS = Object.freeze(["hour", "day", "week", "month", "quarter", "half", "year"]);
@@ -32,6 +32,21 @@ export class Warehouse {
    * @returns {Promise<number>} rows sent
    */
   async insert(table, rows) { throw new Error("Warehouse.insert not implemented"); }
+
+  /**
+   * Recompute the daily and monthly rollups (per location, in local time) for local days `from`..`to`.
+   * Idempotent: recomputed rows replace the old ones.
+   * @param {{ locationIds: string[], from: string, to: string }} range  YYYY-MM-DD, inclusive
+   */
+  async refreshRollups(range) { throw new Error("Warehouse.refreshRollups not implemented"); }
+
+  /**
+   * Temperature forecast accuracy per model and lead day: MAE and bias (forecast − observed), hourly forecasts
+   * joined with observations. Snapshots flagged exclude_from_accuracy are left out.
+   * @param {{ from: string, to: string, locationIds?: string[] }} q  target dates (UTC), inclusive
+   * @returns {Promise<Array<{ model: string, lead_days: number, n: number, mae_c: number, bias_c: number }>>}
+   */
+  async accuracySummary(q) { throw new Error("Warehouse.accuracySummary not implemented"); }
 
   /** Latest `fetched_at` loaded into a table (Stage 2 incremental watermark), or null when empty. */
   async latestFetchedAt(table) { throw new Error("Warehouse.latestFetchedAt not implemented"); }

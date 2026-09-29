@@ -18,6 +18,7 @@ export class RawStore {
 
   /**
    * Insert or update documents by their natural key (idempotent: re-running never duplicates).
+   * Every written document gets `stored_at` (when it last arrived in this store), used by Stage 2's incremental load.
    * @returns {Promise<{ inserted: number, updated: number, unchanged: number }>}
    */
   async upsertMany(collection, docs, keyFields) { throw new Error("RawStore.upsertMany not implemented"); }
@@ -43,6 +44,14 @@ export class RawStore {
   async find(collection, filter = {}, options = {}) { throw new Error("RawStore.find not implemented"); }
 
   async findOne(collection, filter = {}, options = {}) { throw new Error("RawStore.findOne not implemented"); }
+
+  /**
+   * Stream matching documents in arrays of up to `batchSize` (for collections too big to load at once).
+   * @returns {AsyncGenerator<object[]>}
+   */
+  async *findBatches(collection, filter = {}, { batchSize = 10_000, projection } = {}) {
+    throw new Error("RawStore.findBatches not implemented");
+  }
 
   async count(collection, filter = {}) { throw new Error("RawStore.count not implemented"); }
 }

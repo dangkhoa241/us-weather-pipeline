@@ -58,16 +58,17 @@ export class MongoRawStore extends RawStore {
   async upsertMany(collection, docs, keyFields) {
     const col = this.db.collection(collection);
     const totals = { inserted: 0, updated: 0, unchanged: 0 };
+    const storedAt = new Date();
 
     for (let i = 0; i < docs.length; i += BATCH_SIZE) {
       const ops = docs.slice(i, i + BATCH_SIZE).map((doc) => {
-        const { _id, first_seen_at, ...fields } = doc;
+        const { _id, first_seen_at, stored_at, ...fields } = doc;
         const filter = Object.fromEntries(keyFields.map((k) => [k, doc[k]]));
         return {
           updateOne: {
             filter,
             // $setOnInsert keeps the time we first saw this record; $set refreshes the rest.
-            update: { $set: fields, $setOnInsert: { first_seen_at: first_seen_at ?? new Date() } },
+            update: { $set: { ...fields, stored_at: storedAt }, $setOnInsert: { first_seen_at: first_seen_at ?? storedAt } },
             upsert: true,
           },
         };
@@ -102,6 +103,20 @@ export class MongoRawStore extends RawStore {
 
   async findOne(collection, filter = {}, { sort, projection } = {}) {
     return this.db.collection(collection).findOne(filter, { sort, projection });
+  }
+
+  async *findBatches(collection, filter = {}, { batchSize = 10_000, projection } = {}) {
+    const cursor = this.db.collection(collection).find(filter, { projection, batchSize });
+    try {
+      let batch = [];
+      for await (const doc of cursor) {
+        batch.push(doc);
+        if (batch.length >= batchSize) { yield batch; batch = []; }
+      }
+      if (batch.length) yield batch;
+    } finally {
+      await cursor.close();
+    }
   }
 
   async count(collection, filter = {}) {

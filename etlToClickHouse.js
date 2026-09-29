@@ -1,185 +1,110 @@
-import { createClient } from "@clickhouse/client";
-import { MongoClient } from "mongodb";
-import dotenv from "dotenv";
+// etlToClickHouse.js — Stage 2: RawStore (MongoDB) → Warehouse (ClickHouse).
+// Incremental: loads documents stored since the last run (stored_at marker per collection), refreshes the
+// daily/monthly rollups for the local days it touched, and logs the run. Re-running never duplicates rows.
+// Usage: node etlToClickHouse.js [--full]   (--full reloads everything)
 
-dotenv.config();
+import { parseArgs } from "node:util";
+import { config } from "./src/config.js";
+import { COLLECTIONS, ensureCollections } from "./src/collections.js";
+import { createRawStore } from "./src/adapters/rawStore/index.js";
+import { createWarehouse } from "./src/adapters/warehouse/index.js";
+import { RunLog } from "./src/lib/runLog.js";
+import { observationRows, forecastRows, alertRows, touchedDays } from "./src/stage2/transform.js";
 
-const MONGO_URI = process.env.MONGO_URI;
-const MONGO_DB = process.env.MONGO_DB;
-const MONGO_COLLECTION_ENRICHED = process.env.MONGO_COLLECTION_ENRICHED;
+const BATCH = 20_000;
+const WATERMARKS = COLLECTIONS.watermarks;
 
-const CLICKHOUSE_URL = process.env.CLICKHOUSE_URL;
+const LOADS = [
+  { collection: COLLECTIONS.observationsHourly.name, table: "hourly_weather",
+    transform: (docs, tz, id) => observationRows(docs, tz, id) },
+  { collection: COLLECTIONS.forecastSnapshots.name, table: "forecast_snapshots",
+    transform: (docs, tz, id) => forecastRows(docs, tz, id) },
+  { collection: COLLECTIONS.alerts.name, table: "alerts",
+    transform: (docs) => ({ rows: alertRows(docs), quarantined: [] }) },
+];
 
-const ch = createClient({
-  host: CLICKHOUSE_URL,
-});
+async function loadCollection(store, warehouse, run, load, timeZones, full, touched) {
+  const markerKey = { source: `stage2:${load.collection}`, location_id: "*" };
+  const marker = full ? null : await store.findOne(WATERMARKS.name, markerKey);
+  const startedAt = new Date();   // taken before reading: the next run picks up anything stored from now on
+  const filter = marker ? { stored_at: { $gte: marker.last_time } } : {};
+  const stats = { read: 0, loaded: 0, quarantined: 0, nullTemp: 0 };
 
-async function createTables() {
-  console.log("Ensuring ClickHouse tables exist...");
-
-  await ch.query({ query: `CREATE DATABASE IF NOT EXISTS weather_dw` });
-
-  await ch.query({
-    query: `
-      CREATE TABLE IF NOT EXISTS weather_dw.daily_weather
-      (
-          -- Core weather data
-          date Date,
-          temperatureC Float32,
-          temperatureF Float32,
-          humidityPercent Float32,
-          rainfallMm Float32,
-          windSpeedMps Float32,
-          windGustMps Float32,
-
-          -- Location fields
-          city String,
-          state String,
-
-          -- MongoDB metadata (source metadata)
-          source_timestamp DateTime,
-          source_database String,
-          data_quality String,
-          api_request_id String,
-          etl_batch_id String,
-          pipeline_name String,
-
-          -- ClickHouse metadata (warehouse metadata)
-          warehouse_load_time DateTime,
-          rows_loaded UInt32,
-          sync_interval_min UInt16,
-          load_mode LowCardinality(String)
-      )
-      ENGINE = MergeTree()
-      PARTITION BY toYYYYMM(date)
-      ORDER BY (city, date)
-    `,
-  });
-
-  console.log("ClickHouse tables are ready.");
-}
-
-async function incrementalSync() {
-  console.log("\nStarting INCREMENTAL sync (MongoDB → ClickHouse)...");
-
-  const mongo = new MongoClient(MONGO_URI);
-  await mongo.connect();
-
-  const db = mongo.db(MONGO_DB);
-  const enriched = db.collection(MONGO_COLLECTION_ENRICHED);
-
-  console.log(`Connected to DB: ${MONGO_DB}`);
-  console.log(`Using collection: ${MONGO_COLLECTION_ENRICHED}`);
-
-  const docs = await enriched.find({}).toArray();
-  console.log(`Loaded ${docs.length} MongoDB documents`);
-
-  if (docs.length === 0) {
-    console.log("No documents found. Stopping.");
-    return;
+  for await (const docs of store.findBatches(load.collection, filter, { batchSize: BATCH })) {
+    const { rows, quarantined, nullTemp = 0 } = load.transform(docs, timeZones, run.etlBatchId);
+    await warehouse.insert(load.table, rows);
+    if (quarantined.length) await warehouse.insert("quarantine", quarantined);
+    if (load.table === "hourly_weather") {
+      for (const [id, range] of touchedDays(rows)) {
+        const t = touched.get(id);
+        touched.set(id, t ? { from: range.from < t.from ? range.from : t.from, to: range.to > t.to ? range.to : t.to } : range);
+      }
+    }
+    stats.read += docs.length;
+    stats.loaded += rows.length;
+    stats.quarantined += quarantined.length;
+    stats.nullTemp += nullTemp;
+    run.add(docs.length, { inserted: rows.length });
+    console.log(`[stage2] ${load.table}: ${stats.read} read, ${stats.loaded} loaded so far`);
   }
 
-  function toCHDateTime(ts) {
-    if (!ts) return null;
-    return ts.replace("T", " ").replace("Z", "").split(".")[0];
-  }
-
-  function gmtToClickHouseDateTime(gmtString) {
-    if (!gmtString) return null;
-
-    const d = new Date(gmtString);
-
-    if (isNaN(d.getTime())) return null;
-
-    return d.toISOString().replace("T", " ").replace("Z", "").split(".")[0];
-  }
-
-  const nowCH = toCHDateTime(new Date().toISOString());
-
-  const rows = docs.map((d) => ({
-    date: d.timestamp.slice(0, 10),
-    temperatureC: d.temperatureC,
-    temperatureF: d.temperatureF,
-    humidityPercent: d.humidityPercent,
-    rainfallMm: d.rainfallMm,
-    windSpeedMps: d.windSpeedMps,
-    windGustMps: d.windGustMps,
-
-    city: d.location.city,
-    state: d.location.state,
-
-    source_timestamp: gmtToClickHouseDateTime(d.metadata?.source_timestamp),
-    source_database: d.metadata?.source_database,
-    data_quality: d.metadata?.data_quality,
-    api_request_id: d.metadata?.api_request_id ?? "",
-    etl_batch_id: d.metadata?.etl_batch_id,
-    pipeline_name: d.metadata?.pipeline_name ?? "",
-
-    warehouse_load_time: nowCH,
-    rows_loaded: 1,
-    sync_interval_min: 60,
-    load_mode: "incremental",
-  }));
-
-  await ch.insert({
-    table: "weather_dw.daily_weather",
-    values: rows,
-    format: "JSONEachRow",
-  });
-
-  console.log("Incremental load completed into daily_weather.");
-  await mongo.close();
-}
-
-async function updateMonthlyAgg() {
-  console.log("Updating monthly_agg analytics table...");
-
-  await ch.query({
-    query: `
-      CREATE TABLE IF NOT EXISTS weather_dw.monthly_agg
-      (
-          city String,
-          month Date,
-          avg_temp_c Float32,
-          total_rain_mm Float32,
-
-          warehouse_load_time DateTime,
-          rows_loaded UInt32,
-          load_mode LowCardinality(String),
-          sync_interval_min UInt16
-      )
-      ENGINE = MergeTree()
-      PARTITION BY toYYYYMM(month)
-      ORDER BY (city, month)
-    `,
-  });
-
-  await ch.query({
-    query: `
-      INSERT INTO weather_dw.monthly_agg
-      SELECT
-        city,
-        toStartOfMonth(date) AS month,
-        avg(temperatureC) AS avg_temp_c,
-        sum(rainfallMm) AS total_rain_mm,
-        now() AS warehouse_load_time,
-        count(*) AS rows_loaded,
-        'incremental' AS load_mode,
-        0 AS sync_interval_min
-      FROM weather_dw.daily_weather
-      GROUP BY city, month
-      ORDER BY month
-    `,
-  });
-
-  console.log("monthly_agg updated successfully.");
+  await store.upsertMany(WATERMARKS.name, [{ ...markerKey, last_time: startedAt, updated_at: new Date() }], WATERMARKS.uniqueKey);
+  if (stats.quarantined) run.skip(null, `${load.table}: ${stats.quarantined} rows quarantined (range checks)`);
+  const nullRate = load.table === "hourly_weather" && stats.loaded ? ` (temp null rate ${(100 * stats.nullTemp / stats.loaded).toFixed(2)}%)` : "";
+  console.log(`[stage2] ${load.table}: ${stats.loaded} of ${stats.read} rows loaded, ${stats.quarantined} quarantined${nullRate}`);
 }
 
 async function main() {
-  await createTables();
-  await incrementalSync();
-  await updateMonthlyAgg();
-  console.log("\nETL PIPELINE COMPLETED SUCCESSFULLY\n");
+  const { values } = parseArgs({ options: { full: { type: "boolean", default: false } } });
+  const store = createRawStore();
+  const warehouse = createWarehouse();
+  let run;
+  try {
+    await store.connect();
+    await warehouse.connect();
+    await ensureCollections(store);
+    await warehouse.ensureSchema();
+    run = await new RunLog(store, { stage: "stage2", mode: values.full ? "full" : "incremental" }).start();
+
+    try {
+      const locations = await store.find(COLLECTIONS.locations.name);
+      await warehouse.insert("locations", locations.map(({ _id, first_seen_at, stored_at, ...l }) => l));
+      const timeZones = new Map(locations.map((l) => [l.id, l.timezone]));
+
+      const touched = new Map();   // location_id → local days loaded (rollup refresh range)
+      for (const load of LOADS) await loadCollection(store, warehouse, run, load, timeZones, values.full, touched);
+
+      if (touched.size) {
+        const ranges = [...touched.values()];
+        const from = ranges.map((r) => r.from).sort()[0];
+        const to = ranges.map((r) => r.to).sort().at(-1);
+        await warehouse.refreshRollups({ locationIds: [...touched.keys()], from, to });
+        console.log(`[stage2] rollups refreshed for ${touched.size} locations, ${from}..${to}`);
+      }
+      const summary = await run.finish();
+      await logRunInWarehouse(warehouse, summary);
+      console.log(`[stage2] ${summary.status} in ${(summary.duration_ms / 1000).toFixed(1)}s`);
+    } catch (err) {
+      const summary = await run.finish(err);
+      await logRunInWarehouse(warehouse, summary).catch(() => {});
+      throw err;
+    }
+  } finally {
+    await warehouse.close();
+    await store.close();
+  }
 }
 
-main().catch(console.error);
+/** Mirror the run into the warehouse's pipeline_runs (for the Pipeline Ops page). */
+async function logRunInWarehouse(warehouse, s) {
+  await warehouse.insert("pipeline_runs", [{
+    etl_batch_id: s.etl_batch_id, pipeline: config.pipelineName, stage: s.stage, mode: s.mode, status: s.status,
+    started_at: new Date(s.finished_at.getTime() - s.duration_ms), finished_at: s.finished_at, duration_ms: s.duration_ms,
+    rows_in: s.rows_fetched, rows_out: s.inserted, error_count: s.error_count,
+  }]);
+}
+
+main().catch((err) => {
+  console.error(`[stage2] ${err.message}`);
+  process.exitCode = 1;
+});

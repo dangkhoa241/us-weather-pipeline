@@ -77,15 +77,15 @@ Cost follow-ups (must be done before expanding to ~150 cities):
 ## Known bugs
 
 - [x] 1. `fetchStocktonWeather.js` only fetches 1 day (`hoursBack = 24 * 1`); archive API returns nulls for the last ~5 days
-- [ ] 2. ClickHouse columns are non-nullable `Float32` → nulls silently stored as 0
+- [x] 2. ClickHouse columns are non-nullable `Float32` → nulls silently stored as 0
 - [x] 3a. Duplicates in MongoDB: inserts have no unique key
-- [ ] 3b. Duplicates in ClickHouse: `etlToClickHouse` loads ALL docs every run; `monthly_agg` uses `INSERT…SELECT` every run
-- [ ] 4. `daily_weather` actually holds hourly rows (hour dropped via `timestamp.slice(0,10)`)
+- [x] 3b. Duplicates in ClickHouse: `etlToClickHouse` loads ALL docs every run; `monthly_agg` uses `INSERT…SELECT` every run
+- [x] 4. `daily_weather` actually holds hourly rows (hour dropped via `timestamp.slice(0,10)`)
 - [ ] 5. Dashboard month labels shift one month back (`new Date("YYYY-MM-01")` parsed as UTC, shown in America/Los_Angeles)
 - [ ] 6. Frontend turns null into 0 (`?.toFixed(1) || 0`) and uses `alert()`
 - [ ] 7. `backend/routes/monthly.js` builds SQL by string interpolation → use ClickHouse `query_params`
 - [ ] 8. Sync status computed from Redis TTL in two places; `/api/sync-now` only runs the Redis step; `/health` checks nothing
-- [ ] 9. `etlToClickHouse.js` never closes the ClickHouse client, skips closing Mongo on early return; uses `host:` while backend uses `url:`
+- [x] 9. `etlToClickHouse.js` never closes the ClickHouse client, skips closing Mongo on early return; uses `host:` while backend uses `url:`
 
 ## Known limitations
 
@@ -100,6 +100,9 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
 - NWS sometimes serves old forecasts (e.g. Philadelphia issued the day before); stored as-is with their `issued_at`.
 - GitHub Actions cron runs can start 10–30+ min late; alerts are checked hourly, so short alerts can be missed.
 - Observed history lags ~5 days (archive), so accuracy for the most recent days fills in later.
+- Rollups include partial days (e.g. the last archive day); the `hours` column tells complete days apart.
+- Forecast accuracy covers temperature on hourly forecasts only (NWS 12-hour periods and precipitation skill not yet).
+- `forecast_accuracy` is a plain view computed at query time; fine at 20 cities, may need materializing at 150.
 
 ## Stage 1 – API → MongoDB (`fetchWeather.js`, replaces `fetchStocktonWeather.js`) (Mon)
 
@@ -126,18 +129,19 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
 
 ## Stage 2 – MongoDB → ClickHouse (`etlToClickHouse.js`) (Tue)
 
-- [ ] True incremental load (watermark)
-- [ ] **Daily aggregates group by each city's local day**, not the UTC day (storage stays UTC). ClickHouse needs a
+- [x] True incremental load (watermark): `stored_at` stamp on every raw-store write, marker per collection (also catches `sync-atlas` copies)
+- [x] **Daily aggregates group by each city's local day**, not the UTC day (storage stays UTC). ClickHouse needs a
       constant time zone in `toDate(time, tz)`, so Stage 2 writes a `local_time` column (wall-clock time from
       `locations.timezone`, via `src/lib/time.js`) and the period builder groups on it. Same for week/month/…;
       a "day" in Honolulu starts 10 h after UTC midnight.
-- [ ] `hourly_weather` with Nullable columns, `ReplacingMergeTree`
-- [ ] Materialized views: day / week / month / quarter / half-year / year
-- [ ] `forecast_snapshots`
-- [ ] `forecast_accuracy`: join forecasts with actuals (error, abs_error, MAE and bias per lead day)
-- [ ] `alerts`
-- [ ] Data quality checks (null rate, ranges, rows/day) + quarantine table
-- [ ] `pipeline_runs` (batch_id, stage, rows_in, rows_out, duration, status)
+- [x] `hourly_weather` with Nullable columns, `ReplacingMergeTree`
+- [x] Rollups `weather_daily` / `weather_monthly` (ReplacingMergeTree, recomputed for touched local days); week / quarter / half-year / year
+      come from the period builder (`queryStats`)
+- [x] `forecast_snapshots`
+- [x] `forecast_accuracy`: view joining hourly forecasts with observations (temperature error, abs error); `accuracySummary` gives MAE and bias per model and lead day
+- [x] `alerts`
+- [x] Data quality checks (null rate, ranges) + quarantine table (simple; rows/day check not yet)
+- [x] `pipeline_runs` (batch_id, stage, rows_in, rows_out, duration, status)
 
 ## Stage 3 – ClickHouse → Redis (`clickhouseToRedis.js`) (Wed)
 

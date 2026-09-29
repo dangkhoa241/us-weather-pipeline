@@ -8,15 +8,15 @@ export const COLLECTIONS = Object.freeze({
   observationsHourly: {
     name: "observations_hourly",
     uniqueKey: ["location_id", "time"],
-    indexes: [["fetched_at"], ["etl_batch_id"]],
+    indexes: [["fetched_at"], ["etl_batch_id"], ["stored_at"]],
   },
   forecastSnapshots: {
     name: "forecast_snapshots",
     uniqueKey: ["location_id", "model", "kind", "issued_at", "target_time"],   // model: "nws" or an Open-Meteo model
-    indexes: [["fetched_at"], ["location_id", "target_time"]],
+    indexes: [["fetched_at"], ["location_id", "target_time"], ["stored_at"]],
     retentionField: "fetched_at",
   },
-  alerts: { name: "alerts", uniqueKey: ["id"], indexes: [["fetched_at"], ["states"], ["expires"]], retentionField: "fetched_at" },
+  alerts: { name: "alerts", uniqueKey: ["id"], indexes: [["fetched_at"], ["states"], ["expires"], ["stored_at"]], retentionField: "fetched_at" },
   watermarks: { name: "watermarks", uniqueKey: ["source", "location_id"] },
   pipelineRuns: { name: "pipeline_runs", uniqueKey: ["etl_batch_id"], indexes: [["started_at"], ["stage"]], retentionField: "started_at" },
   apiUsage: { name: "api_usage", uniqueKey: ["api", "period"] },   // weighted calls per UTC hour/day (src/lib/apiBudget.js)
