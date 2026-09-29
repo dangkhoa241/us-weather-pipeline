@@ -26,7 +26,7 @@ export class MongoRawStore extends RawStore {
     this.db = null;
   }
 
-  async ensureCollection(collection, { uniqueKey, indexes = [] }) {
+  async ensureCollection(collection, { uniqueKey, indexes = [], retention }) {
     const col = this.db.collection(collection);
     const toSpec = (fields) => Object.fromEntries(fields.map((f) => [f, 1]));
     const uniqueName = `uniq_${uniqueKey.join("_")}`;
@@ -39,7 +39,20 @@ export class MongoRawStore extends RawStore {
       }
     }
     await col.createIndex(toSpec(uniqueKey), { unique: true, name: uniqueName });
-    for (const fields of indexes) await col.createIndex(toSpec(fields));
+    const ttlField = retention?.days > 0 ? retention.field : null;
+    for (const fields of indexes) {
+      if (ttlField && fields.length === 1 && fields[0] === ttlField) continue;   // the TTL index covers it
+      await col.createIndex(toSpec(fields));
+    }
+    if (ttlField) {
+      const seconds = retention.days * 86_400;
+      // A plain or differently-timed index on the same field would conflict with the TTL index: replace it.
+      for (const idx of current) {
+        const sameKey = Object.keys(idx.key).length === 1 && idx.key[ttlField] === 1;
+        if (sameKey && idx.expireAfterSeconds !== seconds) await col.dropIndex(idx.name);
+      }
+      await col.createIndex({ [ttlField]: 1 }, { name: `ttl_${ttlField}`, expireAfterSeconds: seconds });
+    }
   }
 
   async upsertMany(collection, docs, keyFields) {

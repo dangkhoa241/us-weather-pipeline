@@ -11,7 +11,8 @@ export class RawStore {
   /**
    * Make sure a collection exists with a unique natural key and optional extra indexes.
    * @param {string} collection
-   * @param {{ uniqueKey: string[], indexes?: string[][] }} spec
+   * @param {{ uniqueKey: string[], indexes?: string[][], retention?: { field: string, days: number } }} spec
+   *        retention: delete documents `days` after the date in `field` (data retention on free tiers)
    */
   async ensureCollection(collection, spec) { throw new Error("RawStore.ensureCollection not implemented"); }
 

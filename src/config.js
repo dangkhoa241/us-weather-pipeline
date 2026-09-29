@@ -72,6 +72,17 @@ export const config = Object.freeze({
     perDay: int(env.OPEN_METEO_BUDGET_PER_DAY, 6000),
   },
 
+  // Raw-store retention in days (0 = keep forever). The GitHub Actions workflows set 14 for the free Atlas cluster.
+  retentionDays: int(env.RAW_RETENTION_DAYS, 0),
+
+  // Second raw store that GitHub Actions writes NWS data to; sync-atlas copies it into the local store.
+  atlas: {
+    uri: env.ATLAS_MONGO_URI || null,
+    db: env.ATLAS_MONGO_DB || "weather",
+    syncCron: env.SYNC_ATLAS_CRON || "40 5 * * *",
+    syncWarnDays: int(env.SYNC_WARN_DAYS, 7),
+  },
+
   discord: {
     webhookUrl: env.DISCORD_WEBHOOK_URL || null,
   },

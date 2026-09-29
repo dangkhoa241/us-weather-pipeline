@@ -16,7 +16,8 @@
     "smoke:adapters": "node scripts/smokeAdapters.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "seed:locations": "node scripts/seedLocations.js",
-    "fetch:watch": "node fetchWeather.js --watch"
+    "fetch:watch": "node fetchWeather.js --watch",
+    "sync:atlas": "node fetchWeather.js sync-atlas"
   },
   "dependencies": {
     "@clickhouse/client": "^1.14.0",

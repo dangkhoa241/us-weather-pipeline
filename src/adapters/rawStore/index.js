@@ -3,10 +3,11 @@
 import { config } from "../../config.js";
 import { MongoRawStore } from "./mongoRawStore.js";
 
-export function createRawStore(kind = config.adapters.rawStore) {
+/** @param {object} [overrides] connection settings, e.g. { uri, db } for a second store (Atlas sync) */
+export function createRawStore(kind = config.adapters.rawStore, overrides = {}) {
   switch (kind) {
     case "mongo":
-      return new MongoRawStore(config.mongo);
+      return new MongoRawStore({ ...config.mongo, ...overrides });
     // case "s3": return new S3RawStore(config.s3);   // optional AWS phase
     default:
       throw new Error(`Unknown RAW_STORE "${kind}". Supported: mongo`);

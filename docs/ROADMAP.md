@@ -119,6 +119,8 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
       (exact `issued_at`, run-horizon caps, progress marker per model + city); 90-day backfill spread over ~5 days
 - [x] `om-baseline`: best_match baseline from the Previous Runs API (value forecast 1–7 days before each past hour;
       `lead_days` exact, `issued_at` approximate, `lead_hours` null); live best_match collection stopped
+- [x] NWS collection in the cloud: GitHub Actions (forecasts every 3 h, alerts hourly) → MongoDB Atlas M0 with a 14-day TTL;
+      `sync-atlas` copies it to local Mongo at watcher startup and daily; warning + `sync_stale` run if the last sync is > 7 days old
 - [x] **Start collecting forecasts today** (accuracy data needed by Friday): `fetcher` service in Docker Compose
       (`restart: unless-stopped`); on start it warns and records a `gap_detected` run if the newest snapshot is > 6 h old
 

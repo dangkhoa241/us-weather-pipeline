@@ -21,6 +21,7 @@ jobs:
     env:
       MONGO_URI: ${{ secrets.ATLAS_MONGO_URI }}
       MONGO_DB: weather
+      RAW_RETENTION_DAYS: "14"      # TTL index on Atlas keeps the free 512 MB cluster small
       NWS_USER_AGENT: ${{ vars.NWS_USER_AGENT }}
       TZ: UTC
     steps:

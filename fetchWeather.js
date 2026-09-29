@@ -15,6 +15,7 @@ import { fetchAlerts } from "./src/stage1/nwsAlerts.js";
 import { checkForecastGap } from "./src/stage1/forecastGap.js";
 import { backfillOpenMeteoRuns } from "./src/stage1/openMeteoBackfill.js";
 import { backfillBestMatchBaseline } from "./src/stage1/openMeteoBaseline.js";
+import { syncFromAtlas, checkSyncFreshness } from "./src/stage1/atlasSync.js";
 
 const HELP = `
 Usage: node fetchWeather.js [mode] [options]
@@ -31,7 +32,8 @@ Modes (default: all):
   om-forecast  (manual only) latest Open-Meteo forecasts, one per model:
                ${config.stage1.openMeteoForecastModels.join(", ")}
   alerts       NWS active alerts for tracked states → alerts
-  all          history, forecast, om-backfill, om-baseline and alerts
+  sync-atlas   copy NWS forecasts, alerts and run logs collected by GitHub Actions on Atlas into the local store
+  all          sync-atlas, history, forecast, om-backfill, om-baseline and alerts
 
 Options:
   --location <id[,id…]>  only these locations (e.g. stockton-ca)
@@ -41,7 +43,7 @@ Options:
   --watch                keep running on a schedule:
                            forecast "${config.stage1.forecastCron}", alerts "${config.stage1.alertsCron}",
                            history "${config.stage1.historyCron}", om-backfill "${config.stage1.omBackfillCron}",
-                           om-baseline "${config.stage1.omBaselineCron}"
+                           om-baseline "${config.stage1.omBaselineCron}", sync-atlas "${config.atlas.syncCron}"
   -h, --help             show this help
 
 Examples:
@@ -51,9 +53,9 @@ Examples:
   node fetchWeather.js --watch
 `;
 
-const MODES = ["history", "forecast", "om-backfill", "om-baseline", "om-forecast", "alerts"];
+const MODES = ["history", "forecast", "om-backfill", "om-baseline", "om-forecast", "alerts", "sync-atlas"];
 // "all" and --watch: live Open-Meteo forecasts are replaced by om-backfill (no machine needs to stay on).
-const DEFAULT_MODES = ["history", "forecast", "om-backfill", "om-baseline", "alerts"];
+const DEFAULT_MODES = ["sync-atlas", "history", "forecast", "om-backfill", "om-baseline", "alerts"];
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function parseCli() {
@@ -108,6 +110,7 @@ const JOBS = {
   "om-backfill": (store, locations, run, opts) => backfillOpenMeteoRuns(store, locations, run, { days: opts.days }),
   "om-baseline": (store, locations, run, opts) => backfillBestMatchBaseline(store, locations, run, { days: opts.days }),
   alerts: (store, locations, run) => fetchAlerts(store, locations, run),
+  "sync-atlas": (store, locations, run) => syncFromAtlas(store, run),
 };
 
 /** Run one mode with its own run log; returns the run summary. */
@@ -115,7 +118,7 @@ async function runMode(mode, store, notifier, opts) {
   const run = await new RunLog(store, { stage: "stage1", mode }).start();
   let summary;
   try {
-    const locations = await loadLocations(store, opts.locationIds);
+    const locations = mode === "sync-atlas" ? [] : await loadLocations(store, opts.locationIds);
     await JOBS[mode](store, locations, run, opts);
     summary = await run.finish();
   } catch (err) {
@@ -160,6 +163,7 @@ async function watch(opts) {
     "om-forecast": config.stage1.openMeteoForecastCron,
     "om-backfill": config.stage1.omBackfillCron,
     "om-baseline": config.stage1.omBaselineCron,
+    "sync-atlas": config.atlas.syncCron,
     alerts: config.stage1.alertsCron,
     history: config.stage1.historyCron,
   };
@@ -186,12 +190,15 @@ async function watch(opts) {
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
 
+  // Has the laptop been off so long that Atlas (14-day retention) may have deleted unsynced NWS data?
+  if (opts.modes.includes("sync-atlas")) await checkSyncFreshness(store, notifier);
+
   // Was collection down (Docker stopped, laptop off)? Warn and record the gap before catching up.
   await checkForecastGap(store, notifier, opts.modes);
 
   // Run once right away so data starts flowing without waiting for the first tick.
   // Forecasts first: a missed forecast snapshot is lost for good, history can be fetched any time.
-  const startupOrder = ["forecast", "om-forecast", "alerts", "history", "om-baseline", "om-backfill"].filter((m) => opts.modes.includes(m));
+  const startupOrder = ["sync-atlas", "forecast", "om-forecast", "alerts", "history", "om-baseline", "om-backfill"].filter((m) => opts.modes.includes(m));
   for (const mode of startupOrder) {
     if (stopping) break;
     await runMode(mode, store, notifier, jobOpts);
