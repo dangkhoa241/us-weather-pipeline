@@ -62,6 +62,14 @@ for (const line of git("log", "--all", "--format=%h %ae %ce").trim().split("\n")
   if (author !== NOREPLY || committer !== NOREPLY) problems.push(`commit ${hash}  email is not the noreply address (${author} / ${committer})`);
 }
 
+// 5. Untracked, non-ignored files: one `git add -A` away from being pushed. Patterns can't recognize a bare
+//    password in a text file, so list them for a human look (warning only).
+const untracked = git("ls-files", "--others", "--exclude-standard").split("\n").filter(Boolean);
+if (untracked.length) {
+  console.warn(`check:secrets WARNING - ${untracked.length} untracked file(s) not in .gitignore; make sure none holds a secret:`);
+  for (const f of untracked) console.warn(`  ${f}`);
+}
+
 const commits = git("rev-list", "--all", "--count").trim();
 if (problems.length) {
   console.error(`check:secrets FAILED - ${problems.length} problem(s):`);

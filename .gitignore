@@ -13,6 +13,15 @@ yarn-error.log*
 .env.local
 .env.*.local
 
+# Secret files (never commit; keep passwords in a password manager)
+*password*.txt
+*Password*.txt
+*PASSWORD*.txt
+*pipeline*.txt
+*.pem
+*.key
+credentials*
+
 # OS files
 .DS_Store
 Thumbs.db

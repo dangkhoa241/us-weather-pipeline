@@ -86,7 +86,7 @@ Public repository: <https://github.com/dangkhoa241/us-weather-pipeline>. At the 
 2. Update `docs/ROADMAP.md` (tick finished items, add known limitations).
 3. Commit (small commits, clear messages).
 4. Run the secret check: `npm run check:secrets` (history + working tree, `.env` not tracked, noreply email on every commit).
-   Push only when it passes.
+   Push only when it passes, and look at any untracked files it lists (a bare password in a text file has no pattern).
 5. `git push`.
 
 Never push `.env` (or any file with real credentials), and never force-push `main`.
