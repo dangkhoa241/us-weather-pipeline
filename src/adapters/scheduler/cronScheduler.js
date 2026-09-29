@@ -17,9 +17,14 @@ export class CronScheduler extends Scheduler {
   }
 
   async start() {
+    // node-cron reads cron expressions in the process time zone (TZ in .env).
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    console.log(`[scheduler] timezone ${timeZone}, now ${new Date().toISOString()}`);
     for (const [name, entry] of this.jobs) {
       entry.task = cron.schedule(entry.cronExpr, () => this.#runOnce(name, entry), { name });
-      console.log(`[scheduler] ${name} scheduled: "${entry.cronExpr}"`);
+      const next = entry.task.getNextRun();
+      const local = next?.toLocaleString("sv-SE", { timeZone, hour12: false });   // "YYYY-MM-DD HH:mm:ss"
+      console.log(`[scheduler] ${name} "${entry.cronExpr}" next run ${next ? `${next.toISOString()} (${local} local)` : "none"}`);
     }
   }
 
