@@ -1,0 +1,40 @@
+# NWS active alerts → MongoDB Atlas (M0, free) every hour.
+# Local Mongo gets the data with `npm run sync:atlas`. Setup: docs/SETUP_CLOUD_COLLECTION.md
+name: NWS alerts
+
+on:
+  schedule:
+    - cron: "23 * * * *"       # off the hour: fewer scheduling delays
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nws-alerts
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      MONGO_URI: ${{ secrets.ATLAS_MONGO_URI }}
+      MONGO_DB: weather
+      NWS_USER_AGENT: ${{ vars.NWS_USER_AGENT }}
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --omit=dev
+      - name: Check configuration
+        run: |
+          test -n "$MONGO_URI" || { echo "::error::Secret ATLAS_MONGO_URI is not set"; exit 1; }
+          test -n "$NWS_USER_AGENT" || { echo "::error::Variable NWS_USER_AGENT is not set"; exit 1; }
+      - name: Seed locations (idempotent; resolves NWS grid points only for new cities)
+        run: npm run seed:locations
+      - name: Fetch NWS alerts
+        run: node fetchWeather.js alerts
