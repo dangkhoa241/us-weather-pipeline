@@ -1,0 +1,140 @@
+{
+  "label": "v1",
+  "passed": 22,
+  "total": 22,
+  "results": [
+    {
+      "group": "validation",
+      "check": "unknown metric",
+      "pass": "PASS",
+      "detail": "400 {\"error\":{\"code\":\"bad_request\",\"message\":\"metric: Invalid op"
+    },
+    {
+      "group": "validation",
+      "check": "SQL-like location",
+      "pass": "PASS",
+      "detail": "400 {\"error\":{\"code\":\"bad_request\",\"message\":\"locations.0: Inval"
+    },
+    {
+      "group": "validation",
+      "check": "NoSQL operator in query",
+      "pass": "PASS",
+      "detail": "400 {\"error\":{\"code\":\"bad_request\",\"message\":\"query: Unrecognize"
+    },
+    {
+      "group": "validation",
+      "check": "bad date",
+      "pass": "PASS",
+      "detail": "400 {\"error\":{\"code\":\"bad_request\",\"message\":\"from/to must be va"
+    },
+    {
+      "group": "validation",
+      "check": "too many locations",
+      "pass": "PASS",
+      "detail": "400 {\"error\":{\"code\":\"bad_request\",\"message\":\"locations: Too big"
+    },
+    {
+      "group": "validation",
+      "check": "limit out of range",
+      "pass": "PASS",
+      "detail": "400 {\"error\":{\"code\":\"bad_request\",\"message\":\"limit: Too big: ex"
+    },
+    {
+      "group": "validation",
+      "check": "path traversal in id",
+      "pass": "PASS",
+      "detail": "400 {\"error\":{\"code\":\"bad_request\",\"message\":\"locationId: Invali"
+    },
+    {
+      "group": "validation",
+      "check": "bad drill key",
+      "pass": "PASS",
+      "detail": "400 {\"error\":{\"code\":\"bad_request\",\"message\":\"key: Invalid strin"
+    },
+    {
+      "group": "validation",
+      "check": "unknown location → 404",
+      "pass": "PASS",
+      "detail": "404"
+    },
+    {
+      "group": "errors",
+      "check": "unknown route → 404 JSON",
+      "pass": "PASS",
+      "detail": "404 {\"error\":{\"code\":\"not_found\",\"message\":\"Route not "
+    },
+    {
+      "group": "errors",
+      "check": "unsupported method → 404/405",
+      "pass": "PASS",
+      "detail": "404"
+    },
+    {
+      "group": "errors",
+      "check": "malformed URL encoding → 4xx, no leak",
+      "pass": "PASS",
+      "detail": "400 {\"error\":{\"code\":\"bad_request\",\"message\":\"location"
+    },
+    {
+      "group": "cors",
+      "check": "allowed origin gets ACAO",
+      "pass": "PASS",
+      "detail": "http://localhost:5173"
+    },
+    {
+      "group": "cors",
+      "check": "other origin gets no ACAO",
+      "pass": "PASS",
+      "detail": "none"
+    },
+    {
+      "group": "headers",
+      "check": "X-Content-Type-Options: nosniff",
+      "pass": "PASS",
+      "detail": "nosniff"
+    },
+    {
+      "group": "headers",
+      "check": "clickjacking protection",
+      "pass": "PASS",
+      "detail": "SAMEORIGIN"
+    },
+    {
+      "group": "headers",
+      "check": "no X-Powered-By",
+      "pass": "PASS",
+      "detail": "none"
+    },
+    {
+      "group": "headers",
+      "check": "Referrer-Policy set",
+      "pass": "PASS",
+      "detail": "no-referrer"
+    },
+    {
+      "group": "docs",
+      "check": "/docs serves Swagger UI",
+      "pass": "PASS",
+      "detail": "200"
+    },
+    {
+      "group": "docs",
+      "check": "openapi.json lists all 11 routes",
+      "pass": "PASS",
+      "detail": "11 paths"
+    },
+    {
+      "group": "rate limit",
+      "check": "429 after 30/min",
+      "pass": "PASS",
+      "detail": "25 of 40 were 429"
+    },
+    {
+      "group": "rate limit",
+      "check": "429 tells when to retry",
+      "pass": "PASS",
+      "detail": "60"
+    }
+  ],
+  "measured_at": "2026-09-30T07:10:19.447Z"
+}
