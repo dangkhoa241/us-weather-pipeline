@@ -84,8 +84,16 @@ Cost follow-ups (must be done before expanding to ~150 cities):
 - [ ] 5. Dashboard month labels shift one month back (`new Date("YYYY-MM-01")` parsed as UTC, shown in America/Los_Angeles)
 - [ ] 6. Frontend turns null into 0 (`?.toFixed(1) || 0`) and uses `alert()`
 - [x] 7. `backend/routes/monthly.js` builds SQL by string interpolation → use ClickHouse `query_params`
-- [ ] 8. Sync status computed from Redis TTL in two places; `/api/sync-now` only runs the Redis step; `/health` checks nothing
+- [ ] 8. (data side fixed: `cacheStatus()` reports the real data version; the legacy API still uses TTLs until Stage 4) Sync status computed from Redis TTL in two places; `/api/sync-now` only runs the Redis step; `/health` checks nothing
 - [x] 9. `etlToClickHouse.js` never closes the ClickHouse client, skips closing Mongo on early return; uses `host:` while backend uses `url:`
+
+## Resume numbers
+
+- Stage 3 cache (10 dashboard queries, local Docker): warm p95 **35.4 → 2.9 ms** (12× faster), cold p95 **62.2 → 32.3 ms**;
+  373 KB of Redis for 20 cities (the fully pre-warmed variant needed 3.2 MB). Method and data: `docs/analysis/caching.md`.
+- Data: 3 years × 20 cities hourly observations (~524k rows), ~960k forecast snapshots (5 models + best_match baseline + NWS; backfill still running), loaded
+  incrementally into ClickHouse in seconds.
+- Tests: 12 Vitest unit tests (cache module).
 
 ## Known limitations
 
@@ -104,6 +112,9 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
 - Rollups include partial days (e.g. the last archive day); the `hours` column tells complete days apart.
 - Forecast accuracy covers temperature on hourly forecasts only (NWS 12-hour periods and precipitation skill not yet).
 - `forecast_accuracy` is a plain view computed at query time; fine at 20 cities, may need materializing at 150.
+- `cityForecast` still shows the first day's live `icon_seamless` and `best_match` snapshots as extra "models".
+- The popular (pre-warmed) and benchmark queries use fixed dates; they should become relative ("last 7 days") in Stage 4.
+- Cache hit/miss counters are cumulative (never reset); per-day counters can come with the Pipeline Ops page.
 
 Security (low; from the security review of Stages 1–2, compose and workflows):
 - Local MongoDB and Redis have no authentication, and ClickHouse uses the development password `weather` with access
@@ -155,10 +166,13 @@ Security (low; from the security review of Stages 1–2, compose and workflows):
 
 ## Stage 3 – ClickHouse → Redis (`clickhouseToRedis.js`) (Wed)
 
-- [ ] Cache keyed by query params
-- [ ] Refresh after each Stage 2 run
-- [ ] Store `data_version` so sync status reflects the real sync
-- [ ] Track cache hits and misses
+Chosen after comparing three strategies (`docs/analysis/caching.md`): versioned cache-aside + pre-warmed landing-page
+queries + single-flight.
+- [x] Cache keyed by query params (hash of normalized params + data version)
+- [x] Refresh after each Stage 2 run (version pointer switch after pre-warming 4 popular queries; old version deleted)
+- [x] Store `data_version` so sync status reflects the real sync (`cacheStatus()`: version, loaded_at, switched_at)
+- [x] Track cache hits and misses (per query type)
+- [x] Redis down → answers come from ClickHouse (fail fast, no hang); Redis capped at 64 MB (`volatile-lru`)
 
 ## Stage 4 – Backend API (`backend/`) (Wed)
 
@@ -208,10 +222,11 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
 
 ## Cross-cutting
 
-- [ ] `pipeline.js` orchestrator (1 → 2 → 3, stop on failure) scheduled by node-cron (Wed)
+- [x] `pipeline.js` orchestrator (1 → 2 → 3, stop on failure) scheduled by node-cron in the fetcher (every 3 h at :50);
+      parent run with steps in `pipeline_runs`, failures sent to the Notifier
 - [ ] Heat-wave alerts + pipeline-failure alerts via Notifier (Sat)
 - [ ] Docker Compose: add API service (Wed)
-- [ ] Unit tests (Sat)
+- [ ] Unit tests (Sat) — started: Vitest, 12 tests for the Stage 3 cache (`npm test`)
 - [ ] Testcontainers integration tests (Sat) *(cut first if short on time)*
 - [ ] GitHub Actions CI (Sat)
 - [ ] README with Mermaid architecture diagram (Sun)
