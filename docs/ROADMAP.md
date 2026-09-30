@@ -83,7 +83,7 @@ Cost follow-ups (must be done before expanding to ~150 cities):
 - [x] 4. `daily_weather` actually holds hourly rows (hour dropped via `timestamp.slice(0,10)`)
 - [ ] 5. Dashboard month labels shift one month back (`new Date("YYYY-MM-01")` parsed as UTC, shown in America/Los_Angeles)
 - [ ] 6. Frontend turns null into 0 (`?.toFixed(1) || 0`) and uses `alert()`
-- [ ] 7. `backend/routes/monthly.js` builds SQL by string interpolation → use ClickHouse `query_params`
+- [x] 7. `backend/routes/monthly.js` builds SQL by string interpolation → use ClickHouse `query_params`
 - [ ] 8. Sync status computed from Redis TTL in two places; `/api/sync-now` only runs the Redis step; `/health` checks nothing
 - [x] 9. `etlToClickHouse.js` never closes the ClickHouse client, skips closing Mongo on early return; uses `host:` while backend uses `url:`
 
@@ -98,11 +98,21 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
 - Live `om-forecast` reads the run time from `meta.json` before fetching; if a model publishes a new run mid-fetch the run is
   marked partial and some snapshots may mix runs.
 - NWS sometimes serves old forecasts (e.g. Philadelphia issued the day before); stored as-is with their `issued_at`.
-- GitHub Actions cron runs can start 10–30+ min late; alerts are checked hourly, so short alerts can be missed.
+- GitHub Actions cron runs can start 10–30+ min late or be skipped (first night: 5 of ~7 forecast runs and 4 of ~20 alert
+  runs happened); alerts are checked hourly at best, so short alerts can be missed.
 - Observed history lags ~5 days (archive), so accuracy for the most recent days fills in later.
 - Rollups include partial days (e.g. the last archive day); the `hours` column tells complete days apart.
 - Forecast accuracy covers temperature on hourly forecasts only (NWS 12-hour periods and precipitation skill not yet).
 - `forecast_accuracy` is a plain view computed at query time; fine at 20 cities, may need materializing at 150.
+
+Security (low; from the security review of Stages 1–2, compose and workflows):
+- Local MongoDB and Redis have no authentication, and ClickHouse uses the development password `weather` with access
+  management on. Acceptable because all three are bound to 127.0.0.1 and hold only public weather data.
+- GitHub Actions are pinned by major version tag (`@v7`), not by commit SHA. They are GitHub-owned actions.
+- Atlas network access is `0.0.0.0/0` (GitHub runners have changing IPs), mitigated by a user limited to the `weather`
+  database, a generated password and TLS.
+- Legacy `backend/` (rewritten in Stage 4): CORS allows any origin, errors return internal messages to the client, and
+  it reads `process.env` directly. It now listens on 127.0.0.1 only.
 
 ## Stage 1 – API → MongoDB (`fetchWeather.js`, replaces `fetchStocktonWeather.js`) (Mon)
 

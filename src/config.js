@@ -43,6 +43,8 @@ export const config = Object.freeze({
   },
 
   port: int(env.PORT, 3000),
+  // Interface the API listens on. 127.0.0.1 = this machine only; use 0.0.0.0 only behind a firewall/proxy.
+  host: env.HOST || "127.0.0.1",
 
   http: {
     nwsUserAgent: env.NWS_USER_AGENT || "us-weather-pipeline/1.0",

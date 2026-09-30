@@ -8,6 +8,7 @@ import cacheRoutes from './routes/cache.js';
 import diagnosticsRoutes from './routes/diagnostics.js';
 import './config/clickhouse.js';
 import './config/redis.js';
+import { config } from '../src/config.js';
 
 dotenv.config();
 
@@ -58,7 +59,8 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Listen on config.host (default 127.0.0.1 = this machine only), not on every network interface.
+app.listen(PORT, config.host, () => {
+  console.log(`Server running on http://${config.host}:${PORT}`);
 });
 

@@ -55,8 +55,7 @@ router.get('/', async (req, res) => {
       console.warn('Redis connection error, falling back to ClickHouse:', redisError.message);
     }
 
-    const escapedCity = city.replace(/'/g, "''");
-    
+    // The city is passed as a query parameter, never pasted into the SQL (quote-doubling alone is bypassable).
     const query = `
       SELECT 
         city,
@@ -65,12 +64,13 @@ router.get('/', async (req, res) => {
         total_rain_mm,
         warehouse_load_time
       FROM weather_dw.monthly_agg
-      WHERE city = '${escapedCity}'
+      WHERE city = {city:String}
       ORDER BY month ASC
     `;
 
     const result = await clickhouseClient.query({
       query,
+      query_params: { city },
       format: 'JSONEachRow',
     });
 

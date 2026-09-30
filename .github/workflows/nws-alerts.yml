@@ -19,7 +19,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      MONGO_URI: ${{ secrets.ATLAS_MONGO_URI }}
       MONGO_DB: weather
       RAW_RETENTION_DAYS: "14"      # TTL index on Atlas keeps the free 512 MB cluster small
       NWS_USER_AGENT: ${{ vars.NWS_USER_AGENT }}
@@ -30,12 +29,20 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci --omit=dev
+      # --ignore-scripts: dependency install scripts never run (and never see the Atlas secret)
+      - run: npm ci --omit=dev --ignore-scripts
+      # The Atlas connection string is given only to the steps that need it.
       - name: Check configuration
+        env:
+          MONGO_URI: ${{ secrets.ATLAS_MONGO_URI }}
         run: |
           test -n "$MONGO_URI" || { echo "::error::Secret ATLAS_MONGO_URI is not set"; exit 1; }
           test -n "$NWS_USER_AGENT" || { echo "::error::Variable NWS_USER_AGENT is not set"; exit 1; }
       - name: Seed locations (idempotent; resolves NWS grid points only for new cities)
+        env:
+          MONGO_URI: ${{ secrets.ATLAS_MONGO_URI }}
         run: npm run seed:locations
       - name: Fetch NWS alerts
+        env:
+          MONGO_URI: ${{ secrets.ATLAS_MONGO_URI }}
         run: node fetchWeather.js alerts
