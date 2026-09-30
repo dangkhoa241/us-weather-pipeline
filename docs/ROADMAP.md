@@ -84,7 +84,7 @@ Cost follow-ups (must be done before expanding to ~150 cities):
 - [ ] 5. Dashboard month labels shift one month back (`new Date("YYYY-MM-01")` parsed as UTC, shown in America/Los_Angeles)
 - [ ] 6. Frontend turns null into 0 (`?.toFixed(1) || 0`) and uses `alert()`
 - [x] 7. `backend/routes/monthly.js` builds SQL by string interpolation → use ClickHouse `query_params`
-- [ ] 8. (data side fixed: `cacheStatus()` reports the real data version; the legacy API still uses TTLs until Stage 4) Sync status computed from Redis TTL in two places; `/api/sync-now` only runs the Redis step; `/health` checks nothing
+- [x] 8. (fixed: `/api/v1/pipeline/status` reports the real data version from `cacheStatus()`; legacy routes removed) Sync status computed from Redis TTL in two places; `/api/sync-now` only runs the Redis step; `/health` checks nothing
 - [x] 9. `etlToClickHouse.js` never closes the ClickHouse client, skips closing Mongo on early return; uses `host:` while backend uses `url:`
 
 ## Resume numbers
@@ -93,7 +93,10 @@ Cost follow-ups (must be done before expanding to ~150 cities):
   373 KB of Redis for 20 cities (the fully pre-warmed variant needed 3.2 MB). Method and data: `docs/analysis/caching.md`.
 - Data: 3 years × 20 cities hourly observations (~524k rows), ~960k forecast snapshots (5 models + best_match baseline + NWS; backfill still running), loaded
   incrementally into ClickHouse in seconds.
-- Tests: 12 Vitest unit tests (cache module).
+- API (Hono, 12 dashboard requests, 10 connections): ~1,600 req/s, p95 12.7 ms, 0 errors; 22/22 security checks.
+  Compared with Express + Zod and Fastify + JSON Schema: same throughput within noise, Hono lowest memory (~150 MB vs
+  up to 282 MB) and smallest dependency tree (116 vs 168–174 packages). Method and data: `docs/analysis/api-layer.md`.
+- Tests: 31 Vitest unit tests (12 cache + 19 API), no Docker needed.
 
 ## Known limitations
 
@@ -122,6 +125,11 @@ Security (low; from the security review of Stages 1–2, compose and workflows):
 - GitHub Actions are pinned by major version tag (`@v7`), not by commit SHA. They are GitHub-owned actions.
 - Atlas network access is `0.0.0.0/0` (GitHub runners have changing IPs), mitigated by a user limited to the `weather`
   database, a generated password and TLS.
+- API rate limits are kept in process memory and keyed on the socket address; behind a reverse proxy this needs
+  trusted-proxy handling, and with several API processes a shared store (e.g. Redis).
+- The `/docs` page allows `'unsafe-inline'` scripts (Swagger UI's init script); it has no user content and only the
+  pinned CDN path is allowed for external scripts.
+- The API is not a Docker Compose service yet (run with `npm start`).
 - `npm audit` (dev dependencies only): 3 moderate findings in `uuid` via `autocannon`, the load-test tool; it never ships
   in the image and production dependencies have 0 findings.
 - Legacy `backend/` (rewritten in Stage 4): CORS allows any origin, errors return internal messages to the client, and
@@ -178,22 +186,24 @@ queries + single-flight.
 
 ## Stage 4 – Backend API (`backend/`) (Wed)
 
-- [ ] Zod validation
-- [ ] Swagger at `/docs`
-- [ ] Rate limiting
-- [ ] Parameterized queries only
-- [ ] One ClickHouse query builder for all periods
+Hono, chosen after comparing Express + Zod, Fastify + JSON Schema and Hono (`docs/analysis/api-layer.md`).
+- [x] Zod validation (`@hono/zod-openapi`; unknown query parameters rejected)
+- [x] Swagger at `/docs` (OpenAPI at `/openapi.json`, generated from the same Zod route definitions; Swagger UI pinned)
+- [x] Rate limiting (per client IP, `API_RATE_LIMIT_PER_MIN`), CORS for `CORS_ORIGINS`, security headers + strict CSP
+- [x] Parameterized queries only
+- [x] One ClickHouse query builder for all periods
       (half-year = `if(toMonth(d) <= 6, toStartOfYear(d), addMonths(toStartOfYear(d), 6))`)
-- [ ] `GET /api/v1/locations`
-- [ ] `GET /api/v1/stats?location=&metric=&period=week|month|quarter|half|year&from=&to=&compare=`
-- [ ] `GET /api/v1/map?level=state|city&metric=&period=&at=`
-- [ ] `GET /api/v1/drill?location=&level=&key=`
-- [ ] `GET /api/v1/forecast/:locationId`
-- [ ] `GET /api/v1/alerts?state=`
-- [ ] `GET /api/v1/accuracy?location=&period=&lead=`
-- [ ] `GET /api/v1/records?location=`
-- [ ] `GET /api/v1/pipeline/status`, `GET /api/v1/pipeline/runs`, `POST /api/v1/pipeline/run?stage=`
-- [ ] `GET /health` (checks Mongo, ClickHouse, Redis)
+- [x] `GET /api/v1/locations`
+- [x] `GET /api/v1/stats?locations=&metric=&period=day|week|month|quarter|half|year&from=&to=&compare=previous|last_year`
+- [x] `GET /api/v1/map?from=&to=` (state level; city level not yet)
+- [x] `GET /api/v1/drill?location=&level=&key=` (keys like `2025`, `2025-H1`, `2025-Q3`, `2025-07`, `2025-07-07`)
+- [x] `GET /api/v1/forecast/:locationId`
+- [x] `GET /api/v1/alerts?state=`
+- [x] `GET /api/v1/accuracy?location=&from=&to=` (all lead days returned; no `period`/`lead` filter yet)
+- [x] `GET /api/v1/records?location=`
+- [x] `GET /api/v1/pipeline/status`, `GET /api/v1/pipeline/runs` (`POST /api/v1/pipeline/run` not yet)
+- [x] `GET /api/v1/health` (checks Mongo, ClickHouse, Redis; 503 when a required one is down, "degraded" without Redis)
+- [x] Tests: 19 Vitest API tests (`app.request()`), security probe `npm run probe:api` (22 checks), load test `npm run loadtest:api`
 
 ## Stage 5 – Dashboard (`dashboard/`, rebuilt with React) (Thu–Sat)
 
@@ -228,7 +238,7 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       parent run with steps in `pipeline_runs`, failures sent to the Notifier
 - [ ] Heat-wave alerts + pipeline-failure alerts via Notifier (Sat)
 - [ ] Docker Compose: add API service (Wed)
-- [ ] Unit tests (Sat) — started: Vitest, 12 tests for the Stage 3 cache (`npm test`)
+- [ ] Unit tests (Sat) — started: Vitest, 31 tests (12 cache + 19 API; `npm test`)
 - [ ] Testcontainers integration tests (Sat) *(cut first if short on time)*
 - [ ] GitHub Actions CI (Sat)
 - [ ] README with Mermaid architecture diagram (Sun)
