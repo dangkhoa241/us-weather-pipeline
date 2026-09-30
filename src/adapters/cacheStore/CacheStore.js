@@ -14,6 +14,15 @@ export class CacheStore {
 
   async del(key) { throw new Error("CacheStore.del not implemented"); }
 
+  /** Atomically add `by` to a counter (created at 0). @returns {Promise<number>} the new value */
+  async incr(key, by = 1) { throw new Error("CacheStore.incr not implemented"); }
+
+  /** Delete every key that starts with `prefix`. @returns {Promise<number>} keys deleted */
+  async clear(prefix) { throw new Error("CacheStore.clear not implemented"); }
+
+  /** Memory used by the cache in bytes and the number of keys (for monitoring and benchmarks). */
+  async stats() { throw new Error("CacheStore.stats not implemented"); }
+
   /** Can the cache be reached? Used by /health. */
   async ping() { throw new Error("CacheStore.ping not implemented"); }
 }

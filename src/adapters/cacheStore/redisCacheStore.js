@@ -34,6 +34,25 @@ export class RedisCacheStore extends CacheStore {
     await this.client.del(key);
   }
 
+  async incr(key, by = 1) {
+    return this.client.incrBy(key, by);
+  }
+
+  async clear(prefix) {
+    let deleted = 0;
+    for await (const keys of this.client.scanIterator({ MATCH: `${prefix}*`, COUNT: 500 })) {
+      const batch = Array.isArray(keys) ? keys : [keys];   // redis v4 yields keys one by one, v5 in arrays
+      if (batch.length) deleted += await this.client.del(batch);
+    }
+    return deleted;
+  }
+
+  async stats() {
+    const info = await this.client.info("memory");
+    const usedBytes = Number(/used_memory:(\d+)/.exec(info)?.[1] ?? NaN);
+    return { usedBytes, keys: await this.client.dbSize() };
+  }
+
   async ping() {
     return (await this.client.ping()) === "PONG";
   }

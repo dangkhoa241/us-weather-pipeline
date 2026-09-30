@@ -48,6 +48,20 @@ export class Warehouse {
    */
   async accuracySummary(q) { throw new Error("Warehouse.accuracySummary not implemented"); }
 
+  /**
+   * One row per state for the US map, from the daily rollups over local days `from`..`to`.
+   * @returns {Promise<Array<{ state: string, region: string, cities: number, temp_avg_c: number|null,
+   *          temp_max_c: number|null, precip_mm_per_city: number|null }>>}
+   */
+  async mapByState({ from, to }) { throw new Error("Warehouse.mapByState not implemented"); }
+
+  /**
+   * Hourly forecast for one location: the latest issued run of each model, for the next `days` days.
+   * @returns {Promise<Array<{ model: string, issued_at: string, target_time: string, temp_c: number|null,
+   *          precip_mm: number|null, precip_prob_pct: number|null, wind_speed_ms: number|null }>>}
+   */
+  async cityForecast({ locationId, days }) { throw new Error("Warehouse.cityForecast not implemented"); }
+
   /** Latest `fetched_at` loaded into a table (Stage 2 incremental watermark), or null when empty. */
   async latestFetchedAt(table) { throw new Error("Warehouse.latestFetchedAt not implemented"); }
 

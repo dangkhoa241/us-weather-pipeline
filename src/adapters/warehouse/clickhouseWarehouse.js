@@ -345,6 +345,37 @@ export class ClickHouseWarehouse extends Warehouse {
     { ids: locationIds, metric, from, to });
   }
 
+  async mapByState({ from, to }) {
+    if (!DAY.test(from) || !DAY.test(to)) throw new Error("from/to must be dates like 2024-01-31");
+    return this.#rows(`
+      SELECT l.state AS state, any(l.region) AS region, uniqExact(d.location_id) AS cities,
+        round(avg(d.temp_avg_c), 2) AS temp_avg_c, max(d.temp_max_c) AS temp_max_c,
+        round(sum(d.precip_sum_mm) / uniqExact(d.location_id), 1) AS precip_mm_per_city
+      FROM weather_daily AS d FINAL
+      INNER JOIN (SELECT id, state, region FROM locations FINAL) AS l ON l.id = d.location_id
+      WHERE d.day BETWEEN {from:Date} AND {to:Date}
+      GROUP BY state
+      ORDER BY state`,
+    { from, to });
+  }
+
+  async cityForecast({ locationId, days = 7 }) {
+    if (typeof locationId !== "string" || !locationId) throw new Error("locationId is required");
+    if (!Number.isInteger(days) || days < 1 || days > 16) throw new Error("days must be 1..16");
+    return this.#rows(`
+      SELECT model, issued_at, target_time,
+        temp_c, precip_mm, precip_prob_pct, wind_speed_ms
+      FROM forecast_snapshots FINAL
+      WHERE location_id = {id:String} AND kind = 'hourly' AND exclude_from_accuracy = 0
+        AND target_time >= toStartOfHour(now()) AND target_time < now() + toIntervalDay({days:UInt8})
+        AND (model, issued_at) IN (
+          SELECT model, max(issued_at) FROM forecast_snapshots
+          WHERE location_id = {id:String} AND kind = 'hourly' AND exclude_from_accuracy = 0
+          GROUP BY model)
+      ORDER BY model, target_time`,
+    { id: locationId, days });
+  }
+
   async #rows(query, params) {
     const result = await this.client.query({ query, query_params: params, format: "JSONEachRow" });
     return result.json();

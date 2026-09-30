@@ -1,96 +1,43 @@
-// clickhouseToRedis.js
-// ClickHouse -> Redis ETL (ESM)
-// Reads monthly_agg from ClickHouse and caches Stockton monthly aggregates in Redis with TTL.
+// clickhouseToRedis.js — Stage 3: refresh the dashboard cache after a Stage 2 load.
+// The caching strategy lives in src/stage3/dashboard.js; this script tells it which data version is current
+// (the latest successful Stage 2 run) and logs the run in pipeline_runs.
+// Usage: node clickhouseToRedis.js
 
-import dotenv from "dotenv";
-import { createClient as createCHClient } from "@clickhouse/client";
-import { createClient as createRedisClient } from "redis";
+import { COLLECTIONS } from "./src/collections.js";
+import { createRawStore } from "./src/adapters/rawStore/index.js";
+import { createWarehouse } from "./src/adapters/warehouse/index.js";
+import { createCacheStore } from "./src/adapters/cacheStore/index.js";
+import { RunLog } from "./src/lib/runLog.js";
+import { afterStage2 } from "./src/stage3/dashboard.js";
 
-dotenv.config();
-
-const CLICKHOUSE_URL = process.env.CLICKHOUSE_URL || "http://localhost:8123";
-const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
-const REDIS_TTL_SEC = parseInt(process.env.REDIS_TTL_SEC || "3600", 10);
-
-const ch = createCHClient({
-    host: CLICKHOUSE_URL
-});
-
-const redis = createRedisClient({
-    url: REDIS_URL
-});
-
-async function fetchMonthlyAggFromClickHouse() {
-    console.log("Fetching monthly aggregates from ClickHouse...");
-
-    const resultSet = await ch.query({
-        query: `
-      SELECT
-        city,
-        month,
-        avg_temp_c,
-        total_rain_mm,
-        warehouse_load_time,
-        rows_loaded,
-        load_mode,
-        sync_interval_min
-      FROM weather_dw.monthly_agg
-      ORDER BY city, month
-    `,
-        format: "JSONEachRow"
-    });
-
-    const rows = await resultSet.json();
-    console.log(`Loaded ${rows.length} rows from weather_dw.monthly_agg`);
-    return rows;
+export async function runStage3({ store, warehouse, cache }) {
+  const run = await new RunLog(store, { stage: "stage3", mode: "refresh" }).start();
+  try {
+    const stage2 = await store.findOne(COLLECTIONS.pipelineRuns.name, { stage: "stage2", status: "success" }, { sort: { finished_at: -1 } });
+    if (!stage2) throw new Error("no successful Stage 2 run yet; run npm run etl:clickhouse first");
+    const result = await afterStage2({ warehouse, cache, dataVersion: stage2.etl_batch_id, loadedAt: stage2.finished_at });
+    run.add(result?.prewarmed ?? 0, { inserted: result?.prewarmed ?? 0 });
+    console.log(`[stage3] cache refreshed for data version ${stage2.etl_batch_id}`, result ?? {});
+    return await run.finish();
+  } catch (err) {
+    await run.finish(err);
+    throw err;
+  }
 }
 
-async function cacheToRedis(rows) {
-    await redis.connect();
-
-    const nowIso = new Date().toISOString();
-
-    // Filter for Stockton only – adjust if needed
-    const stocktonRows = rows.filter((r) => r.city === "Stockton");
-
-    const payload = {
-        city: "Stockton",
-        metric: "monthly_agg",
-        data: stocktonRows,
-        metadata: {
-            cache_timestamp: nowIso,
-            data_version: `v${Date.now()}`,
-            refresh_interval_sec: REDIS_TTL_SEC
-        }
-    };
-
-    const redisKey = `weather:stockton:monthly`;
-
-    await redis.set(redisKey, JSON.stringify(payload), {
-        EX: REDIS_TTL_SEC
-    });
-
-    console.log(
-        `Cached ${stocktonRows.length} rows into Redis key "${redisKey}" with TTL=${REDIS_TTL_SEC}s`
-    );
-
-    await redis.quit();
+// Run directly: node clickhouseToRedis.js
+if (import.meta.url === `file://${process.argv[1].replace(/\\/g, "/").replace(/^\/?/, "/")}` || process.argv[1]?.endsWith("clickhouseToRedis.js")) {
+  const store = createRawStore();
+  const warehouse = createWarehouse();
+  const cache = createCacheStore();
+  try {
+    await Promise.all([store.connect(), warehouse.connect(), cache.connect()]);
+    const summary = await runStage3({ store, warehouse, cache });
+    console.log(`[stage3] ${summary.status} in ${(summary.duration_ms / 1000).toFixed(1)}s`);
+  } catch (err) {
+    console.error(`[stage3] ${err.message}`);
+    process.exitCode = 1;
+  } finally {
+    await Promise.allSettled([store.close(), warehouse.close(), cache.close()]);
+  }
 }
-
-async function main() {
-    try {
-        const rows = await fetchMonthlyAggFromClickHouse();
-        if (!rows.length) {
-            console.warn("No rows in monthly_agg – nothing to cache.");
-            return;
-        }
-        await cacheToRedis(rows);
-    } finally {
-        await ch.close();
-    }
-}
-
-main().catch((err) => {
-    console.error("ClickHouse -> Redis ETL failed:", err);
-    process.exit(1);
-});

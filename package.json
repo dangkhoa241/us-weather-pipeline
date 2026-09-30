@@ -18,7 +18,8 @@
     "seed:locations": "node scripts/seedLocations.js",
     "fetch:watch": "node fetchWeather.js --watch",
     "sync:atlas": "node fetchWeather.js sync-atlas",
-    "check:secrets": "node scripts/checkSecrets.js"
+    "check:secrets": "node scripts/checkSecrets.js",
+    "bench:dashboard": "node scripts/benchDashboard.js"
   },
   "dependencies": {
     "@clickhouse/client": "^1.14.0",
