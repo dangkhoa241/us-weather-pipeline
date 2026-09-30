@@ -1,0 +1,79 @@
+{
+  "summary": {
+    "label": "v3",
+    "cold_p50_ms": 27,
+    "cold_p95_ms": 45.2,
+    "warm_p50_ms": 1.5,
+    "warm_p95_ms": 2.9,
+    "after_stage2_ms": 258.4,
+    "redis_keys": 31,
+    "redis_memory_kb": 3271,
+    "samples": {
+      "cold": 50,
+      "warm": 200
+    }
+  },
+  "perQuery": [
+    {
+      "query": "stats day, 1 city, 30 d",
+      "rows": 30,
+      "cold_p50_ms": 34.8,
+      "warm_p50_ms": 1.5
+    },
+    {
+      "query": "stats week precip, 1 city, 90 d",
+      "rows": 14,
+      "cold_p50_ms": 27.7,
+      "warm_p50_ms": 1.4
+    },
+    {
+      "query": "stats month, 3 cities, 12 mo",
+      "rows": 36,
+      "cold_p50_ms": 28.6,
+      "warm_p50_ms": 1.4
+    },
+    {
+      "query": "stats quarter, 5 cities, 2 y",
+      "rows": 40,
+      "cold_p50_ms": 30.9,
+      "warm_p50_ms": 1.4
+    },
+    {
+      "query": "stats year, all cities, 3 y",
+      "rows": 80,
+      "cold_p50_ms": 45.2,
+      "warm_p50_ms": 1.5
+    },
+    {
+      "query": "map by state, 7 d",
+      "rows": 19,
+      "cold_p50_ms": 1.5,
+      "warm_p50_ms": 1.4
+    },
+    {
+      "query": "map by state, 30 d",
+      "rows": 19,
+      "cold_p50_ms": 1.4,
+      "warm_p50_ms": 1.4
+    },
+    {
+      "query": "accuracy all cities, 60 d",
+      "rows": 7,
+      "cold_p50_ms": 1.5,
+      "warm_p50_ms": 1.4
+    },
+    {
+      "query": "accuracy 1 city, 30 d",
+      "rows": 7,
+      "cold_p50_ms": 28.2,
+      "warm_p50_ms": 1.4
+    },
+    {
+      "query": "forecast 1 city, 7 d",
+      "rows": 871,
+      "cold_p50_ms": 2.7,
+      "warm_p50_ms": 2.8
+    }
+  ],
+  "measured_at": "2026-09-30T06:36:27.517Z"
+}
