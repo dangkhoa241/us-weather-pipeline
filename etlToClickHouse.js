@@ -54,44 +54,37 @@ async function loadCollection(store, warehouse, run, load, timeZones, full, touc
   console.log(`[stage2] ${load.table}: ${stats.loaded} of ${stats.read} rows loaded, ${stats.quarantined} quarantined${nullRate}`);
 }
 
-async function main() {
-  const { values } = parseArgs({ options: { full: { type: "boolean", default: false } } });
-  const store = createRawStore();
-  const warehouse = createWarehouse();
-  let run;
+/**
+ * Run Stage 2 with already-connected stores. Returns the run summary; throws (after logging the run) on failure.
+ * @param {{ store, warehouse, full?: boolean }} deps
+ */
+export async function runStage2({ store, warehouse, full = false }) {
+  await ensureCollections(store);
+  await warehouse.ensureSchema();
+  const run = await new RunLog(store, { stage: "stage2", mode: full ? "full" : "incremental" }).start();
   try {
-    await store.connect();
-    await warehouse.connect();
-    await ensureCollections(store);
-    await warehouse.ensureSchema();
-    run = await new RunLog(store, { stage: "stage2", mode: values.full ? "full" : "incremental" }).start();
+    const locations = await store.find(COLLECTIONS.locations.name);
+    await warehouse.insert("locations", locations.map(({ _id, first_seen_at, stored_at, ...l }) => l));
+    const timeZones = new Map(locations.map((l) => [l.id, l.timezone]));
 
-    try {
-      const locations = await store.find(COLLECTIONS.locations.name);
-      await warehouse.insert("locations", locations.map(({ _id, first_seen_at, stored_at, ...l }) => l));
-      const timeZones = new Map(locations.map((l) => [l.id, l.timezone]));
+    const touched = new Map();   // location_id → local days loaded (rollup refresh range)
+    for (const load of LOADS) await loadCollection(store, warehouse, run, load, timeZones, full, touched);
 
-      const touched = new Map();   // location_id → local days loaded (rollup refresh range)
-      for (const load of LOADS) await loadCollection(store, warehouse, run, load, timeZones, values.full, touched);
-
-      if (touched.size) {
-        const ranges = [...touched.values()];
-        const from = ranges.map((r) => r.from).sort()[0];
-        const to = ranges.map((r) => r.to).sort().at(-1);
-        await warehouse.refreshRollups({ locationIds: [...touched.keys()], from, to });
-        console.log(`[stage2] rollups refreshed for ${touched.size} locations, ${from}..${to}`);
-      }
-      const summary = await run.finish();
-      await logRunInWarehouse(warehouse, summary);
-      console.log(`[stage2] ${summary.status} in ${(summary.duration_ms / 1000).toFixed(1)}s`);
-    } catch (err) {
-      const summary = await run.finish(err);
-      await logRunInWarehouse(warehouse, summary).catch(() => {});
-      throw err;
+    if (touched.size) {
+      const ranges = [...touched.values()];
+      const from = ranges.map((r) => r.from).sort()[0];
+      const to = ranges.map((r) => r.to).sort().at(-1);
+      await warehouse.refreshRollups({ locationIds: [...touched.keys()], from, to });
+      console.log(`[stage2] rollups refreshed for ${touched.size} locations, ${from}..${to}`);
     }
-  } finally {
-    await warehouse.close();
-    await store.close();
+    const summary = await run.finish();
+    await logRunInWarehouse(warehouse, summary);
+    console.log(`[stage2] ${summary.status} in ${(summary.duration_ms / 1000).toFixed(1)}s`);
+    return summary;
+  } catch (err) {
+    const summary = await run.finish(err);
+    await logRunInWarehouse(warehouse, summary).catch(() => {});
+    throw err;
   }
 }
 
@@ -104,7 +97,18 @@ async function logRunInWarehouse(warehouse, s) {
   }]);
 }
 
-main().catch((err) => {
-  console.error(`[stage2] ${err.message}`);
-  process.exitCode = 1;
-});
+// Run directly: node etlToClickHouse.js [--full]
+if (process.argv[1]?.endsWith("etlToClickHouse.js")) {
+  const { values } = parseArgs({ options: { full: { type: "boolean", default: false } } });
+  const store = createRawStore();
+  const warehouse = createWarehouse();
+  try {
+    await Promise.all([store.connect(), warehouse.connect()]);
+    await runStage2({ store, warehouse, full: values.full });
+  } catch (err) {
+    console.error(`[stage2] ${err.message}`);
+    process.exitCode = 1;
+  } finally {
+    await Promise.allSettled([warehouse.close(), store.close()]);
+  }
+}

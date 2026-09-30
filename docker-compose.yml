@@ -64,9 +64,16 @@ services:
       - path: .env
         required: false          # defaults from src/config.js apply when .env is missing
     environment:
-      MONGO_URI: mongodb://mongo:27017   # service name on the compose network (overrides localhost from .env)
+      # Service names on the compose network (override localhost from .env).
+      MONGO_URI: mongodb://mongo:27017
+      CLICKHOUSE_URL: http://clickhouse:8123
+      REDIS_URL: redis://redis:6379
     depends_on:
       mongo:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     init: true                   # forwards SIGTERM so `docker compose stop` shuts the watcher down cleanly
     restart: unless-stopped

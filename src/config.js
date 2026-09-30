@@ -74,6 +74,9 @@ export const config = Object.freeze({
     perDay: int(env.OPEN_METEO_BUDGET_PER_DAY, 6000),
   },
 
+  // Watcher: run pipeline.js (Stage 1 catch-up → Stage 2 → Stage 3) on this schedule.
+  pipelineCron: env.PIPELINE_CRON || "50 */3 * * *",
+
   // Raw-store retention in days (0 = keep forever). The GitHub Actions workflows set 14 for the free Atlas cluster.
   retentionDays: int(env.RAW_RETENTION_DAYS, 0),
 

@@ -21,6 +21,7 @@ export class RunLog {
     this.counts = { rows_fetched: 0, inserted: 0, updated: 0, unchanged: 0 };
     this.errors = [];
     this.skipped = [];   // expected gaps (e.g. a model that doesn't cover a location); not errors
+    this.extra = {};     // run-specific fields saved with the summary (e.g. the pipeline's steps)
   }
 
   async start() {
@@ -49,6 +50,11 @@ export class RunLog {
     if (this.errors.length < MAX_ERRORS) this.errors.push({ location_id: locationId ?? null, message: err.message });
   }
 
+  /** Extra fields to store with the run summary. */
+  set(fields) {
+    Object.assign(this.extra, fields);
+  }
+
   skip(locationId, reason) {
     if (this.skipped.length < MAX_ERRORS) this.skipped.push({ location_id: locationId ?? null, reason });
   }
@@ -67,6 +73,7 @@ export class RunLog {
       errors: this.errors,
       skipped_count: this.skipped.length,
       skipped: this.skipped,
+      ...this.extra,
     };
     await this.store.updateOne(RUNS, { etl_batch_id: this.etlBatchId }, summary);
     return { etl_batch_id: this.etlBatchId, stage: this.stage, mode: this.mode, ...summary, errors: undefined, skipped: undefined };

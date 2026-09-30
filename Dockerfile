@@ -9,7 +9,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY src ./src
 COPY scripts ./scripts
-COPY fetchWeather.js ./
+COPY fetchWeather.js pipeline.js etlToClickHouse.js clickhouseToRedis.js ./
 
 # Run as the image's non-root user.
 USER node

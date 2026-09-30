@@ -3,19 +3,15 @@
 
 import { parseArgs } from "node:util";
 import { config } from "./src/config.js";
-import { COLLECTIONS, ensureCollections } from "./src/collections.js";
+import { ensureCollections } from "./src/collections.js";
 import { createRawStore } from "./src/adapters/rawStore/index.js";
 import { createNotifier } from "./src/adapters/notifier/index.js";
 import { createScheduler } from "./src/adapters/scheduler/index.js";
-import { RunLog } from "./src/lib/runLog.js";
-import { fetchHistory, archiveEndDay } from "./src/stage1/openMeteoHistory.js";
-import { fetchForecasts } from "./src/stage1/nwsForecast.js";
-import { fetchOpenMeteoForecasts } from "./src/stage1/openMeteoForecast.js";
-import { fetchAlerts } from "./src/stage1/nwsAlerts.js";
 import { checkForecastGap } from "./src/stage1/forecastGap.js";
-import { backfillOpenMeteoRuns } from "./src/stage1/openMeteoBackfill.js";
-import { backfillBestMatchBaseline } from "./src/stage1/openMeteoBaseline.js";
-import { syncFromAtlas, checkSyncFreshness } from "./src/stage1/atlasSync.js";
+import { archiveEndDay } from "./src/stage1/openMeteoHistory.js";
+import { checkSyncFreshness } from "./src/stage1/atlasSync.js";
+import { runMode } from "./src/stage1/runMode.js";
+import { runPipeline } from "./pipeline.js";
 
 const HELP = `
 Usage: node fetchWeather.js [mode] [options]
@@ -43,7 +39,8 @@ Options:
   --watch                keep running on a schedule:
                            forecast "${config.stage1.forecastCron}", alerts "${config.stage1.alertsCron}",
                            history "${config.stage1.historyCron}", om-backfill "${config.stage1.omBackfillCron}",
-                           om-baseline "${config.stage1.omBaselineCron}", sync-atlas "${config.atlas.syncCron}"
+                           om-baseline "${config.stage1.omBaselineCron}",
+                           pipeline (sync-atlas + history → Stage 2 → Stage 3) "${config.pipelineCron}"
   -h, --help             show this help
 
 Examples:
@@ -56,6 +53,8 @@ Examples:
 const MODES = ["history", "forecast", "om-backfill", "om-baseline", "om-forecast", "alerts", "sync-atlas"];
 // "all" and --watch: live Open-Meteo forecasts are replaced by om-backfill (no machine needs to stay on).
 const DEFAULT_MODES = ["sync-atlas", "history", "forecast", "om-backfill", "om-baseline", "alerts"];
+// In --watch these run as Stage 1 of pipeline.js (then Stage 2 and 3), on PIPELINE_CRON, instead of on their own.
+const PIPELINE_MODES = ["sync-atlas", "history"];
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function parseCli() {
@@ -92,51 +91,6 @@ function parseCli() {
   };
 }
 
-async function loadLocations(store, locationIds) {
-  const filter = locationIds ? { id: { $in: locationIds } } : {};
-  const locations = await store.find(COLLECTIONS.locations.name, filter, { sort: { id: 1 } });
-  if (locationIds) {
-    const missing = locationIds.filter((id) => !locations.some((l) => l.id === id));
-    if (missing.length) throw new Error(`Unknown location(s): ${missing.join(", ")}`);
-  }
-  if (!locations.length) throw new Error("No locations found. Run: npm run seed:locations");
-  return locations;
-}
-
-const JOBS = {
-  history: (store, locations, run, opts) => fetchHistory(store, locations, run, opts.range),
-  forecast: (store, locations, run) => fetchForecasts(store, locations, run),
-  "om-forecast": (store, locations, run) => fetchOpenMeteoForecasts(store, locations, run),
-  "om-backfill": (store, locations, run, opts) => backfillOpenMeteoRuns(store, locations, run, { days: opts.days }),
-  "om-baseline": (store, locations, run, opts) => backfillBestMatchBaseline(store, locations, run, { days: opts.days }),
-  alerts: (store, locations, run) => fetchAlerts(store, locations, run),
-  "sync-atlas": (store, locations, run) => syncFromAtlas(store, run),
-};
-
-/** Run one mode with its own run log; returns the run summary. */
-async function runMode(mode, store, notifier, opts) {
-  const run = await new RunLog(store, { stage: "stage1", mode }).start();
-  let summary;
-  try {
-    const locations = mode === "sync-atlas" ? [] : await loadLocations(store, opts.locationIds);
-    await JOBS[mode](store, locations, run, opts);
-    summary = await run.finish();
-  } catch (err) {
-    summary = await run.finish(err);
-  }
-  const { status, etl_batch_id, rows_fetched, inserted, updated, unchanged, error_count, skipped_count, duration_ms } = summary;
-  console.log(`[stage1:${mode}] ${status} in ${(duration_ms / 1000).toFixed(1)}s`,
-    { etl_batch_id, rows_fetched, inserted, updated, unchanged, error_count, skipped_count });
-  if (status !== "success") {
-    await notifier.notify({
-      level: status === "failed" ? "error" : "warn",
-      title: `Stage 1 ${mode} ${status}`,
-      message: `${error_count} error(s), batch ${etl_batch_id}`,
-    });
-  }
-  return summary;
-}
-
 async function runOnce(opts) {
   const store = createRawStore();
   const notifier = createNotifier();
@@ -169,12 +123,16 @@ async function watch(opts) {
   };
   // Incremental only: an explicit backfill range makes no sense on a schedule.
   const jobOpts = { ...opts, range: {} };
+  // sync-atlas and history run inside the pipeline (Stage 1 → 2 → 3) when the default modes are watched.
+  const usePipeline = PIPELINE_MODES.every((m) => opts.modes.includes(m));
+  const ownSchedule = opts.modes.filter((m) => !(usePipeline && PIPELINE_MODES.includes(m)));
 
   await store.connect();
   await ensureCollections(store);
-  for (const mode of opts.modes) {
+  for (const mode of ownSchedule) {
     scheduler.schedule(`stage1-${mode}`, crons[mode], async () => { await runMode(mode, store, notifier, jobOpts); });
   }
+  if (usePipeline) scheduler.schedule("pipeline", config.pipelineCron, async () => { await runPipeline({ store, notifier }); });
 
   let stopping = false;
   const shutdown = async () => {
@@ -198,10 +156,12 @@ async function watch(opts) {
 
   // Run once right away so data starts flowing without waiting for the first tick.
   // Forecasts first: a missed forecast snapshot is lost for good, history can be fetched any time.
-  const startupOrder = ["sync-atlas", "forecast", "om-forecast", "alerts", "history", "om-baseline", "om-backfill"].filter((m) => opts.modes.includes(m));
-  for (const mode of startupOrder) {
+  const startupOrder = ["forecast", "om-forecast", "alerts", "pipeline", "om-baseline", "om-backfill", "sync-atlas", "history"]
+    .filter((m) => (m === "pipeline" ? usePipeline : ownSchedule.includes(m)));
+  for (const step of startupOrder) {
     if (stopping) break;
-    await runMode(mode, store, notifier, jobOpts);
+    if (step === "pipeline") await runPipeline({ store, notifier });
+    else await runMode(step, store, notifier, jobOpts);
   }
   if (!stopping) await scheduler.start();
 }
