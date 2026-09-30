@@ -80,7 +80,7 @@ In the repository: **Settings → Secrets and variables → Actions**.
 
 1. Add to your local `.env`:
    ```
-   ATLAS_MONGO_URI=mongodb+srv://pipeline:...@weather.abcde.mongodb.net/?retryWrites=true&w=majority&appName=weather
+   ATLAS_MONGO_URI=mongodb+srv://pipeline:<db_password>@<your-cluster-host>/?retryWrites=true&w=majority&appName=weather
    ```
 2. Restart the watcher so it picks up the new setting: `docker compose up -d --build fetcher`.
 3. Check: `docker compose logs fetcher | grep sync-atlas` should show documents copied. Or run it by hand any time:
