@@ -78,6 +78,19 @@ npm start                   # API + dashboard on :3000
 - No team/author names in code or data; use `PIPELINE_NAME` for pipeline identity.
 - Small commits with clear messages.
 
+## Compare & review (key features only)
+
+Key features: Stage 3 caching, Stage 4 API layer, Stage 5 map/drill-down.
+
+1. Build 3 implementations in parallel branches `feature/<name>-v1`, `-v2`, `-v3` (one git worktree each).
+2. Write `docs/analysis/<feature>.md` comparing the versions on: files changed, architecture, complexity, error handling,
+   security considerations, performance (measured numbers), extensibility. End with a summary table and an
+   "adopt or combine" decision.
+3. Merge the winner, fix the security issues the comparison surfaced, and add Vitest unit tests for the chosen version.
+4. Run `/security-review` and `npm run check:secrets` before pushing.
+
+Everything else: good enough beats perfect (one simple implementation).
+
 ## Git workflow
 
 Public repository: <https://github.com/dangkhoa241/us-weather-pipeline>. At the end of each stage, and at least once a day:
