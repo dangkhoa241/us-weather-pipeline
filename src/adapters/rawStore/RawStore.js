@@ -53,5 +53,8 @@ export class RawStore {
     throw new Error("RawStore.findBatches not implemented");
   }
 
+  /** Can the store be reached? Used by /health. */
+  async ping() { throw new Error("RawStore.ping not implemented"); }
+
   async count(collection, filter = {}) { throw new Error("RawStore.count not implemented"); }
 }

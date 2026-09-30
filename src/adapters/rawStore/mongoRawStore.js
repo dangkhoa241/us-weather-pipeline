@@ -119,6 +119,11 @@ export class MongoRawStore extends RawStore {
     }
   }
 
+  async ping() {
+    const res = await this.db.command({ ping: 1 });
+    return res.ok === 1;
+  }
+
   async count(collection, filter = {}) {
     return this.db.collection(collection).countDocuments(filter);
   }

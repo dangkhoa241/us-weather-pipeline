@@ -122,6 +122,8 @@ Security (low; from the security review of Stages 1–2, compose and workflows):
 - GitHub Actions are pinned by major version tag (`@v7`), not by commit SHA. They are GitHub-owned actions.
 - Atlas network access is `0.0.0.0/0` (GitHub runners have changing IPs), mitigated by a user limited to the `weather`
   database, a generated password and TLS.
+- `npm audit` (dev dependencies only): 3 moderate findings in `uuid` via `autocannon`, the load-test tool; it never ships
+  in the image and production dependencies have 0 findings.
 - Legacy `backend/` (rewritten in Stage 4): CORS allows any origin, errors return internal messages to the client, and
   it reads `process.env` directly. It now listens on 127.0.0.1 only.
 

@@ -62,6 +62,15 @@ export class Warehouse {
    */
   async cityForecast({ locationId, days }) { throw new Error("Warehouse.cityForecast not implemented"); }
 
+  /** All locations (id, name, state, region, lat, lon, timezone), ordered by state and name. */
+  async listLocations() { throw new Error("Warehouse.listLocations not implemented"); }
+
+  /** Alerts that have not expired, optionally for one state (2-letter code). At most 200. */
+  async activeAlerts({ state }) { throw new Error("Warehouse.activeAlerts not implemented"); }
+
+  /** Record days for one location from the daily rollups (hottest, coldest, wettest, windiest; complete days only). */
+  async records({ locationId }) { throw new Error("Warehouse.records not implemented"); }
+
   /** Latest `fetched_at` loaded into a table (Stage 2 incremental watermark), or null when empty. */
   async latestFetchedAt(table) { throw new Error("Warehouse.latestFetchedAt not implemented"); }
 

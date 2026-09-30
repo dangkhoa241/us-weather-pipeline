@@ -376,6 +376,38 @@ export class ClickHouseWarehouse extends Warehouse {
     { id: locationId, days });
   }
 
+  async listLocations() {
+    return this.#rows(`
+      SELECT id, name, state, region, lat, lon, timezone FROM locations FINAL ORDER BY state, name`, {});
+  }
+
+  async activeAlerts({ state = "" } = {}) {
+    if (state && !/^[A-Z]{2}$/.test(state)) throw new Error("state must be a 2-letter code");
+    return this.#rows(`
+      SELECT id, event, severity, urgency, certainty, headline, area_desc, states, location_ids, onset, expires, ends
+      FROM alerts FINAL
+      WHERE (expires IS NULL OR expires > now()) AND (empty({state:String}) OR has(states, {state:String}))
+      ORDER BY expires
+      LIMIT 200`,
+    { state });
+  }
+
+  async records({ locationId }) {
+    if (typeof locationId !== "string" || !locationId) throw new Error("locationId is required");
+    const rows = await this.#rows(`
+      SELECT
+        min(day) AS first_day, max(day) AS last_day, count() AS days,
+        argMax(day, temp_max_c) AS hottest_day, max(temp_max_c) AS hottest_c,
+        argMin(day, temp_min_c) AS coldest_day, min(temp_min_c) AS coldest_c,
+        argMax(day, precip_sum_mm) AS wettest_day, max(precip_sum_mm) AS wettest_mm,
+        argMax(day, gust_max_ms) AS windiest_day, max(gust_max_ms) AS windiest_gust_ms
+      FROM weather_daily FINAL
+      WHERE location_id = {id:String} AND hours >= 23   -- complete local days only (23 on DST days)
+      HAVING days > 0`,
+    { id: locationId });
+    return rows[0] ?? null;
+  }
+
   async #rows(query, params) {
     const result = await this.client.query({ query, query_params: params, format: "JSONEachRow" });
     return result.json();

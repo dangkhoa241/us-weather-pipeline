@@ -45,6 +45,12 @@ export const config = Object.freeze({
   port: int(env.PORT, 3000),
   // Interface the API listens on. 127.0.0.1 = this machine only; use 0.0.0.0 only behind a firewall/proxy.
   host: env.HOST || "127.0.0.1",
+  api: {
+    rateLimitPerMin: int(env.API_RATE_LIMIT_PER_MIN, 120),   // per client IP
+    // Browser origins allowed to call the API (comma-separated). Default: the Vite dev server of the dashboard.
+    benchMemoryLog: env.API_BENCH_MEMORY_LOG === "1",   // load test only: print RSS every 250 ms
+    corsOrigins: (env.CORS_ORIGINS || "http://localhost:5173").split(",").map((s) => s.trim()).filter(Boolean),
+  },
 
   http: {
     nwsUserAgent: env.NWS_USER_AGENT || "us-weather-pipeline/1.0",
