@@ -25,13 +25,18 @@
     "probe:api": "node scripts/probeApi.js"
   },
   "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^9.1.0",
     "@clickhouse/client": "^1.14.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
     "mongodb": "^7.0.0",
     "node-cron": "^4.6.0",
-    "redis": "^4.7.1"
+    "redis": "^4.7.1",
+    "swagger-ui-express": "^5.0.1",
+    "zod": "^4.6.5"
   },
   "license": "ISC",
   "devDependencies": {

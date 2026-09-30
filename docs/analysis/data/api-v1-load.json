@@ -1,0 +1,30 @@
+{
+  "summary": {
+    "label": "v1",
+    "req_per_s": 1544,
+    "p50_ms": 6.2,
+    "p95_ms": 10.5,
+    "p99_ms": 13.8,
+    "requests": 23161,
+    "non_2xx": 0,
+    "errors": 0,
+    "peak_rss_mb": 159,
+    "connections": 10,
+    "duration_s": 15
+  },
+  "paths": [
+    "/api/v1/stats?locations=stockton-ca&metric=temp_c&period=day&from=2026-08-25&to=2026-09-23",
+    "/api/v1/stats?locations=miami-fl&metric=precip_mm&period=week&from=2026-06-26&to=2026-09-23",
+    "/api/v1/stats?locations=new-york-ny,chicago-il,los-angeles-ca&period=month&from=2025-10-01&to=2026-09-23",
+    "/api/v1/stats?locations=phoenix-az,denver-co,seattle-wa,houston-tx,boston-ma&period=quarter&from=2024-10-01&to=2026-09-23",
+    "/api/v1/map?from=2026-09-17&to=2026-09-23",
+    "/api/v1/map?from=2026-08-25&to=2026-09-23",
+    "/api/v1/accuracy?from=2026-07-26&to=2026-09-23",
+    "/api/v1/accuracy?from=2026-08-25&to=2026-09-23&location=stockton-ca",
+    "/api/v1/forecast/stockton-ca",
+    "/api/v1/drill?location=miami-fl&level=quarter&key=2025-Q3",
+    "/api/v1/records?location=anchorage-ak",
+    "/api/v1/locations"
+  ],
+  "measured_at": "2026-09-30T07:12:41.050Z"
+}
