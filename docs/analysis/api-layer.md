@@ -78,3 +78,19 @@ Security fixes surfaced by the comparison, applied with the merge:
 2. **Strict CSP on API responses** (`default-src 'none'; frame-ancestors 'none'`): they are JSON and should never
    execute anything or be framed.
 3. Unknown query parameters are rejected (already done for all versions during the comparison).
+
+## Result after merging (Hono + fixes)
+
+| | Value |
+|---|---|
+| Requests/s | 1,617 (10 connections, 15 s) |
+| p50 / p95 / p99 | 5.6 / 12.7 / 16.6 ms |
+| Peak memory | 188 MB (varies with garbage collection; runs above: 151–152 MB) |
+| Errors / non-2xx | 0 |
+| Security probe | 22/22 (`docs/analysis/data/api-final-probe.json`) |
+
+Fixes applied: Swagger UI pinned to 5.33.0 with a CSP that only allows that CDN path on `/docs`; strict
+`default-src 'none'; frame-ancestors 'none'` on API responses; the rate limiter falls back to one shared bucket when
+there is no Node socket (before, that case threw and turned every request into a 500). Unit tests:
+`tests/api.test.js` (19 tests with Hono's `app.request()` and a fake service).
+

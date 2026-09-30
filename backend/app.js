@@ -71,6 +71,23 @@ const ROUTES = [
   { path: "/pipeline/runs", summary: "Recent pipeline runs", query: Q.runs, run: (s, q) => s.pipelineRuns(q) },
 ];
 
+// Swagger UI comes from a CDN: pin the version, and let the docs page load scripts only from that exact path.
+const SWAGGER_UI_VERSION = "5.33.0";
+const SWAGGER_UI_CDN = `https://cdn.jsdelivr.net/npm/swagger-ui-dist@${SWAGGER_UI_VERSION}/`;
+// API responses are JSON: nothing may run, load or frame them.
+const apiHeaders = secureHeaders({ contentSecurityPolicy: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] } });
+// The docs page runs Swagger UI (an inline init script + the pinned CDN bundle) and fetches /openapi.json.
+const docsHeaders = secureHeaders({
+  contentSecurityPolicy: {
+    defaultSrc: ["'none'"],
+    scriptSrc: ["'unsafe-inline'", SWAGGER_UI_CDN],
+    styleSrc: ["'unsafe-inline'", SWAGGER_UI_CDN],
+    imgSrc: ["'self'", "data:", SWAGGER_UI_CDN],
+    connectSrc: ["'self'"],
+    frameAncestors: ["'none'"],
+  },
+});
+
 const errorBody = (code, message) => ({ error: { code, message } });
 const describeIssue = (issue) => `${issue.path.join(".") || "query"}: ${issue.message}`;
 
@@ -82,13 +99,19 @@ export function createApp({ service }) {
     },
   });
 
-  app.use("*", secureHeaders());
+  app.use("*", (c, next) => (c.req.path === "/docs" ? docsHeaders(c, next) : apiHeaders(c, next)));
   app.use("/api/*", cors({ origin: config.api.corsOrigins, allowMethods: ["GET"] }));
   app.use("/api/*", rateLimiter({
     windowMs: 60_000,
     limit: config.api.rateLimitPerMin,
     standardHeaders: "draft-7",
-    keyGenerator: (c) => getConnInfo(c).remote.address ?? "unknown",
+    keyGenerator: (c) => {
+      try {
+        return getConnInfo(c).remote.address ?? "unknown";
+      } catch {
+        return "unknown";   // no Node socket (e.g. app.request() in tests, other runtimes): one shared bucket
+      }
+    },
     handler: (c) => c.json(errorBody("rate_limited", "Too many requests, try again later"), 429),
   }));
 
@@ -111,7 +134,7 @@ export function createApp({ service }) {
   });
 
   app.doc("/openapi.json", { openapi: "3.0.3", info: { title: "US Weather Pipeline API", version: "1.0.0" } });
-  app.get("/docs", swaggerUI({ url: "/openapi.json" }));
+  app.get("/docs", swaggerUI({ url: "/openapi.json", version: SWAGGER_UI_VERSION }));
 
   app.notFound((c) => c.json(errorBody("not_found", "Route not found"), 404));
   app.onError((err, c) => {

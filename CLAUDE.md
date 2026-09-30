@@ -30,7 +30,7 @@ Free-tier limits of the services in use, and cost follow-ups: `docs/ROADMAP.md`.
 fetchWeather.js      APIs (NWS, Open-Meteo) → MongoDB      Stage 1
 etlToClickHouse.js   MongoDB → ClickHouse                  Stage 2
 clickhouseToRedis.js ClickHouse → Redis                    Stage 3
-backend/             Express API (reads Redis, falls back to ClickHouse)   Stage 4
+backend/             Hono API (reads Redis, falls back to ClickHouse)      Stage 4
 dashboard/           UI (to be rebuilt with React, see below)               Stage 5
 ```
 
@@ -52,7 +52,8 @@ npm run sync:atlas          # copy NWS data collected by GitHub Actions on Atlas
 npm run check:secrets       # pre-push check: secrets in history/working tree, tracked .env, commit emails
 npm run etl:clickhouse      # Stage 2
 npm run etl:redis           # Stage 3
-npm start                   # API + dashboard on :3000
+npm start                   # API on 127.0.0.1:3000 (OpenAPI docs at /docs)
+npm test                    # Vitest unit tests (cache + API; no Docker needed)
 ```
 
 ## Conventions
