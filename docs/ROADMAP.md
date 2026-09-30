@@ -130,8 +130,6 @@ Security (low; from the security review of Stages 1–2, compose and workflows):
 - The `/docs` page allows `'unsafe-inline'` scripts (Swagger UI's init script); it has no user content and only the
   pinned CDN path is allowed for external scripts.
 - The API is not a Docker Compose service yet (run with `npm start`).
-- `npm audit` (dev dependencies only): 3 moderate findings in `uuid` via `autocannon`, the load-test tool; it never ships
-  in the image and production dependencies have 0 findings.
 - Legacy `backend/` (rewritten in Stage 4): CORS allows any origin, errors return internal messages to the client, and
   it reads `process.env` directly. It now listens on 127.0.0.1 only.
 
