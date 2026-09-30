@@ -1,66 +1,13 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import monthlyRoutes from './routes/monthly.js';
-import cacheRoutes from './routes/cache.js';
-import diagnosticsRoutes from './routes/diagnostics.js';
-import './config/clickhouse.js';
-import './config/redis.js';
-import { config } from '../src/config.js';
+// backend/server.js — start the Stage 4 API (v2: Fastify). Usage: npm start
+import { config } from "../src/config.js";
+import { createApiDeps } from "../src/api/deps.js";
+import { buildApp } from "./app.js";
 
-dotenv.config();
+const deps = await createApiDeps();
+const app = await buildApp(deps);
+await app.listen({ port: config.port, host: config.host });
+console.log(`[api] listening on http://${config.host}:${config.port} (docs: /docs)`);
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, '../dashboard')));
-
-app.use('/api/monthly', monthlyRoutes);
-app.use('/api/diagnostics', diagnosticsRoutes);
-app.use('/api', cacheRoutes);
-
-app.get('/api', (req, res) => {
-  res.json({
-    name: 'Weather Database System API',
-    version: '1.0.0',
-    endpoints: {
-      'GET /api/monthly': 'Get monthly aggregated weather data',
-      'GET /api/cache-status': 'Get Redis cache status',
-      'POST /api/sync-now': 'Trigger cache refresh',
-      'GET /health': 'Health check endpoint'
-    }
-  });
-});
-
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../dashboard/index.html'));
-});
-
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    clickhouse_url: process.env.CLICKHOUSE_URL || 'http://localhost:8123'
-  });
-});
-
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(500).json({ 
-    error: 'Internal server error',
-    message: err.message 
-  });
-});
-
-// Listen on config.host (default 127.0.0.1 = this machine only), not on every network interface.
-app.listen(PORT, config.host, () => {
-  console.log(`Server running on http://${config.host}:${PORT}`);
-});
-
+const shutdown = async () => { await app.close(); await deps.close(); process.exit(0); };
+process.once("SIGINT", shutdown);
+process.once("SIGTERM", shutdown);
