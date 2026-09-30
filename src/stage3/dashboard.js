@@ -1,16 +1,21 @@
-// src/stage3/dashboard.js — caching strategy v3: pre-warmed popular queries + cache-aside fallback.
-// After each Stage 2 load, the popular landing-page queries are computed under the NEW data version first, and
-// only then is the version pointer switched, so readers never meet an empty cache. Other queries use
-// cache-aside like v2. Concurrent misses for the same key share one warehouse query (single-flight).
+// src/stage3/dashboard.js — dashboard reads through a Redis cache (chosen strategy, see docs/analysis/caching.md).
+// Cache-aside: look in the cache, on a miss query the warehouse and store the result with a TTL. Keys contain the
+// current data version (latest Stage 2 run); after each load, the small set of popular landing-page queries is
+// computed under the NEW version first, then the version pointer switches, so the landing page is never cold.
+// Concurrent misses for one key share a single warehouse query (single-flight). Cache errors fall back to the
+// warehouse. Hit/miss counters and the version record give the API a real cache/sync status.
 
 import { config } from "../config.js";
 import { QUERY_TYPES, POPULAR_QUERIES, normalizeQuery, queryKey } from "./queries.js";
 
 export const VERSION_KEY = "wx:meta:data_version";
+const COUNTER_PREFIX = "wx:stats:";   // wx:stats:hit:<type>, wx:stats:miss:<type>
+const QUERY_TYPE_NAMES = Object.keys(QUERY_TYPES);
 const PREWARM_CONCURRENCY = 4;
 
 export function createDashboard({ warehouse, cache, ttlSec = config.redis.ttlSec }) {
   const inFlight = new Map();   // key → Promise of data (single-flight)
+  const count = (kind, type) => { cache.incr(`${COUNTER_PREFIX}${kind}:${type}`).catch(() => {}); };   // fire and forget
 
   async function currentVersion() {
     try {
@@ -34,8 +39,12 @@ export function createDashboard({ warehouse, cache, ttlSec = config.redis.ttlSec
       if (key) {
         try {
           const hit = await cache.get(key);
-          if (hit !== null) return { data: hit, source: "cache" };
+          if (hit !== null) {
+            count("hit", type);
+            return { data: hit, source: "cache" };
+          }
         } catch { /* cache read failed: use the warehouse */ }
+        count("miss", type);
         if (!inFlight.has(key)) {
           inFlight.set(key, loadAndStore(type, normalized, key).finally(() => inFlight.delete(key)));
         }
@@ -43,6 +52,28 @@ export function createDashboard({ warehouse, cache, ttlSec = config.redis.ttlSec
       }
       return { data: await loadAndStore(type, normalized, null), source: "warehouse" };
     },
+  };
+}
+
+/**
+ * Cache and sync status for the API: which Stage 2 load the cache serves (and when it was loaded/switched), plus
+ * hit/miss counts per query type since the counters were last reset.
+ */
+export async function cacheStatus(cache) {
+  const version = await cache.get(VERSION_KEY);
+  const counters = {};
+  for (const type of QUERY_TYPE_NAMES) {
+    const [hits, misses] = await Promise.all([cache.get(`${COUNTER_PREFIX}hit:${type}`), cache.get(`${COUNTER_PREFIX}miss:${type}`)]);
+    counters[type] = { hits: Number(hits ?? 0), misses: Number(misses ?? 0) };
+  }
+  const total = Object.values(counters).reduce((a, c) => ({ hits: a.hits + c.hits, misses: a.misses + c.misses }), { hits: 0, misses: 0 });
+  return {
+    data_version: version?.version ?? null,
+    loaded_at: version?.loaded_at ?? null,
+    switched_at: version?.switched_at ?? null,
+    hit_rate: total.hits + total.misses ? Math.round((1000 * total.hits) / (total.hits + total.misses)) / 1000 : null,
+    ...total,
+    by_type: counters,
   };
 }
 

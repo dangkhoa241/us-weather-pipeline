@@ -2,7 +2,8 @@
 // Values are plain JSON-serializable objects; implementations handle serialization.
 
 export class CacheStore {
-  async connect() { throw new Error("CacheStore.connect not implemented"); }
+  /** @param {{ optional?: boolean }} [options] optional: keep going without the cache if it is unreachable */
+  async connect(options) { throw new Error("CacheStore.connect not implemented"); }
 
   async close() { throw new Error("CacheStore.close not implemented"); }
 

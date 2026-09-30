@@ -39,6 +39,9 @@ services:
   redis:
     image: redis:7-alpine
     container_name: weather-redis
+    # Bounded cache: past 64 MB, evict least-recently-used keys that have a TTL (cached query results).
+    # Keys without a TTL (data-version pointer, hit/miss counters) are never evicted.
+    command: ["redis-server", "--maxmemory", "64mb", "--maxmemory-policy", "volatile-lru"]
     ports:
       - "127.0.0.1:6379:6379"
     volumes:

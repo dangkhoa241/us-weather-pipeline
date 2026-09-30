@@ -53,7 +53,22 @@ for every request, while v2/v3 pay it once per data version. Most of v3's memory
 Security and robustness fixes surfaced by the comparison, applied with the merge:
 1. **Redis down must not hang requests:** the Redis client fails fast (no offline queue, connect timeout), so the
    dashboard falls back to ClickHouse.
-2. **Bounded memory:** Redis runs with `maxmemory` and `allkeys-lru`, so many distinct parameter combinations evict
-   old entries instead of growing without limit. Parameter validation (Zod) follows in Stage 4.
+2. **Bounded memory:** Redis runs with `maxmemory 64mb` and `volatile-lru`, so many distinct parameter combinations
+   evict old cached results instead of growing without limit (the version pointer and counters have no TTL and are
+   never evicted). Parameter validation (Zod) follows in Stage 4.
 3. Hit/miss counters and the data-version record (`wx:meta:data_version` with `loaded_at`) give the API a real sync
    status instead of guessing from TTLs (roadmap bug 8).
+
+## Result after merging (combined version)
+
+Same benchmark (`docs/analysis/data/caching-final.json`):
+
+| | v1 (no cache) | Combined |
+|---|---|---|
+| Cold p50 / p95 | 27.8 / 62.2 ms | 18.2 / 32.3 ms |
+| Warm p50 / p95 | 21.4 / 35.4 ms | **1.4 / 2.9 ms** (p95 12× faster) |
+| Work after each Stage 2 run | 0 | 57 ms (4 pre-warmed queries) |
+| Redis keys / memory | 0 | 19 / 373 KB (v3: 31 / 3.2 MB) |
+
+With Redis stopped, requests are answered from ClickHouse in 22–35 ms instead of hanging (they hung with the
+original client settings). Unit tests: `tests/dashboard.test.js` (Vitest).

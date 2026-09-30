@@ -58,12 +58,12 @@ export const BENCH_QUERIES = [
   { name: "forecast 1 city, 7 d", type: "forecast", params: { locationId: "stockton-ca", days: 7 } },
 ];
 
-// What the dashboard's landing pages request by default (pre-warm candidates): the national map and accuracy
-// overviews, a 12-month overview for all cities, and the forecast page of every city.
+// What the dashboard's landing page requests by default: the national maps, the accuracy overview and a 12-month
+// overview of all cities. These are pre-warmed after each Stage 2 run. Per-city pages (e.g. forecasts, 871 rows
+// each) are not: at 150 cities they would cost ~25 MB of Redis per load (docs/analysis/caching.md).
 export const POPULAR_QUERIES = [
   { type: "map", params: { from: "2026-09-17", to: "2026-09-23" } },
   { type: "map", params: { from: "2026-08-25", to: "2026-09-23" } },
   { type: "accuracy", params: { from: "2026-07-26", to: "2026-09-23" } },
   { type: "stats", params: { locationIds: ALL_CITIES, metric: "temp_c", period: "month", from: "2025-10-01", to: "2026-09-23" } },
-  ...ALL_CITIES.map((locationId) => ({ type: "forecast", params: { locationId, days: 7 } })),
 ];
