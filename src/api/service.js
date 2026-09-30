@@ -77,8 +77,9 @@ export function drillRange(level, key) {
 
 const RUN_FIELDS = {
   _id: 0, etl_batch_id: 1, stage: 1, mode: 1, status: 1, started_at: 1, finished_at: 1, duration_ms: 1,
-  rows_fetched: 1, inserted: 1, updated: 1, error_count: 1, skipped_count: 1, steps: 1,
-};   // no error messages: they can contain internal details
+  rows_fetched: 1, inserted: 1, updated: 1, error_count: 1, skipped_count: 1,
+  "steps.step": 1, "steps.status": 1, "steps.etl_batch_id": 1, "steps.duration_ms": 1,
+};   // no error messages (not even a failed step's): they can contain internal hostnames and driver details
 
 async function withTimeout(promise, ms) {
   let timer;
