@@ -26,7 +26,7 @@ export async function runStage3({ store, warehouse, cache }) {
 }
 
 // Run directly: node clickhouseToRedis.js
-if (import.meta.url === `file://${process.argv[1].replace(/\\/g, "/").replace(/^\/?/, "/")}` || process.argv[1]?.endsWith("clickhouseToRedis.js")) {
+if (process.argv[1]?.endsWith("clickhouseToRedis.js")) {
   const store = createRawStore();
   const warehouse = createWarehouse();
   const cache = createCacheStore();
