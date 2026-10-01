@@ -4,7 +4,7 @@
 // Charts without one DOM element per point expose window.__chartPointPixel(key) instead.
 // Usage: npm run build && node scripts/measureDrill.mjs <label>
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright";
 
@@ -28,6 +28,7 @@ async function clickPoint(page, key) {
   const panel = page.locator("[data-drill-panel] [data-chart]");
   const el = page.locator(`[data-drill-panel] [data-chart] [data-key="${key}"]`);
   if (await el.count()) return el.first().click();
+  await panel.scrollIntoViewIfNeeded();   // mouse.click uses viewport coordinates
   const pos = await page.evaluate((k) => window.__chartPointPixel?.(k) ?? null, key);
   const box = await panel.boundingBox();
   if (pos && box) await page.mouse.click(box.x + pos[0], box.y + pos[1]);
@@ -114,6 +115,7 @@ try {
   writeFileSync(`${ROOT}/docs/analysis/data/drill-${label}-browser.json`, JSON.stringify({ ...result, measured_at: new Date() }, null, 2));
 } finally {
   await browser.close();
+  // Kill the preview's process tree before its shell exits (shell: true), or vite keeps port 4173.
+  if (process.platform === "win32") spawnSync("taskkill", ["/F", "/T", "/PID", String(procs[1].pid)], { stdio: "ignore" });
   for (const p of procs) p.kill();
-  if (process.platform === "win32") spawn("taskkill", ["/F", "/T", "/PID", String(procs[1].pid)], { stdio: "ignore" });
 }
