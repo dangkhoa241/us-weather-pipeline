@@ -28,6 +28,7 @@ Approved free stack:
 |---|---|---|---|---|---|
 | NWS API | No published quota; needs a `User-Agent` with contact | Temporary block (403/429) | No | ~40 forecast req / 3 h, 1 alerts req / 15 min | ~300 req / 3 h |
 | Open-Meteo | Non-commercial only. 600 / min, 5,000 / hour, 10,000 / day *weighted* calls (a request counts extra per 10 variables and per 14 days) | 429 until the window resets | No | ~800 / day steady; first 3-year backfill ~2,000 once | ~6,000 / day steady (60%, too close); backfill ~15,000 (over the daily limit) |
+| Vercel Hobby (dashboard demo, static) | 100 GB Fast Data Transfer / month, 100 deployments / day, 45 min / build; non-commercial only | Project paused (Hobby is never billed) | No | ~0.5 MB gzipped per visit (≈ 200k visits / month) | same (static snapshot) |
 | Discord webhook | ~30 messages / min per webhook | 429 | No | a few / day | a few / day |
 | GitHub Actions | Free on public repos (private: 2,000 min / month) | Jobs stop running | No | — | — |
 | MongoDB, ClickHouse, Redis (Docker) | Self-hosted; limited only by disk | Disk full | No | ~12 MB / day on disk (≈ 4 GB / year), mostly forecast snapshots | ~90 MB / day (≈ 32 GB / year) |
@@ -96,7 +97,10 @@ Cost follow-ups (must be done before expanding to ~150 cities):
 - API (Hono, 12 dashboard requests, 10 connections): ~1,600 req/s, p95 12.7 ms, 0 errors; 22/22 security checks.
   Compared with Express + Zod and Fastify + JSON Schema: same throughput within noise, Hono lowest memory (~150 MB vs
   up to 282 MB) and smallest dependency tree (116 vs 168–174 packages). Method and data: `docs/analysis/api-layer.md`.
-- Tests: 31 Vitest unit tests (12 cache + 19 API), no Docker needed.
+- Dashboard map (3 implementations compared): hand-rolled d3-geo adds 47 KB gzipped (vs 71 KB react-simple-maps, 83 KB
+  ECharts), first render 149 ms, 51 keyboard-focusable labelled states/cities. Method: `docs/analysis/map-drilldown.md`.
+- Static demo: 750 KB snapshot (140 KB gzipped) for 20 cities × 2 years; 0 CSP violations under a strict policy.
+- Tests: 62 Vitest tests (12 cache + 19 API + 31 dashboard), no Docker needed.
 
 ## Known limitations
 
@@ -130,6 +134,10 @@ Security (low; from the security review of Stages 1–2, compose and workflows):
 - The `/docs` page allows `'unsafe-inline'` scripts (Swagger UI's init script); it has no user content and only the
   pinned CDN path is allowed for external scripts.
 - The API is not a Docker Compose service yet (run with `npm start`).
+- Dashboard: the Period filter is kept in the URL but not used yet (KPI sparklines are daily); the map colors by
+  temperature or precipitation only.
+- Static demo: data frozen at the snapshot date; forecast accuracy only for preset ranges; Zod runs "jitless" in the
+  browser (no `new Function`, required by the CSP).
 - Legacy `backend/` (rewritten in Stage 4): CORS allows any origin, errors return internal messages to the client, and
   it reads `process.env` directly. It now listens on 127.0.0.1 only.
 
@@ -209,13 +217,18 @@ Stack (all free / open source): React + TypeScript + Vite, ECharts via `echarts-
 caching, loading/error states), TanStack Table (tables), Zustand (filter state, synced to the URL), Tailwind CSS + shadcn/ui.
 
 **Setup & filters (Thu)**
-- [ ] React + TypeScript + Vite scaffold with Tailwind + shadcn/ui, echarts-for-react, TanStack Query/Table, Zustand
-- [ ] Filters in a Zustand store kept in sync with the URL (shareable links, back/forward work); °F default
-- [ ] Global filters: location, period (Week/Month/Quarter/Half-Year/Year), date range + presets, metric, °F/°C, compare (previous period / same period last year)
-- [ ] KPI cards with delta and sparkline
-- [ ] US choropleth map (states, Albers USA with AK/HI insets, us-atlas TopoJSON)
-- [ ] Map: click state → zoom + city markers; click city → city page
+- [x] React + TypeScript + Vite scaffold with Tailwind + shadcn/ui, echarts-for-react, TanStack Query/Table, Zustand
+- [x] Filters in a Zustand store kept in sync with the URL (shareable links, back/forward work); °F default
+- [x] Global filters: location, period (Week/Month/Quarter/Half-Year/Year), date range + presets, metric, °F/°C, compare (previous period / same period last year)
+- [x] KPI cards with delta and sparkline
+- [x] US choropleth map (states, Albers USA with AK/HI insets, us-atlas TopoJSON)
+- [x] Map: click state → zoom + city markers; click city → select location (hand-rolled d3-geo, chosen in
+      `docs/analysis/map-drilldown.md`; keyboard accessible)
 - [ ] Map toggles: metric / forecast error / active NWS alerts; 7-day forecast time slider
+
+- [x] API types shared with the backend (`src/api/schemas.js`), 31 dashboard tests (Vitest + React Testing Library)
+- [x] Static demo on Vercel Hobby: `npm run export:snapshot` → `dashboard/public/data/`, `build:snapshot` mode with a
+      "Demo data as of" badge, `dashboard/vercel.json` (strict CSP), `docs/DEPLOY_VERCEL.md`
 
 **Drill-down, charts, tables (Fri)**
 - [ ] Time drill-down: Year → Half → Quarter → Month → Week → Day → Hour, with breadcrumb

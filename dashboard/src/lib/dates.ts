@@ -6,8 +6,14 @@ export const ARCHIVE_LAG_DAYS = 5;   // observations lag ~5 days (Open-Meteo arc
 export const toDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 export const dayMs = (day: string) => Date.parse(`${day}T00:00:00Z`);
 
-/** Last day with complete observations. */
-export const latestDataDay = (now = Date.now()) => toDay(now - ARCHIVE_LAG_DAYS * DAY_MS);
+let dataEnd: string | null = null;   // set by the snapshot mode: presets count back from the snapshot's last day
+
+export function setDataEnd(day: string | null) {
+  dataEnd = day;
+}
+
+/** Last day with complete observations (live: today − archive lag; snapshot: its "data as of" day). */
+export const latestDataDay = (now = Date.now()) => dataEnd ?? toDay(now - ARCHIVE_LAG_DAYS * DAY_MS);
 
 export const PRESETS = {
   "7d": "Last 7 days",

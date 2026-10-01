@@ -25,7 +25,8 @@
     "probe:api": "node scripts/probeApi.js",
     "dashboard:dev": "npm --prefix dashboard run dev",
     "dashboard:build": "npm --prefix dashboard run build",
-    "test:dashboard": "npm --prefix dashboard test"
+    "test:dashboard": "npm --prefix dashboard test",
+    "export:snapshot": "node scripts/exportSnapshot.js"
   },
   "dependencies": {
     "@clickhouse/client": "^1.14.0",

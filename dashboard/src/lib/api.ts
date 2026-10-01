@@ -2,6 +2,7 @@
 // so the dashboard and the API share one definition instead of copies.
 import type { z } from "zod";
 import { RESPONSE, ROW, errorResponse } from "@shared/schemas.js";
+import { snapshotApi } from "@/lib/snapshot";
 
 export type LocationRow = z.infer<typeof ROW.location>;
 export type StatsRow = z.infer<typeof ROW.stats>;
@@ -34,10 +35,15 @@ async function get<S extends z.ZodType>(path: string, params: Params, schema: S)
   return parsed.data;
 }
 
-export const api = {
+/** Live API (local dev and any deployment with a backend). */
+export const liveApi = {
   locations: () => get("/locations", {}, RESPONSE.locations),
   stats: (p: { locations: string; metric: string; period: string; from: string; to: string; compare?: string }) =>
     get("/stats", p, RESPONSE.stats),
   map: (p: { from: string; to: string }) => get("/map", p, RESPONSE.map),
   accuracy: (p: { from: string; to: string; location?: string }) => get("/accuracy", p, RESPONSE.accuracy),
 };
+
+/** Static demo build (VITE_DATA_MODE=snapshot) reads the exported JSON snapshot instead of /api. */
+export const isSnapshot = import.meta.env.VITE_DATA_MODE === "snapshot";
+export const api: typeof liveApi = isSnapshot ? snapshotApi : liveApi;

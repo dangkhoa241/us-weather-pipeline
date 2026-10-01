@@ -11,9 +11,9 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "src"),
+      "@": path.resolve(import.meta.dirname, "src"),
       // API schemas shared with the backend (src/api/schemas.js): one definition for validation and types.
-      "@shared": path.resolve(__dirname, "../src/api"),
+      "@shared": path.resolve(import.meta.dirname, "../src/api"),
     },
     dedupe: ["zod"],
   },

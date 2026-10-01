@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "measure:map": "node scripts/measureMap.mjs",
-    "bundle:size": "node scripts/bundleSize.mjs"
+    "bundle:size": "node scripts/bundleSize.mjs",
+    "build:snapshot": "tsc -b && vite build --mode snapshot",
+    "check:demo": "node scripts/checkDemoBuild.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
