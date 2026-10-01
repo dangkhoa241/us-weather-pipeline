@@ -25,7 +25,7 @@ const ready = (page) => page.waitForFunction(() => performance.getEntriesByName(
 const search = (page, key) => new URL(page.url()).searchParams.get(key);
 
 async function clickPoint(page, key) {
-  const panel = page.locator("[data-drill-panel] [data-chart]");
+  const panel = page.locator("[data-drill-panel] [data-chart]").first();
   const el = page.locator(`[data-drill-panel] [data-chart] [data-key="${key}"]`);
   if (await el.count()) return el.first().click();
   await panel.scrollIntoViewIfNeeded();   // mouse.click uses viewport coordinates
@@ -81,7 +81,7 @@ try {
   await clickPoint(page, "07");
   await page.waitForTimeout(800);
   const mouseDrill = search(page, "month") === "07";
-  const dayPoints = await page.locator("[data-drill-panel] [data-chart]").getAttribute("data-points");
+  const dayPoints = await page.locator("[data-drill-panel] [data-chart]").first().getAttribute("data-points");
   mkdirSync(`${ROOT}/docs/images`, { recursive: true });
   await page.locator("[data-drill-panel]").screenshot({ path: `${ROOT}/docs/images/drill-${label}-days.png` });
   const crumb = page.locator('nav[aria-label="Breadcrumb"] button', { hasText: "2025" });

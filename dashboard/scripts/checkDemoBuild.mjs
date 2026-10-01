@@ -76,10 +76,20 @@ try {
   // City chart: the oldest year in the snapshot, then drill into December (days derived from the daily columns).
   await page.goto(`${base}?city=stockton-ca&year=2023`, { waitUntil: "load" });
   await page.waitForFunction(() => performance.getEntriesByName("drill-chart-ready").length > 0, null, { timeout: 30_000 });
-  const dec = page.locator('[data-drill-panel] [data-key="12"][role="button"]');
-  if (await dec.count()) { await dec.focus(); await page.keyboard.press("Enter"); await page.waitForTimeout(600); }
-  const dayCount = await page.locator("[data-drill-panel] [data-chart]").getAttribute("data-points");
-  check("city chart: 2023 → December days", new URL(page.url()).searchParams.get("month") === "12" && dayCount === "31", `${dayCount} points`);
+  // Drill on the rain chart: both charts (temperature + rain) must switch to the days of December.
+  const dec = page.locator('[data-drill-panel] [data-chart]').nth(1).locator('[data-key="12"][role="button"]');
+  if (await dec.count()) { await dec.focus(); await page.keyboard.press("Enter"); await page.waitForTimeout(800); }
+  const dayCounts = await page.locator("[data-drill-panel] [data-chart]").evaluateAll((els) => els.map((e) => e.getAttribute("data-points")));
+  check("city charts: 2023 → December days (both)", new URL(page.url()).searchParams.get("month") === "12" && dayCounts.join() === "31,31", dayCounts.join(" + "));
+
+  // City history open on a recent year, hovering a month (synced crosshair): screenshot for the README.
+  await page.goto(`${base}?city=stockton-ca&year=2025`, { waitUntil: "load" });
+  await page.waitForFunction(() => performance.getEntriesByName("drill-chart-ready").length > 0, null, { timeout: 30_000 });
+  await page.waitForTimeout(800);
+  await page.locator('[data-drill-panel] [data-chart]').first().locator('[data-key="07"]').hover();
+  const crosshairs = await page.locator("[data-drill-panel] [data-crosshair]").count();
+  check("synced crosshair on both charts", crosshairs === 2, `${crosshairs} crosshairs`);
+  await page.locator("[data-drill-section]").screenshot({ path: new URL("../../docs/images/dashboard-demo-city.png", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1") });
 
   const csp = await page.evaluate(() => window.__csp ?? []);
   check("no CSP violations", csp.length === 0, csp.join("; "));

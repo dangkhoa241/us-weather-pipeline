@@ -144,8 +144,9 @@ export function UsMap({ states: rows, locations, metric, unit, selectedLocation,
                   <circle r={3 * r} fill="none" strokeWidth={1.4 * r} style={{ stroke: "var(--muted-foreground)" }} opacity={0.8} />
                 ) : (
                   <>
-                    <circle r={9 * r} fill={color} opacity={0.28} />
-                    <circle r={5.2 * r} fill={color} stroke="#ffffff" strokeWidth={1.4 * r} />
+                    <circle r={9.5 * r} fill="#ffffff" opacity={0.55} />
+                    <circle r={7 * r} fill={color} opacity={0.45} />
+                    <circle r={5 * r} fill={color} strokeWidth={1.2 * r} style={{ stroke: "rgba(17, 24, 39, 0.75)" }} />
                   </>
                 )}
                 {selected && <circle r={10 * r} fill="none" strokeWidth={2 * r} style={{ stroke: "var(--foreground)" }} />}

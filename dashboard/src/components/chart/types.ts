@@ -20,6 +20,10 @@ export type StatsChartProps = {
   title: string;                    // accessible name of the chart
   onSelect?: (key: string) => void; // makes points with data selectable (drill-down)
   readyMark?: string;               // performance.mark name after the first render with data (measurements)
+  maWindow?: number;                // moving-average window in points (7 for daily, 3 for periods)
+  hoverKey?: string | null;         // synced crosshair: the hovered bucket, shared by twin charts
+  onHoverKey?: (key: string | null) => void;
+  fileName?: string;                // base name of the PNG/CSV downloads
 };
 
 /** The plotted value of a point in display units. */
