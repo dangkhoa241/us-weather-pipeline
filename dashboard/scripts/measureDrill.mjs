@@ -11,7 +11,7 @@ import { chromium } from "playwright";
 const label = process.argv[2] ?? "unnamed";
 const ROOT = new URL("../..", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1");
 const APP = "http://127.0.0.1:4173/";
-const START = `${APP}?loc=stockton-ca&year=2025`;
+const START = `${APP}?city=stockton-ca&year=2025`;
 const RUNS = 5;
 
 async function waitFor(url, tries = 100) {

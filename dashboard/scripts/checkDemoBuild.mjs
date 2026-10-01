@@ -74,7 +74,7 @@ try {
   check("drill-down works offline", (await page.getAttribute("[data-map]", "data-map-level")) === "state");
 
   // City chart: the oldest year in the snapshot, then drill into December (days derived from the daily columns).
-  await page.goto(`${base}?loc=stockton-ca&year=2023`, { waitUntil: "load" });
+  await page.goto(`${base}?city=stockton-ca&year=2023`, { waitUntil: "load" });
   await page.waitForFunction(() => performance.getEntriesByName("drill-chart-ready").length > 0, null, { timeout: 30_000 });
   const dec = page.locator('[data-drill-panel] [data-key="12"][role="button"]');
   if (await dec.count()) { await dec.focus(); await page.keyboard.press("Enter"); await page.waitForTimeout(600); }

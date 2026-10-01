@@ -1,5 +1,6 @@
 // City drill-down below the map: years → 12 months of a year → days of a month, with a breadcrumb.
 // The level lives in the URL (filters year/month), so links and back/forward keep it.
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { allYearsRange, dayPoints, drillLevel, monthName, monthPoints, rangeFor, yearPoints, yearsWithData } from "@/lib/drill";
@@ -10,12 +11,36 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { StatsChart } from "@/components/chart/StatsChart";
 
+/** Hidden until a city is chosen (map click or shared link); then fades in and scrolls into view. */
 export function DrillDownPanel() {
+  const city = useFilters((s) => s.city);
+  const ref = useRef<HTMLDivElement>(null);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }   // a shared link opens directly, without scrolling
+    if (!city) return;
+    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    ref.current?.scrollIntoView?.({ behavior: calm ? "auto" : "smooth", block: "start" });
+  }, [city]);
+  return (
+    <div ref={ref} data-drill-section className="scroll-mt-4">
+      {city ? (
+        <div key={city} className="animate-in fade-in slide-in-from-bottom-4 duration-300 motion-reduce:animate-none"><DrillDownCard city={city} /></div>
+      ) : (
+        <Card data-drill-placeholder>
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">Click a city on the map to see its monthly history.</CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function DrillDownCard({ city: cityId }: { city: string }) {
   const f = useFilters();
   const locations = useQuery({ queryKey: ["locations"], queryFn: api.locations, staleTime: Infinity });
-  const city = locations.data?.data.find((l) => l.id === f.location);
-  const cityName = city ? `${city.name}, ${city.state}` : f.location;
-  const base = { locations: f.location, metric: f.metric };
+  const city = locations.data?.data.find((l) => l.id === cityId);
+  const cityName = city ? `${city.name}, ${city.state}` : cityId;
+  const base = { locations: cityId, metric: f.metric };
 
   const yearsRange = allYearsRange();
   const years = useQuery({ queryKey: ["stats", { ...base, period: "year", ...yearsRange }], queryFn: () => api.stats({ ...base, period: "year", ...yearsRange }) });
@@ -62,14 +87,16 @@ export function DrillDownPanel() {
             </ol>
           </nav>
         </CardDescription>
-        {level !== "years" && yearList.length > 0 && (
-          <CardAction>
+        <CardAction className="flex items-center gap-2">
+          {level !== "years" && yearList.length > 0 && (
             <Select value={year} onValueChange={(y) => f.setFilters({ year: y, month: "" })}>
               <SelectTrigger className="w-28" aria-label="Year"><SelectValue /></SelectTrigger>
               <SelectContent>{yearList.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
             </Select>
-          </CardAction>
-        )}
+          )}
+          <button type="button" aria-label="Close city history" className="rounded-md px-2 py-1 text-lg leading-none text-muted-foreground hover:bg-muted hover:text-foreground"
+            onClick={() => f.setFilters({ city: "", year: "", month: "" })}>×</button>
+        </CardAction>
       </CardHeader>
       <CardContent data-drill-panel>
         {active.error ? (

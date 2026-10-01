@@ -24,16 +24,18 @@ export type Filters = {
   // "all" = one value per year; month "MM" = the days of that month (needs a year).
   year: string;
   month: string;
+  // City whose history is open ("" = the drill-down section is closed). Separate from `location`, which feeds the KPIs.
+  city: string;
 };
 
 export const DEFAULTS: Filters = {
   location: "stockton-ca", period: "week", preset: "90d", from: "", to: "",
-  metric: "temp_c", unit: "F", compare: "previous", year: "", month: "",
+  metric: "temp_c", unit: "F", compare: "previous", year: "", month: "", city: "",
 };
 
 const URL_KEYS: Record<keyof Filters, string> = {
   location: "loc", period: "period", preset: "range", from: "from", to: "to", metric: "metric", unit: "unit", compare: "compare",
-  year: "year", month: "month",
+  year: "year", month: "month", city: "city",
 };
 
 const oneOf = <T extends string>(value: string | null, allowed: Record<T, unknown>, fallback: T): T =>
@@ -51,6 +53,7 @@ export function parseFilters(search: string): Filters {
     preset = DEFAULTS.preset;
   }
   if (preset !== "custom") from = to = "";
+  const cityParam = get("city");
   const yearParam = get("year") ?? "";
   const year = yearParam === "all" || (/^\d{4}$/.test(yearParam) && Number(yearParam) >= 1990 && Number(yearParam) <= 2100) ? yearParam : "";
   const monthParam = get("month") ?? "";
@@ -66,6 +69,7 @@ export function parseFilters(search: string): Filters {
     compare: oneOf<Compare>(get("compare"), COMPARES, DEFAULTS.compare),
     year,
     month,
+    city: cityParam && locationId.safeParse(cityParam).success ? cityParam : "",
   };
 }
 
@@ -93,7 +97,7 @@ export const useFilters = createFilterStore(typeof window === "undefined" ? DEFA
 
 const pick = (s: FilterStore): Filters => ({
   location: s.location, period: s.period, preset: s.preset, from: s.from, to: s.to, metric: s.metric, unit: s.unit, compare: s.compare,
-  year: s.year, month: s.month,
+  year: s.year, month: s.month, city: s.city,
 });
 
 /**

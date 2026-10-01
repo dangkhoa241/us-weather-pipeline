@@ -25,7 +25,7 @@ const renderPanel = () =>
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><DrillDownPanel /></QueryClientProvider>);
 
 describe("DrillDownPanel", () => {
-  beforeEach(() => useFilters.setState({ ...DEFAULTS, location: "stockton-ca", year: "2025", month: "" }));
+  beforeEach(() => useFilters.setState({ ...DEFAULTS, city: "stockton-ca", year: "2025", month: "" }));
 
   it("drills from 12 months to the days of a month and back via the breadcrumb", async () => {
     const user = userEvent.setup();

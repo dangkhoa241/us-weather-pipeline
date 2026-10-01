@@ -110,7 +110,7 @@ export function MapPanel() {
         ) : (
           <div className="grid gap-4 lg:grid-cols-[3fr_2fr]">
             <UsMap states={map.data?.data ?? []} locations={locations.data?.data ?? []} metric={f.metric} unit={f.unit}
-              selectedLocation={f.location} onSelectLocation={(location) => f.setFilters({ location, month: "" })}
+              selectedLocation={f.location} onSelectLocation={(location) => f.setFilters({ location, city: location, month: "" })}
               cityValues={dotValues} zoomState={zoom} onZoomState={setZoom} hoveredState={hover} onHoverState={setHover} />
             <div className="relative max-h-96 min-h-64 overflow-auto rounded-lg border lg:max-h-none">
               <div className="lg:absolute lg:inset-0 lg:overflow-auto">
