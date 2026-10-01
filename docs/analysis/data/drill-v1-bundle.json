@@ -1,0 +1,17 @@
+{
+  "label": "v1",
+  "js_gzip_kb": 391.6,
+  "css_gzip_kb": 8.5,
+  "files": [
+    {
+      "file": "index-B5Hh25Am.js",
+      "raw_kb": 1206.1,
+      "gzip_kb": 391.6
+    },
+    {
+      "file": "index-BZM42y10.css",
+      "raw_kb": 43.8,
+      "gzip_kb": 8.5
+    }
+  ]
+}

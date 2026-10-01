@@ -1,0 +1,17 @@
+{
+  "label": "v2",
+  "js_gzip_kb": 482.8,
+  "css_gzip_kb": 8.5,
+  "files": [
+    {
+      "file": "index-CpSm_1iw.js",
+      "raw_kb": 1538,
+      "gzip_kb": 482.8
+    },
+    {
+      "file": "index-h4Rq4IKV.css",
+      "raw_kb": 43.8,
+      "gzip_kb": 8.5
+    }
+  ]
+}

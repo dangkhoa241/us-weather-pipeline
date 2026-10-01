@@ -1,0 +1,21 @@
+{
+  "label": "v2",
+  "first_render_ms_median": 245,
+  "first_render_ms_all": [
+    194,
+    216,
+    245,
+    260,
+    518
+  ],
+  "mouse_drill_to_days": true,
+  "day_points": 31,
+  "keyboard_drill": true,
+  "breadcrumb_back_to_year": true,
+  "browser_back_restores_month": true,
+  "focusable": 13,
+  "labelled": 12,
+  "chart_label": "Temperature in Stockton, CA per month, 2025",
+  "chart_role": "group",
+  "measured_at": "2026-10-01T20:13:24.192Z"
+}
