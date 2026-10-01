@@ -11,6 +11,7 @@ import { fmt } from "@/lib/units";
 import { movingAverage } from "@/lib/movingAverage";
 import { downloadCsv, downloadPng, csvOf } from "./exportChart";
 import { valueOf, type StatsChartProps } from "./types";
+import { useWidth } from "./useWidth";
 
 const H = 300;
 const M = { top: 26, right: 14, bottom: 28, left: 46 };
@@ -18,22 +19,7 @@ const M = { top: 26, right: 14, bottom: 28, left: 46 };
 const toUnit = (v: number | null, metric: string, unit: string) =>
   v == null || metric === "precip_mm" ? v : unit === "F" ? (v * 9) / 5 + 32 : v;
 
-function useWidth(ref: React.RefObject<HTMLElement | null>) {
-  const [w, setW] = useState(640);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const measure = () => { if (el.clientWidth > 0) setW(Math.round(el.clientWidth)); };
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref]);
-  return w;
-}
-
-export function StatsChart({ points, metric, unit, title, onSelect, readyMark, maWindow = 3, hoverKey, onHoverKey, fileName }: StatsChartProps) {
+export function StatsChart({ points, metric, unit, title, onSelect, readyMark, maWindow = 3, hoverKey, onHoverKey, fileName, rainUnit = "mm" }: StatsChartProps) {
   const id = useId().replace(/:/g, "");
   const rootRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -57,7 +43,7 @@ export function StatsChart({ points, metric, unit, title, onSelect, readyMark, m
   }, [menu]);
 
   const rain = metric === "precip_mm";
-  const unitLabel = rain ? "mm" : `°${unit}`;
+  const unitLabel = rain ? rainUnit : `°${unit}`;
   const rows = points.map((p) => ({ p, value: valueOf(p, metric, unit), min: toUnit(p.min, metric, unit), max: toUnit(p.max, metric, unit) }));
   type Row = (typeof rows)[number];
   const ma = movingAverage(rows.map((r) => r.value), maWindow);
@@ -70,6 +56,7 @@ export function StatsChart({ points, metric, unit, title, onSelect, readyMark, m
   const top = rows.reduce<number>((best, r, i) => (hiOf(r) != null && (best < 0 || (hiOf(r) as number) > (hiOf(rows[best]) as number)) ? i : best), -1);
   const bottom = rows.reduce<number>((best, r, i) => (loOf(r) != null && (best < 0 || (loOf(r) as number) < (loOf(rows[best]) as number)) ? i : best), -1);
 
+  const flat = top >= 0 && bottom >= 0 && hiOf(rows[top]) === loOf(rows[bottom]);   // all equal: no max/min to mark
   const ys = rows.flatMap((r) => (rain ? [r.value] : [r.min, r.max, r.value])).concat(ma).filter((v): v is number => v != null);
   const [lo, hi] = ys.length ? [Math.min(...ys), Math.max(...ys)] : [0, 1];
   const x = scaleBand<string>().domain(points.map((p) => p.key)).range([M.left, W - M.right]).padding(rain ? 0.28 : 0.1);
@@ -87,7 +74,7 @@ export function StatsChart({ points, metric, unit, title, onSelect, readyMark, m
   const maLine = line<number | null>().defined((v) => v != null).x((_, i) => cx(points[i].key)).y((v) => y(v as number)).curve(curveMonotoneX);
 
   const describe = (r: Row) => r.value == null ? `${r.p.label}: no data`
-    : rain ? `${r.p.label}: ${fmt(r.value)} mm` : `${r.p.label}: average ${fmt(r.value)}${unitLabel}, min ${fmt(r.min)}, max ${fmt(r.max)}`;
+    : rain ? `${r.p.label}: ${fmt(r.value)} ${rainUnit}` : `${r.p.label}: average ${fmt(r.value)}${unitLabel}, min ${fmt(r.min)}, max ${fmt(r.max)}`;
   const activate = (key: string) => (e: React.KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect?.(key); }
   };
@@ -108,7 +95,7 @@ export function StatsChart({ points, metric, unit, title, onSelect, readyMark, m
             <button type="button" role="menuitem" className="block w-full rounded px-2 py-1 text-left hover:bg-muted"
               onClick={() => { if (svgRef.current) downloadPng(svgRef.current, base); setMenu(false); }}>Download PNG</button>
             <button type="button" role="menuitem" className="block w-full rounded px-2 py-1 text-left hover:bg-muted"
-              onClick={() => { downloadCsv(csvOf(points, metric, unit), base); setMenu(false); }}>Download CSV</button>
+              onClick={() => { downloadCsv(csvOf(points, metric, unit, rainUnit), base); setMenu(false); }}>Download CSV</button>
           </div>
         )}
       </div>
@@ -156,7 +143,7 @@ export function StatsChart({ points, metric, unit, title, onSelect, readyMark, m
             <g data-mean>
               <line x1={M.left} x2={W - M.right} y1={y(mean)} y2={y(mean)} strokeDasharray="6 4" strokeWidth={1.2} style={{ stroke: "var(--c-avg)" }} />
               <text x={W - M.right - 2} y={y(mean) - 4} textAnchor="end" fontSize={11} fontWeight={600} paintOrder="stroke" strokeWidth={3}
-                style={{ fill: "var(--c-avg)", stroke: "var(--card)" }}>avg {fmt(mean)}{rain ? " mm" : unitLabel}</text>
+                style={{ fill: "var(--c-avg)", stroke: "var(--card)" }}>avg {fmt(mean)}{rain ? ` ${rainUnit}` : unitLabel}</text>
             </g>
           )}
 
@@ -164,11 +151,11 @@ export function StatsChart({ points, metric, unit, title, onSelect, readyMark, m
             <text key={r.p.key} x={cx(r.p.key)} y={y(r.value) - 8} textAnchor="middle" fontSize={10}
               paintOrder="stroke" strokeWidth={3} style={{ fill: "var(--muted-foreground)", stroke: "var(--card)" }} data-value-label>{fmt(r.value, rain ? 1 : 0)}</text>
           ))}
-          {top >= 0 && (
+          {top >= 0 && !flat && (
             <text x={cx(rows[top].p.key)} y={y(hiOf(rows[top]) as number) - 7} textAnchor="middle" fontSize={11} fontWeight={700}
               paintOrder="stroke" strokeWidth={3} style={{ fill: markColor, stroke: "var(--card)" }} data-marker="max">▲ {fmt(hiOf(rows[top]))}</text>
           )}
-          {bottom >= 0 && bottom !== top && (
+          {bottom >= 0 && bottom !== top && !flat && (
             <text x={cx(rows[bottom].p.key)} y={rain ? y(loOf(rows[bottom]) as number) - 7 : Math.min(y(loOf(rows[bottom]) as number) + 15, H - M.bottom - 3)} textAnchor="middle" fontSize={11} fontWeight={700}
               paintOrder="stroke" strokeWidth={3} style={{ fill: "var(--c-cool)", stroke: "var(--card)" }} data-marker="min">▼ {fmt(loOf(rows[bottom]))}</text>
           )}
@@ -192,14 +179,14 @@ export function StatsChart({ points, metric, unit, title, onSelect, readyMark, m
           style={cx(hr.p.key) > W * 0.6 ? { right: W - cx(hr.p.key) + 10 } : { left: cx(hr.p.key) + 10 }}>
           <div className="font-medium">{hr.p.label}</div>
           {hr.value == null ? <div className="text-muted-foreground">No data</div> : rain ? (
-            <div>{fmt(hr.value)} mm</div>
+            <div>{fmt(hr.value)} {rainUnit}</div>
           ) : (
             <>
               <div>avg {fmt(hr.value)}{unitLabel}</div>
               <div className="text-muted-foreground">min {fmt(hr.min)} · max {fmt(hr.max)}</div>
             </>
           )}
-          {ma[hIdx] != null && <div className="text-muted-foreground">trend {fmt(ma[hIdx])}{rain ? " mm" : unitLabel}</div>}
+          {ma[hIdx] != null && <div className="text-muted-foreground">trend {fmt(ma[hIdx])}{rain ? ` ${rainUnit}` : unitLabel}</div>}
         </div>
       )}
     </div>

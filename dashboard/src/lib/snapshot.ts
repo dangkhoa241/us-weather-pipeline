@@ -3,7 +3,7 @@
 // the state map are computed here from daily values with the same rules as the API; forecast accuracy is
 // pre-computed for the preset ranges and their comparisons.
 import { z } from "zod";
-import type { AccuracyRow, LocationRow, MapRow, StatsResponse, StatsRow } from "@/lib/api";
+import type { AccuracyRow, AlertRow, ForecastRow, LocationRow, MapRow, PeriodRow, StatsResponse, StatsRow } from "@/lib/api";
 import { compareRange, dayMs, setDataEnd, toDay } from "@/lib/dates";
 
 const SUPPORTED_FORMAT = 1;
@@ -154,6 +154,30 @@ export const snapshotApi = {
       });
     }
     return { data: rows.sort((a, b) => a.state.localeCompare(b.state)), meta: meta(p) };
+  },
+
+  /** Latest forecast per model as exported (frozen at the snapshot time). */
+  async forecast(locationId: string) {
+    const all = await file<Record<string, Record<string, { issued_at: string; start: string; hours: [number, number | null, number | null, number | null][] }>>>("forecasts.json");
+    const rows: ForecastRow[] = [];
+    for (const [model, m] of Object.entries(all[locationId] ?? {})) {
+      const start = Date.parse(`${m.start.replace(" ", "T")}Z`);
+      for (const [h, temp_c, precip_mm, precip_prob_pct] of m.hours) {
+        const target_time = new Date(start + h * 3_600_000).toISOString().slice(0, 19).replace("T", " ");
+        rows.push({ model, issued_at: m.issued_at, target_time, temp_c, precip_mm, precip_prob_pct, wind_speed_ms: null });
+      }
+    }
+    return { data: rows, meta: meta() };
+  },
+
+  async forecastPeriods(locationId: string) {
+    const all = await file<Record<string, PeriodRow[]>>("periods.json");
+    return { data: all[locationId] ?? [], meta: meta() };
+  },
+
+  async alerts(state?: string) {
+    const all = await file<AlertRow[]>("alerts.json");
+    return { data: state ? all.filter((a) => a.states.includes(state)) : all, meta: meta() };
   },
 
   /** Pre-computed for the preset ranges and their comparisons; other ranges have no accuracy in the demo. */

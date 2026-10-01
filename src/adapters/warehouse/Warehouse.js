@@ -62,6 +62,13 @@ export class Warehouse {
    */
   async cityForecast({ locationId, days }) { throw new Error("Warehouse.cityForecast not implemented"); }
 
+  /**
+   * NWS 12-hour forecast periods for one location from the latest issued forecast, not yet ended.
+   * @returns {Promise<Array<{ issued_at: string, target_time: string, target_end_time: string|null, local_target_time: string,
+   *          temp_c: number|null, precip_prob_pct: number|null, wind_speed_ms: number|null, short_forecast: string|null }>>}
+   */
+  async forecastPeriods({ locationId }) { throw new Error("Warehouse.forecastPeriods not implemented"); }
+
   /** All locations (id, name, state, region, lat, lon, timezone), ordered by state and name. */
   async listLocations() { throw new Error("Warehouse.listLocations not implemented"); }
 

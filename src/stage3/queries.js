@@ -23,6 +23,10 @@ export const QUERY_TYPES = {
     normalize: ({ locationId, days = 7 }) => ({ locationId, days }),
     run: (warehouse, p) => warehouse.cityForecast(p),
   },
+  periods: {
+    normalize: ({ locationId }) => ({ locationId }),
+    run: (warehouse, p) => warehouse.forecastPeriods(p),
+  },
   locations: {
     normalize: () => ({}),
     run: (warehouse) => warehouse.listLocations(),

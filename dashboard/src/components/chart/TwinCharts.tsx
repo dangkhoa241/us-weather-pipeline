@@ -20,6 +20,8 @@ type Props = {
   onSelect?: (key: string) => void;
   emptyHint?: string;
   readyMark?: string;
+  rainTitle?: string;                  // default "Rain"
+  rainUnit?: string;                   // default "mm"; "%" for rain chance
 };
 
 function Body({ data, children, empty }: { data: TwinData; children: React.ReactNode; empty: string }) {
@@ -29,7 +31,7 @@ function Body({ data, children, empty }: { data: TwinData; children: React.React
   return <>{children}</>;
 }
 
-export function TwinCharts({ temp, rain, unit, scope, subject, maWindow, onSelect, emptyHint = "Nothing to show for this selection.", readyMark }: Props) {
+export function TwinCharts({ temp, rain, unit, scope, subject, maWindow, onSelect, emptyHint = "Nothing to show for this selection.", readyMark, rainTitle = "Rain", rainUnit }: Props) {
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const shared = { unit, maWindow, hoverKey, onHoverKey: setHoverKey, onSelect };
   return (
@@ -43,10 +45,10 @@ export function TwinCharts({ temp, rain, unit, scope, subject, maWindow, onSelec
         </CardContent>
       </Card>
       <Card>
-        <CardHeader><CardTitle>Rain</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{rainTitle}</CardTitle></CardHeader>
         <CardContent>
           <Body data={rain} empty={emptyHint}>
-            <StatsChart {...shared} points={rain.points} metric="precip_mm" title={`Precipitation in ${subject} ${scope}`} fileName={`rain-${scope}`.replace(/\W+/g, "-")} />
+            <StatsChart {...shared} points={rain.points} metric="precip_mm" rainUnit={rainUnit} title={`${rainTitle} in ${subject} ${scope}`} fileName={`rain-${scope}`.replace(/\W+/g, "-")} />
           </Body>
         </CardContent>
       </Card>

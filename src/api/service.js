@@ -162,6 +162,11 @@ export function createService({ warehouse, cache, store }) {
       return query("forecast", { locationId, days });
     },
 
+    async forecastPeriods({ locationId }) {
+      await requireLocations([locationId]);
+      return query("periods", { locationId });
+    },
+
     alerts: ({ state } = {}) => query("alerts", { state: state ?? "" }),
 
     async accuracy({ from, to, location }) {

@@ -125,7 +125,7 @@ write(dir, "accuracy.json", accuracy);
 // Latest forecast per model and location, as compact arrays: hours after `start` → [temp_c, precip_mm, precip_prob_pct].
 const forecasts = {};
 for (const loc of locations) {
-  const rows = (await get(`/forecast/${loc.id}`)).data;
+  const rows = (await get(`/forecast/${loc.id}`, { days: 8 })).data;
   const byModel = {};
   for (const r of rows) {
     const m = (byModel[r.model] ??= { issued_at: r.issued_at, start: r.target_time, hours: [] });
@@ -135,6 +135,12 @@ for (const loc of locations) {
   forecasts[loc.id] = byModel;
 }
 write(dir, "forecasts.json", forecasts);
+
+// NWS day/night periods per location (daily forecast cards) and the alerts active at export time.
+const periods = {};
+for (const loc of locations) periods[loc.id] = (await get(`/forecast/${loc.id}/periods`)).data;
+write(dir, "periods.json", periods);
+write(dir, "alerts.json", (await get("/alerts")).data);
 
 const totalKb = Object.values(files).reduce((a, f) => a + f.bytes, 0) / 1024;
 const gzipKb = Object.values(files).reduce((a, f) => a + f.gzip_bytes, 0) / 1024;

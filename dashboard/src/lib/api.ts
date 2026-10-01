@@ -9,6 +9,9 @@ export type StatsRow = z.infer<typeof ROW.stats>;
 export type MapRow = z.infer<typeof ROW.map>;
 export type AccuracyRow = z.infer<typeof ROW.accuracy>;
 export type StatsResponse = z.infer<typeof RESPONSE.stats>;
+export type ForecastRow = z.infer<typeof ROW.forecast>;
+export type PeriodRow = z.infer<typeof ROW.period>;
+export type AlertRow = z.infer<typeof ROW.alert>;
 
 export class ApiRequestError extends Error {
   status: number;
@@ -42,6 +45,9 @@ export const liveApi = {
     get("/stats", p, RESPONSE.stats),
   map: (p: { from: string; to: string }) => get("/map", p, RESPONSE.map),
   accuracy: (p: { from: string; to: string; location?: string }) => get("/accuracy", p, RESPONSE.accuracy),
+  forecast: (locationId: string, days = 8) => get(`/forecast/${encodeURIComponent(locationId)}`, { days }, RESPONSE.forecast),
+  forecastPeriods: (locationId: string) => get(`/forecast/${encodeURIComponent(locationId)}/periods`, {}, RESPONSE.periods),
+  alerts: (state?: string) => get("/alerts", { state }, RESPONSE.alerts),
 };
 
 /** Static demo build (VITE_DATA_MODE=snapshot) reads the exported JSON snapshot instead of /api. */

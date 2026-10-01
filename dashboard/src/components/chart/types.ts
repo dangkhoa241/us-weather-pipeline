@@ -24,6 +24,7 @@ export type StatsChartProps = {
   hoverKey?: string | null;         // synced crosshair: the hovered bucket, shared by twin charts
   onHoverKey?: (key: string | null) => void;
   fileName?: string;                // base name of the PNG/CSV downloads
+  rainUnit?: string;                // unit of the bar values (default "mm"; "%" for rain chance)
 };
 
 /** The plotted value of a point in display units. */

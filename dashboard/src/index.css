@@ -74,6 +74,13 @@
     --chart-5: oklch(0.269 0 0);
     --radius: 0.625rem;
     --c-temp: #e8590c;
+    --m-nws: #0f766e;
+    --m-ecmwf: #7c3aed;
+    --m-gfs: #2563eb;
+    --m-icon: #d97706;
+    --m-hrrr: #db2777;
+    --m-best: #6b7280;
+    --c-spread: rgba(100, 116, 139, 0.18);
     --c-hot: #c92a2a;
     --c-cool: #3b82c4;
     --c-rain: #2f80ed;
@@ -119,6 +126,13 @@
     --chart-4: oklch(0.371 0 0);
     --chart-5: oklch(0.269 0 0);
     --c-temp: #ff8a4c;
+    --m-nws: #2dd4bf;
+    --m-ecmwf: #a78bfa;
+    --m-gfs: #60a5fa;
+    --m-icon: #fbbf24;
+    --m-hrrr: #f472b6;
+    --m-best: #9ca3af;
+    --c-spread: rgba(148, 163, 184, 0.2);
     --c-hot: #ff6b6b;
     --c-cool: #6cb2ff;
     --c-rain: #5aa9ff;

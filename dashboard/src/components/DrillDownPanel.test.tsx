@@ -49,13 +49,13 @@ describe("DrillDownPanel", () => {
     renderPanel();
     await screen.findAllByRole("button", { name: /^Jul:/ });
     expect(chart(/^Temperature in Stockton, CA per month, 2025/)).toHaveAttribute("data-points", "12");
-    expect(chart(/^Precipitation in Stockton, CA per month, 2025/)).toHaveAttribute("data-points", "12");
+    expect(chart(/^Rain in Stockton, CA per month, 2025/)).toHaveAttribute("data-points", "12");
     expect(screen.queryByRole("button", { name: /^Jan:/ })).not.toBeInTheDocument();   // no data → not selectable
 
-    await user.click(within(chart(/^Precipitation/)).getByRole("button", { name: /^Jul:/ }));
+    await user.click(within(chart(/^Rain in/)).getByRole("button", { name: /^Jul:/ }));
     expect(useFilters.getState()).toMatchObject({ year: "2025", month: "07" });
     expect(await screen.findByRole("group", { name: /^Temperature in .* per day, Jul 2025/ })).toHaveAttribute("data-points", "31");
-    expect(chart(/^Precipitation in .* per day, Jul 2025/)).toHaveAttribute("data-points", "31");
+    expect(chart(/^Rain in .* per day, Jul 2025/)).toHaveAttribute("data-points", "31");
     expect(screen.getByText("Jul")).toHaveAttribute("aria-current", "page");
 
     await user.click(screen.getByRole("button", { name: "2025" }));
@@ -71,6 +71,6 @@ describe("DrillDownPanel", () => {
     await screen.findAllByRole("button", { name: /^Jul:/ });
     await user.hover(within(chart(/^Temperature/)).getByRole("button", { name: /^Aug:/ }));
     expect(container.querySelectorAll("[data-crosshair]")).toHaveLength(2);
-    expect(within(chart(/^Precipitation/)).getByText("Aug", { selector: "[data-tooltip] div" })).toBeInTheDocument();
+    expect(within(chart(/^Rain in/)).getByText("Aug", { selector: "[data-tooltip] div" })).toBeInTheDocument();
   });
 });

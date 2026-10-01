@@ -13,10 +13,10 @@ function save(blob: Blob, name: string) {
 const cell = (v: string | number | null) => (v == null ? "" : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
 
 /** Missing values are empty cells (never 0). Temperatures are in the displayed unit. */
-export function csvOf(points: ChartPoint[], metric: "temp_c" | "precip_mm", unit: "F" | "C"): string {
+export function csvOf(points: ChartPoint[], metric: "temp_c" | "precip_mm", unit: "F" | "C", rainUnit = "mm"): string {
   const conv = (c: number | null) => (c == null || metric === "precip_mm" || unit === "C" ? c : (c * 9) / 5 + 32);
   const round = (v: number | null) => (v == null ? null : Math.round(v * 100) / 100);
-  if (metric === "precip_mm") return ["bucket,label,precip_mm", ...points.map((p) => [p.key, p.label, round(p.sum)].map(cell).join(","))].join("\n");
+  if (metric === "precip_mm") return [`bucket,label,${rainUnit === "mm" ? "precip_mm" : "rain_chance_pct"}`, ...points.map((p) => [p.key, p.label, round(p.sum)].map(cell).join(","))].join("\n");
   return [`bucket,label,min_${unit},avg_${unit},max_${unit}`,
     ...points.map((p) => [p.key, p.label, round(conv(p.min)), round(conv(p.avg)), round(conv(p.max))].map(cell).join(","))].join("\n");
 }

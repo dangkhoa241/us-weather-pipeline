@@ -65,6 +65,16 @@ export const ROW = {
     model: z.string(), issued_at: z.string(), target_time: z.string(),
     temp_c: num, precip_mm: num, precip_prob_pct: num, wind_speed_ms: num,
   }),
+  // NWS 12-hour periods (day / night) with the forecaster's short text, e.g. "Mostly Sunny".
+  period: z.object({
+    issued_at: z.string(), target_time: z.string(), target_end_time: z.string().nullable(), local_target_time: z.string(),
+    temp_c: num, precip_prob_pct: num, wind_speed_ms: num, short_forecast: z.string().nullable(),
+  }),
+  alert: z.object({
+    id: z.string(), event: z.string(), severity: z.string().nullable(), urgency: z.string().nullable(), certainty: z.string().nullable(),
+    headline: z.string().nullable(), area_desc: z.string().nullable(), states: z.array(z.string()), location_ids: z.array(z.string()),
+    onset: z.string().nullable(), expires: z.string().nullable(), ends: z.string().nullable(),
+  }),
   records: z.object({
     first_day: z.string(), last_day: z.string(), days: z.number(),
     hottest_day: z.string(), hottest_c: num, coldest_day: z.string(), coldest_c: num,
@@ -93,6 +103,8 @@ export const RESPONSE = {
   map: envelope(z.array(ROW.map)),
   drill: envelope(z.array(ROW.stats)),
   forecast: envelope(z.array(ROW.forecast)),
+  periods: envelope(z.array(ROW.period)),
+  alerts: envelope(z.array(ROW.alert)),
   accuracy: envelope(z.array(ROW.accuracy)),
   records: envelope(ROW.records),
   any: envelope(z.any()),

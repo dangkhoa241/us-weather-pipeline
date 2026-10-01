@@ -376,6 +376,18 @@ export class ClickHouseWarehouse extends Warehouse {
     { id: locationId, days });
   }
 
+  async forecastPeriods({ locationId }) {
+    if (typeof locationId !== "string" || !locationId) throw new Error("locationId is required");
+    return this.#rows(`
+      SELECT issued_at, target_time, target_end_time, local_target_time, temp_c, precip_prob_pct, wind_speed_ms, short_forecast
+      FROM forecast_snapshots FINAL
+      WHERE location_id = {id:String} AND source = 'nws' AND kind = 'periods'
+        AND ifNull(target_end_time, target_time + toIntervalHour(12)) > now()
+        AND issued_at = (SELECT max(issued_at) FROM forecast_snapshots WHERE location_id = {id:String} AND source = 'nws' AND kind = 'periods')
+      ORDER BY target_time`,
+    { id: locationId });
+  }
+
   async listLocations() {
     return this.#rows(`
       SELECT id, name, state, region, lat, lon, timezone FROM locations FINAL ORDER BY state, name`, {});
