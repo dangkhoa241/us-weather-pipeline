@@ -1,0 +1,19 @@
+{
+  "label": "base",
+  "first_render_ms_median": 85,
+  "first_render_ms_all": [
+    70,
+    78,
+    85,
+    97,
+    294
+  ],
+  "mouse_drill_to_state": false,
+  "select_city_from_marker": false,
+  "keyboard_drill": false,
+  "focusable": 0,
+  "labelled": 0,
+  "role": null,
+  "mapLabel": null,
+  "measured_at": "2026-10-01T05:21:42.878Z"
+}

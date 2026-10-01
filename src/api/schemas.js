@@ -78,7 +78,11 @@ export const meta = z.object({
   range: z.object({ from: z.string(), to: z.string() }).optional(),
 }).passthrough();
 
-/** `{ data, meta }` envelope around a data schema. */
+/**
+ * `{ data, meta }` envelope around a data schema.
+ * @template {z.ZodType} T
+ * @param {T} data
+ */
 export const envelope = (data) => z.object({ data, meta: meta.optional() });
 
 export const RESPONSE = {

@@ -1,0 +1,17 @@
+{
+  "label": "base",
+  "js_gzip_kb": 325.4,
+  "css_gzip_kb": 8.4,
+  "files": [
+    {
+      "file": "index-8DAuAskO.css",
+      "raw_kb": 43,
+      "gzip_kb": 8.4
+    },
+    {
+      "file": "index-CEAQnM1e.js",
+      "raw_kb": 1009.9,
+      "gzip_kb": 325.4
+    }
+  ]
+}

@@ -22,7 +22,10 @@
     "bench:dashboard": "node scripts/benchDashboard.js",
     "pipeline": "node pipeline.js",
     "loadtest:api": "node scripts/loadTestApi.js",
-    "probe:api": "node scripts/probeApi.js"
+    "probe:api": "node scripts/probeApi.js",
+    "dashboard:dev": "npm --prefix dashboard run dev",
+    "dashboard:build": "npm --prefix dashboard run build",
+    "test:dashboard": "npm --prefix dashboard test"
   },
   "dependencies": {
     "@clickhouse/client": "^1.14.0",
