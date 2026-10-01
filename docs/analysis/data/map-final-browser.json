@@ -1,0 +1,19 @@
+{
+  "label": "final",
+  "first_render_ms_median": 144,
+  "first_render_ms_all": [
+    116,
+    139,
+    144,
+    153,
+    664
+  ],
+  "mouse_drill_to_state": true,
+  "select_city_from_marker": true,
+  "keyboard_drill": true,
+  "focusable": 51,
+  "labelled": 51,
+  "role": "group",
+  "mapLabel": "US map: Average temperature (°F)",
+  "measured_at": "2026-10-01T05:41:51.627Z"
+}
