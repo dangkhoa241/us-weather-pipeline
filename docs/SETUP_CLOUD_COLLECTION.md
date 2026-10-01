@@ -10,7 +10,7 @@ public repositories.
 | `NWS forecasts` (`.github/workflows/nws-forecasts.yml`) | every 3 h at minute 7 | `forecast_snapshots`, `pipeline_runs` |
 | `NWS alerts` (`.github/workflows/nws-alerts.yml`) | every hour at minute 23 | `alerts`, `pipeline_runs` |
 
-Atlas keeps 14 days of data (TTL indexes), so **sync at least once every 14 days**. The watcher warns after 7 days.
+Atlas keeps 7 days of data (TTL indexes), so **sync at least once every 7 days**. The watcher warns after 4 days.
 
 Takes about 15 minutes. Do the steps in order.
 
@@ -90,10 +90,11 @@ In the repository: **Settings → Secrets and variables → Actions**.
 
 - **60-day rule:** GitHub disables scheduled workflows in public repositories after 60 days without repository activity.
   Any push resets the clock; if it happens, re-enable them in the **Actions** tab.
-- **Storage:** Atlas M0 has 512 MB. Expected use is about 250–330 MB at 14 days (20 cities). Check
-  **Database → Metrics → Data Size** once in a while; if it passes ~400 MB, set `RAW_RETENTION_DAYS: "7"` in both
-  workflow files.
+- **Storage:** Atlas M0 has 512 MB. With 53 cities NWS adds ~48 MB/day (9,010 snapshots of ~660 bytes per run, 8 runs),
+  so 7 days are ~335 MB of data, ~370 MB with indexes and alerts (less in practice, because GitHub skips some scheduled
+  runs). Check **Database → Metrics → Data Size** once in a while; if it passes ~430 MB, set
+  `RAW_RETENTION_DAYS: "5"` in both workflow files (and `SYNC_WARN_DAYS=3` locally).
 - **Late runs:** GitHub can start scheduled runs 10–30+ minutes late, and occasionally skips one. That's accepted
   (see Known limitations in `docs/ROADMAP.md`).
-- **Sync at least every 14 days.** After 7 days without a successful sync, the watcher logs a warning and records a
+- **Sync at least every 7 days.** After 4 days without a successful sync, the watcher logs a warning and records a
   `sync_stale` entry in `pipeline_runs`.

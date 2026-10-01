@@ -102,12 +102,15 @@ export async function fetchHistory(store, locations, run, { from, to } = {}) {
   for (const location of locations) {
     try {
       let start = from;
+      const end = to && to < endLimit ? to : endLimit;
       if (!start) {
         const wm = await readWatermark(store, location.id);
+        // Already have the archive's last day up to 23:00: nothing new until the archive moves on (saves a call
+        // per city on every pipeline run).
+        if (wm && wm.last_time >= new Date(`${end}T23:00:00Z`)) continue;
         // Re-fetch the watermark's day: its last hours may have been null (trimmed) last time.
         start = wm ? toDay(wm.last_time) : toDay(addDays(new Date(), -365 * config.stage1.historyYears));
       }
-      const end = to && to < endLimit ? to : endLimit;
       if (start > end) {
         console.log(`[history] ${location.id}: up to date (next ${start}, archive ends ${end})`);
         continue;

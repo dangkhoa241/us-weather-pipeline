@@ -83,7 +83,7 @@ export const config = Object.freeze({
   // Watcher: run pipeline.js (Stage 1 catch-up → Stage 2 → Stage 3) on this schedule.
   pipelineCron: env.PIPELINE_CRON || "50 */3 * * *",
 
-  // Raw-store retention in days (0 = keep forever). The GitHub Actions workflows set 14 for the free Atlas cluster.
+  // Raw-store retention in days (0 = keep forever). The GitHub Actions workflows set 7 for the free Atlas cluster.
   retentionDays: int(env.RAW_RETENTION_DAYS, 0),
 
   // Second raw store that GitHub Actions writes NWS data to; sync-atlas copies it into the local store.
@@ -91,7 +91,7 @@ export const config = Object.freeze({
     uri: env.ATLAS_MONGO_URI || null,
     db: env.ATLAS_MONGO_DB || "weather",
     syncCron: env.SYNC_ATLAS_CRON || "40 5 * * *",
-    syncWarnDays: int(env.SYNC_WARN_DAYS, 7),
+    syncWarnDays: int(env.SYNC_WARN_DAYS, 4),   // Atlas keeps 7 days: warn with 3 days to spare
   },
 
   discord: {

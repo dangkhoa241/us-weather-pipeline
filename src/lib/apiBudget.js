@@ -24,11 +24,13 @@ export class ApiBudget {
    * @param {import("../adapters/rawStore/RawStore.js").RawStore} store
    * @param {string} api  e.g. "open-meteo"
    * @param {{ perHour: number, perDay: number }} limits  weighted calls
+   * @param {{ share?: number }} [options]  share: the fraction of each limit this caller may use (default all of it).
+   *        A bulk job with share < 1 always leaves the rest of the budget to the other jobs.
    */
-  constructor(store, api, { perHour, perDay }) {
+  constructor(store, api, { perHour, perDay }, { share = 1 } = {}) {
     this.store = store;
     this.api = api;
-    this.limits = { hour: perHour, day: perDay };
+    this.limits = { hour: perHour * share, day: perDay * share };
   }
 
   /** Weighted calls used in the current UTC hour and day. */

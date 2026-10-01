@@ -17,6 +17,9 @@ const HOUR_MS = 3_600_000;
 const RUN_STEP_MS = 6 * HOUR_MS;
 const FORECAST_DAYS = 7;
 const RECENT_MS = 24 * HOUR_MS;   // a missing run younger than this may still appear; retry it later
+// The backfill is the biggest Open-Meteo user; it may take at most this share of the hourly/daily budget so the
+// history load (and the baseline) always get the rest, even while a large backfill is catching up.
+const BUDGET_SHARE = 0.75;
 
 // Domain whose meta.json says which run is the latest.
 const RUN_DOMAIN = {
@@ -119,7 +122,7 @@ const isRunMissing = (err) => err instanceof HttpError && err.status === 400 && 
 export async function backfillOpenMeteoRuns(store, locations, run, options = {}) {
   const days = options.days ?? config.stage1.omBackfillDays;
   const models = options.models ?? config.stage1.omBackfillModels;
-  const budget = new ApiBudget(store, "open-meteo", config.openMeteoBudget);
+  const budget = new ApiBudget(store, "open-meteo", config.openMeteoBudget, { share: BUDGET_SHARE });
   const now = Date.now();
   const earliest = floorToRun(now - days * 24 * HOUR_MS);
   const latest = await latestRuns(models, run);

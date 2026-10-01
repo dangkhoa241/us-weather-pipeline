@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 10
     env:
       MONGO_DB: weather
-      RAW_RETENTION_DAYS: "14"      # TTL index on Atlas keeps the free 512 MB cluster small
+      RAW_RETENTION_DAYS: "7"       # TTL index: 53 cities ≈ 47 MB/day of NWS data, 7 days stay under Atlas M0's 512 MB
       NWS_USER_AGENT: ${{ vars.NWS_USER_AGENT }}
       TZ: UTC
     steps:

@@ -1,7 +1,7 @@
 // src/stage1/atlasSync.js
 // Copy what GitHub Actions collected on MongoDB Atlas (NWS forecasts, alerts, their run logs) into the local
 // raw store. Incremental by a per-collection marker; upserts by natural key, so re-running never duplicates.
-// Atlas keeps only RAW_RETENTION_DAYS (14) of data, so sync at least that often (warning after SYNC_WARN_DAYS).
+// Atlas keeps only RAW_RETENTION_DAYS (7) of data, so sync at least that often (warning after SYNC_WARN_DAYS).
 
 import { config } from "../config.js";
 import { COLLECTIONS } from "../collections.js";
@@ -69,7 +69,7 @@ export async function checkSyncFreshness(store, notifier, now = new Date()) {
   const message = lastAt
     ? `last successful Atlas sync ${lastAt.toISOString()} (${ageDays.toFixed(1)} days ago)`
     : "no successful Atlas sync yet";
-  console.warn(`[watch] WARNING ${message}; Atlas keeps ${config.retentionDays || 14} days of data`);
+  console.warn(`[watch] WARNING ${message}; Atlas keeps ${config.retentionDays || 7} days of data`);
   await notifier.notify({ level: "warn", title: "Atlas sync is stale", message });
   const entry = {
     etl_batch_id: `stage1-sync-check-${now.toISOString().replace(/[-:.]/g, "")}`,
