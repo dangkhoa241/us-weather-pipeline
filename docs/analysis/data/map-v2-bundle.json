@@ -1,0 +1,17 @@
+{
+  "label": "v2",
+  "js_gzip_kb": 396,
+  "css_gzip_kb": 8.4,
+  "files": [
+    {
+      "file": "index-BrSgCJAP.js",
+      "raw_kb": 1219.1,
+      "gzip_kb": 396
+    },
+    {
+      "file": "index-DroRleHb.css",
+      "raw_kb": 43.1,
+      "gzip_kb": 8.4
+    }
+  ]
+}
