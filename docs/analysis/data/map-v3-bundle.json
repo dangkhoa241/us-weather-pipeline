@@ -1,0 +1,17 @@
+{
+  "label": "v3",
+  "js_gzip_kb": 372.4,
+  "css_gzip_kb": 8.5,
+  "files": [
+    {
+      "file": "index-DUXpuu0L.css",
+      "raw_kb": 43.6,
+      "gzip_kb": 8.5
+    },
+    {
+      "file": "index-U5rOtxKY.js",
+      "raw_kb": 1148.4,
+      "gzip_kb": 372.4
+    }
+  ]
+}
