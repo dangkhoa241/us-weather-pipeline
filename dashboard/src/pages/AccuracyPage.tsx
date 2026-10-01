@@ -109,7 +109,7 @@ export function AccuracyPage() {
       <Card>
         <CardHeader>
           <CardTitle>Biggest misses</CardTitle>
-          <CardDescription>Largest hourly errors at lead day {lead} ({areaName}); at most one per city and day. Times are city-local.</CardDescription>
+          <CardDescription>Largest hourly errors at lead day {lead} ({areaName}); at most one per city and day; models with an exact run time only (no best match). Times are city-local.</CardDescription>
         </CardHeader>
         <CardContent>
           {misses.error ? <Problem what="the biggest misses" error={misses.error} /> : misses.isPending ? <Skeleton className="h-40" /> : !misses.data?.data.length ? <Empty /> : (
@@ -151,7 +151,7 @@ export function AccuracyPage() {
           <p><b className="text-foreground">Error (MAE)</b>: each hourly temperature forecast is compared with the temperature observed at that hour (Open-Meteo archive); the average size of the difference, ignoring its sign.</p>
           <p><b className="text-foreground">Bias</b>: the average signed difference (forecast − observed). Positive means the model runs too warm, negative too cold. In °F, errors and biases are ×1.8 (no +32).</p>
           <p><b className="text-foreground">Lead day</b>: how many days before the forecast hour the model run was issued (1 = the day before). Errors usually grow with lead time.</p>
-          <p><b className="text-foreground">Data</b>: past model runs (ECMWF, GFS, ICON, HRRR) and NWS forecasts collected by the pipeline. <i>Best match</i> is a lead-day-only baseline (approximate issue time), listed but not ranked; legacy snapshots are excluded; models with fewer than {MIN_SAMPLES} pairs aren't ranked. NWS appears once its forecasts can be matched with observations (~5-day lag).</p>
+          <p><b className="text-foreground">Data</b>: past model runs (ECMWF, GFS, ICON, HRRR) and NWS forecasts collected by the pipeline. <i>Best match</i> is a lead-day-only baseline (approximate issue time): listed in the leaderboard but not ranked, and left out of the biggest misses; legacy snapshots are excluded; models with fewer than {MIN_SAMPLES} pairs aren't ranked. NWS appears once its forecasts can be matched with observations (~5-day lag).</p>
         </CardContent>
       </Card>
     </>

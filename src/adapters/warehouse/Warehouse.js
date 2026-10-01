@@ -63,6 +63,7 @@ export class Warehouse {
 
   /**
    * The largest hourly errors, at most one per city and day; same filters as accuracyByMonth plus `limit`.
+   * Only forecasts with an exact issue time (best_match, whose issue time is approximate, is left out).
    * @returns {Promise<Array<{ target_time: string, location_id: string, model: string, lead_days: number,
    *          forecast_c: number, observed_c: number, error_c: number }>>}
    */

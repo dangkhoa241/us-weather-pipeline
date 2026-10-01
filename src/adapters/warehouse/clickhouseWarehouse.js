@@ -337,6 +337,8 @@ export class ClickHouseWarehouse extends Warehouse {
         round(forecast_temp_c, 1) AS forecast_c, round(observed_temp_c, 1) AS observed_c, round(temp_error_c, 1) AS error_c
       FROM forecast_accuracy
       WHERE ${ACCURACY_FILTER}
+        -- exact issue times only: best_match's issue time is approximate (lead day only), so it isn't a fair "miss"
+        AND issued_at_basis NOT IN ('previous_runs_lead_day', 'fetch_hour')
       ORDER BY temp_abs_error_c DESC, target_time, model
       LIMIT 1 BY location_id, toDate(target_time)
       LIMIT {limit:UInt8}`,

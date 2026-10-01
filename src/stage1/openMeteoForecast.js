@@ -6,6 +6,7 @@
 import { config } from "../config.js";
 import { COLLECTIONS } from "../collections.js";
 import { openMeteoGet } from "../lib/http.js";
+import { ApiBudget, BudgetExceeded } from "../lib/apiBudget.js";
 
 const FORECAST_URL = "https://api.open-meteo.com/v1/forecast";
 const META_URL = (domain) => `https://api.open-meteo.com/data/${domain}/static/meta.json`;
@@ -133,8 +134,10 @@ export const requestWeight = (modelCount) =>
 export async function fetchOpenMeteoForecasts(store, locations, run) {
   const allModels = config.stage1.openMeteoForecastModels;
   const runTimes = await fetchRunTimes(allModels, run);
+  // Shared Open-Meteo budget (the backfill leaves at least 25% of it to the other jobs).
+  const budget = new ApiBudget(store, "open-meteo", config.openMeteoBudget);
 
-  for (const location of locations) {
+  for (const [i, location] of locations.entries()) {
     try {
       const models = allModels.filter((m) => coversLocation(m, location));
       for (const m of allModels.filter((x) => !models.includes(x))) run.skip(location.id, `${m}: location outside model domain`);
@@ -147,6 +150,14 @@ export async function fetchOpenMeteoForecasts(store, locations, run) {
         timezone: "GMT",
         wind_speed_unit: "ms",
       });
+      try {
+        await budget.reserve(requestWeight(models.length));
+      } catch (err) {
+        if (!(err instanceof BudgetExceeded)) throw err;
+        run.skip(null, `stopped before ${location.id}: ${err.message}; ${locations.length - i} locations not fetched`);
+        console.log(`[om-forecast] ${err.message}; ${locations.length - i} locations left for the next run`);
+        break;
+      }
       const fetchedAt = new Date();
       const data = await openMeteoGet(`${FORECAST_URL}?${params}`, { cost: requestWeight(models.length) });
       const meta = { etl_batch_id: run.etlBatchId, source_timestamp: fetchedAt, fetched_at: fetchedAt };

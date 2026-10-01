@@ -25,7 +25,7 @@ Modes (default: all):
                resumes per model + location, stops at the Open-Meteo budget
   om-baseline  best_match baseline from the Previous Runs API: value forecast 1..7 days before each past hour
                (lead_days exact, issued_at approximate); last ${config.stage1.omBackfillDays} days, resumes per location
-  om-forecast  (manual only) latest Open-Meteo forecasts, one per model:
+  om-forecast  latest Open-Meteo forecasts, one per model (every 6 h, after the model runs):
                ${config.stage1.openMeteoForecastModels.join(", ")}
   alerts       NWS active alerts for tracked states → alerts
   sync-atlas   copy NWS forecasts, alerts and run logs collected by GitHub Actions on Atlas into the local store
@@ -38,6 +38,7 @@ Options:
   --days <n>             om-backfill / om-baseline: how many days back (default ${config.stage1.omBackfillDays})
   --watch                keep running on a schedule:
                            forecast "${config.stage1.forecastCron}", alerts "${config.stage1.alertsCron}",
+                           om-forecast "${config.stage1.openMeteoForecastCron}",
                            history "${config.stage1.historyCron}", om-backfill "${config.stage1.omBackfillCron}",
                            om-baseline "${config.stage1.omBaselineCron}",
                            pipeline (sync-atlas + history → Stage 2 → Stage 3) "${config.pipelineCron}"
@@ -51,8 +52,9 @@ Examples:
 `;
 
 const MODES = ["history", "forecast", "om-backfill", "om-baseline", "om-forecast", "alerts", "sync-atlas"];
-// "all" and --watch: live Open-Meteo forecasts are replaced by om-backfill (no machine needs to stay on).
-const DEFAULT_MODES = ["sync-atlas", "history", "forecast", "om-backfill", "om-baseline", "alerts"];
+// "all" and --watch. Live Open-Meteo forecasts (om-forecast) feed the Forecast page; om-backfill fills past runs for
+// accuracy. Both draw from the same Open-Meteo budget (om-backfill takes at most 75% of it).
+const DEFAULT_MODES = ["sync-atlas", "history", "forecast", "om-forecast", "om-backfill", "om-baseline", "alerts"];
 // In --watch these run as Stage 1 of pipeline.js (then Stage 2 and 3), on PIPELINE_CRON, instead of on their own.
 const PIPELINE_MODES = ["sync-atlas", "history"];
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;

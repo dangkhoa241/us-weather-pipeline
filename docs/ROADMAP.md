@@ -27,7 +27,7 @@ Approved free stack:
 | Service | Free limit | When exceeded | Card? | Our use: 53 cities (current) | Note |
 |---|---|---|---|---|---|
 | NWS API | No published quota; needs a `User-Agent` with contact | Temporary block (403/429) | No | ~106 forecast req / 3 h (~40 s), 1 alerts req / h | fine |
-| Open-Meteo | Non-commercial only. 600 / min, 5,000 / hour, 10,000 / day *weighted* calls (a request counts extra per 10 variables and per 14 days) | 429 until the window resets | No | ~1,100 / day steady (11%); our cap 2,000 / h and 6,000 / day, backfill ≤ 75% of it | catch-up below |
+| Open-Meteo | Non-commercial only. 600 / min, 5,000 / hour, 10,000 / day *weighted* calls (a request counts extra per 10 variables and per 14 days) | 429 until the window resets | No | ~2,400 / day steady (24%: ~1,100 history/backfill/baseline + ~1,270 om-forecast every 6 h); our cap 2,000 / h and 6,000 / day, backfill ≤ 75% of it | catch-up below |
 | Vercel Hobby (dashboard demo, static) | 100 GB Fast Data Transfer / month, 100 deployments / day, 45 min / build; non-commercial only | Project paused (Hobby is never billed) | No | ~0.5 MB gzipped per visit (≈ 200k visits / month) | static snapshot, size independent of traffic |
 | MongoDB Atlas M0 (NWS via GitHub Actions) | 512 MB storage | Writes fail | No | ~48 MB / day; 7-day TTL ≈ 335 MB data, ~370 MB with indexes (72%) | if > 430 MB: retention 5 days |
 | Discord webhook | ~30 messages / min per webhook | 429 | No | a few / day | a few / day |
@@ -43,8 +43,8 @@ Completion estimates after expanding to 53 cities (2026-10-01, budgets unchanged
   ~18 days at the full 6,000 calls/day (Docker on ≥ 4 h/day), ~30 days at ~2 h/day.
 
 Cost follow-ups:
-- [x] Open-Meteo usage budget: `api_usage` ledger per UTC hour/day (defaults 2,000 / 6,000 weighted calls), shared by history and om-backfill; jobs stop cleanly and resume
-- [x] Live `om-forecast` replaced by `om-backfill` (Single Runs, 1 weighted call per run/model/city)
+- [x] Open-Meteo usage budget: `api_usage` ledger per UTC hour/day (defaults 2,000 / 6,000 weighted calls), shared by history, om-backfill, om-baseline and om-forecast; jobs stop cleanly and resume
+- [x] Accuracy data from `om-backfill` (Single Runs, 1 weighted call per run/model/city); live `om-forecast` every 6 h for the Forecast page
 - [ ] Retention for raw `forecast_snapshots` / `observations_hourly` in MongoDB once they are loaded into the warehouse
 
 **Pipeline flow (keep script names):**
@@ -147,13 +147,12 @@ Security (low; from the security review of Stages 1–2, compose and workflows):
 - The API is not a Docker Compose service yet (run with `npm start`).
 - Dashboard: city dot values are means of yearly rows weighted by hours (same as the state values, not per-day exact);
   PNG downloads use the system sans-serif font (the web font isn't available to the exported image).
-- Forecast page: Open-Meteo model forecasts are only as fresh as the last manual `om-forecast` run (live collection is
-  manual by decision); NWS is fresh (GitHub Actions every 3 h). Scheduling `om-forecast` would cost ~5 weighted
-  calls per city per run (≈265 for 53 cities), well within the 2,000/hour budget — not done without a decision.
+- Forecast page: Open-Meteo model forecasts are refreshed every 6 h by the watcher (`om-forecast`, ~318 weighted calls
+  per run, ~1,270/day from the shared budget), so they need the local machine on; NWS is collected in the cloud.
 - Accuracy page: model accuracy so far covers ~Jul 1 – Aug 7 for the original 20 cities (om-backfill works forward from
   the oldest day); NWS appears once its forecasts can be matched with observations (~5-day archive lag). States
   without tracked cities or enough pairs are hatched.
-- Biggest misses are dominated by the best-match baseline, whose issue time is approximate; some may be data artifacts.
+- Biggest misses exclude best_match (approximate issue time); a few remaining large misses may still be data artifacts.
 - Demo snapshot: accuracy map/bias/misses only for all US over the default 90-day range (other choices show a note).
 - Dashboard: KPI sparklines stay daily (the Period filter drives the trend chart); the map colors by temperature or
   precipitation only. The city chart scales its text with the width (SVG `viewBox`).
@@ -174,7 +173,7 @@ Security (low; from the security review of Stages 1–2, compose and workflows):
 - [x] Unique indexes (no duplicates on re-run)
 - [x] Run metadata: `etl_batch_id, source_timestamp, status, rows_fetched`
 - [x] Open-Meteo forecasts as snapshots with a `model` field: gfs_hrrr, gfs_global, ecmwf_ifs025, icon_global (backfilled
-      from Single Runs) + best_match baseline (Previous Runs); live `om-forecast` is manual only
+      from Single Runs) + best_match baseline (Previous Runs); live `om-forecast` every 6 h (02:40/08:40/14:40/20:40 UTC, after the model runs)
 - [x] IANA `timezone` per location
 - [x] `om-backfill`: past 00/06/12/18Z runs of gfs_hrrr, gfs_global, ecmwf_ifs025, icon_global from the Single Runs API
       (exact `issued_at`, run-horizon caps, progress marker per model + city); 90-day backfill spread over ~5 days

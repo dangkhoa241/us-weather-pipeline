@@ -66,7 +66,7 @@ export const config = Object.freeze({
     alertsCron: env.ALERTS_CRON || "*/15 * * * *",
     historyCron: env.HISTORY_CRON || "30 6 * * *",
     openMeteoForecastModels: (env.OPEN_METEO_FORECAST_MODELS || "best_match,gfs_hrrr,gfs_global,ecmwf_ifs025,icon_global").split(",").map((s) => s.trim()).filter(Boolean),
-    openMeteoForecastCron: env.OPEN_METEO_FORECAST_CRON || "0 */3 * * *",
+    openMeteoForecastCron: env.OPEN_METEO_FORECAST_CRON || "40 2,8,14,20 * * *",
     forecastGapWarnHours: int(env.FORECAST_GAP_WARN_HOURS, 6),
     omBackfillDays: int(env.OM_BACKFILL_DAYS, 90),
     omBackfillModels: (env.OM_BACKFILL_MODELS || "gfs_hrrr,gfs_global,ecmwf_ifs025,icon_global").split(",").map((s) => s.trim()).filter(Boolean),
