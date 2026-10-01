@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api, type StatsRow } from "@/lib/api";
 import { periodLabel } from "@/lib/drill";
+import { useSubject } from "@/lib/subject";
 import { maWindowFor } from "@/lib/movingAverage";
 import { PERIODS, selectedRange, useFilters, type Period } from "@/store/filters";
 import { Card, CardAction, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,10 +16,6 @@ const TABS: Record<Period, string> = { week: "Weekly", month: "Monthly", quarter
 export function TrendPanel() {
   const f = useFilters();
   const range = selectedRange(f);
-  const locations = useQuery({ queryKey: ["locations"], queryFn: api.locations, staleTime: Infinity });
-  const city = locations.data?.data.find((l) => l.id === f.location);
-  const subject = city ? `${city.name}, ${city.state}` : f.location;
-
   const query = (metric: "temp_c" | "precip_mm") => {
     const p = { locations: f.location, metric, period: f.period, ...range };
     return useQuery({ queryKey: ["stats", p], queryFn: () => api.stats(p) });   // eslint-disable-line react-hooks/rules-of-hooks
@@ -29,8 +26,11 @@ export function TrendPanel() {
     })),
     pending: q.isPending, error: q.error,
   });
-  const temp = toData(query("temp_c"));
-  const rain = toData(query("precip_mm"));
+  const tempQuery = query("temp_c");
+  const rainQuery = query("precip_mm");
+  const subject = useSubject()(tempQuery.data?.data ?? []);
+  const temp = toData(tempQuery);
+  const rain = toData(rainQuery);
   const scope = `by ${PERIODS[f.period].toLowerCase()}, ${range.from} – ${range.to}`;
 
   return (

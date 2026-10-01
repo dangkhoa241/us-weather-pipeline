@@ -5,7 +5,8 @@ import { api, type StatsRow } from "@/lib/api";
 import { compareRange } from "@/lib/dates";
 import { computeKpis, delta, type Delta, type Kpis } from "@/lib/kpi";
 import { deltaToUnit, fmt, toUnit } from "@/lib/units";
-import { COMPARES, selectedRange, useFilters } from "@/store/filters";
+import { ALL_US, COMPARES, selectedRange, useFilters } from "@/store/filters";
+import { useSubject } from "@/lib/subject";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -18,11 +19,12 @@ function useKpiData() {
   const base = { locations: f.location, period: "day", ...range, compare };
   const temp = useQuery({ queryKey: ["stats", { ...base, metric: "temp_c" }], queryFn: () => api.stats({ ...base, metric: "temp_c" }) });
   const rain = useQuery({ queryKey: ["stats", { ...base, metric: "precip_mm" }], queryFn: () => api.stats({ ...base, metric: "precip_mm" }) });
-  const acc = useQuery({ queryKey: ["accuracy", { location: f.location, ...range }], queryFn: () => api.accuracy({ location: f.location, ...range }) });
+  const location = f.location === ALL_US ? undefined : f.location;   // all US: accuracy over every city
+  const acc = useQuery({ queryKey: ["accuracy", { location, ...range }], queryFn: () => api.accuracy({ location, ...range }) });
   const prevRange = compare ? compareRange(range, compare) : null;
   const prevAcc = useQuery({
-    queryKey: ["accuracy", { location: f.location, ...prevRange }],
-    queryFn: () => api.accuracy({ location: f.location, ...prevRange! }),
+    queryKey: ["accuracy", { location, ...prevRange }],
+    queryFn: () => api.accuracy({ location, ...prevRange! }),
     enabled: prevRange != null,
   });
   return { f, temp, rain, acc, prevAcc, prevRange };
@@ -45,6 +47,7 @@ type CardSpec = { key: keyof Kpis; title: string; value: (k: Kpis) => number | n
 
 export function KpiCards() {
   const { f, temp, rain, acc, prevAcc, prevRange } = useKpiData();
+  const subjectOf = useSubject();
   const loading = temp.isPending || rain.isPending || acc.isPending;
   const error = temp.error ?? rain.error ?? acc.error;
 
@@ -61,6 +64,7 @@ export function KpiCards() {
   }
 
   const tempRows = temp.data?.data ?? [];
+  const subject = subjectOf(tempRows);
   const rainRows = rain.data?.data ?? [];
   if (!tempRows.length && !rainRows.length) {
     return <Alert><AlertTitle>No data for this range</AlertTitle><AlertDescription>Pick another date range or location.</AlertDescription></Alert>;
@@ -92,7 +96,9 @@ export function KpiCards() {
   ];
 
   return (
-    <section aria-label="Key figures" className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+    <section aria-label="Key figures" className="flex flex-col gap-2">
+    <p className="px-1 text-sm font-medium text-muted-foreground" data-kpi-subject>{subject}</p>
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
       {cards.map((c) => (
         <Card key={c.key} size="sm" className="gap-1">
           <CardHeader><CardTitle className="text-xs font-medium text-muted-foreground">{c.title}</CardTitle></CardHeader>
@@ -103,6 +109,7 @@ export function KpiCards() {
           </CardContent>
         </Card>
       ))}
+    </div>
     </section>
   );
 }

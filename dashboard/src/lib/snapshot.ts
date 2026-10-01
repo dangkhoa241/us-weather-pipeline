@@ -18,8 +18,9 @@ export type SnapshotManifest = z.infer<typeof manifestSchema>;
 
 type Daily = {
   location_id: string; from: string; days: number;
-  temp: { min: (number | null)[]; max: (number | null)[]; avg: (number | null)[]; n: (number | null)[] };
-  precip: { sum: (number | null)[]; n: (number | null)[] };
+  // `cities` only in daily-all.json (US-wide averages, the "All US" location)
+  temp: { min: (number | null)[]; max: (number | null)[]; avg: (number | null)[]; n: (number | null)[]; cities?: (number | null)[] };
+  precip: { sum: (number | null)[]; n: (number | null)[]; cities?: (number | null)[] };
 };
 
 let manifest: SnapshotManifest | null = null;
@@ -59,11 +60,13 @@ function dailyRows(d: Daily, metric: string, from: string, to: string): StatsRow
     if (metric === "precip_mm") {
       const n = d.precip.n[i];
       if (n == null) continue;   // no data that day: no row (as the API)
-      rows.push({ location_id: d.location_id, period_start: day, min: null, max: null, avg: null, sum: d.precip.sum[i], n_values: n, n_hours: n });
+      rows.push({ location_id: d.location_id, period_start: day, min: null, max: null, avg: null, sum: d.precip.sum[i], n_values: n, n_hours: n,
+        ...(d.precip.cities ? { cities: d.precip.cities[i] ?? 0 } : {}) });
     } else {
       const n = d.temp.n[i];
       if (n == null) continue;
-      rows.push({ location_id: d.location_id, period_start: day, min: d.temp.min[i], max: d.temp.max[i], avg: d.temp.avg[i], sum: null, n_values: n, n_hours: n });
+      rows.push({ location_id: d.location_id, period_start: day, min: d.temp.min[i], max: d.temp.max[i], avg: d.temp.avg[i], sum: null, n_values: n, n_hours: n,
+        ...(d.temp.cities ? { cities: d.temp.cities[i] ?? 0 } : {}) });
     }
   }
   return rows;
@@ -103,6 +106,7 @@ export function aggregate(rows: StatsRow[], period: string): StatsRow[] {
       avg: n ? round(withAvg.reduce((a, r) => a + (r.avg as number) * r.n_values, 0) / n, 3) : null,
       sum: vals("sum").length ? round(vals("sum").reduce((a, v) => a + v, 0), 3) : null,
       n_values: g.reduce((a, r) => a + r.n_values, 0), n_hours: g.reduce((a, r) => a + r.n_hours, 0),
+      ...(g.some((r) => r.cities != null) ? { cities: Math.max(...g.map((r) => r.cities ?? 0)) } : {}),
     };
   }).sort((a, b) => (a.location_id + a.period_start).localeCompare(b.location_id + b.period_start));
 }

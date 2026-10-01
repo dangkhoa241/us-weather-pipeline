@@ -53,6 +53,8 @@ try {
   check("'Demo data as of' badge", Boolean(badge), badge);
   const avgTemp = await page.locator("section[aria-label='Key figures'] p.text-2xl").first().textContent();
   check("KPI cards have values", /\d/.test(avgTemp ?? ""), avgTemp);
+  const subject = await page.locator("[data-kpi-subject]").textContent();
+  check("default is All US (US-wide KPIs)", /^All US · \d+ cities$/.test(subject ?? ""), subject);
   check("map rendered with states", (await page.locator("[data-map] [data-state]").count()) >= 50, await page.locator("[data-map] [data-state]").count());
 
   const dotsWithData = await page.waitForFunction(() => document.querySelectorAll("[data-map] [data-location]:not([data-loading])").length >= 10, null, { timeout: 15_000 })

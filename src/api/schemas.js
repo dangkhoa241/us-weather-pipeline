@@ -12,7 +12,7 @@ const range = { from: isoDate.optional(), to: isoDate.optional() };
 export const locationList = z.string().max(1000)
   .transform((s) => s.split(","))
   .pipe(z.array(locationId).min(1).max(LIMITS.maxLocations))
-  .meta({ example: "stockton-ca,miami-fl", description: "comma-separated location ids" });
+  .meta({ example: "stockton-ca,miami-fl", description: 'comma-separated location ids, or "all" for the US-wide average' });
 
 export const metric = z.enum(METRICS);
 export const stateCode = z.string().regex(new RegExp(PATTERNS.state)).meta({ example: "CA" });
@@ -64,6 +64,7 @@ export const ROW = {
   stats: z.object({
     location_id: z.string(), period_start: z.string(),
     min: num, max: num, avg: num, sum: num, n_values: z.number(), n_hours: z.number(),
+    cities: z.number().optional(),   // locations=all only: cities with data in this period
   }),
   map: z.object({
     state: z.string(), region: z.string(), cities: z.number(),

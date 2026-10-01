@@ -2,7 +2,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { PRESETS, type Preset } from "@/lib/dates";
-import { COMPARES, METRICS, PERIODS, selectedRange, useFilters, type Metric, type Period } from "@/store/filters";
+import { ALL_US, COMPARES, METRICS, PERIODS, selectedRange, useFilters, type Metric, type Period } from "@/store/filters";
 import type { Compare } from "@/lib/dates";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -33,9 +33,12 @@ export function FilterBar({ fields = ALL }: { fields?: FilterField[] }) {
   return (
     <section aria-label="Filters" className="flex flex-wrap items-end gap-3 rounded-xl bg-card p-4 shadow-sm shadow-black/5 ring-1 ring-foreground/10">
       {show("location") && <Field label="Location">
-        <Select value={f.location} onValueChange={(location) => f.setFilters({ location, month: "" })}>
+        <Select value={f.location} onValueChange={(location) => f.setFilters(location === ALL_US
+          ? { location, city: "", year: "", month: "" }       // back to US-wide: the city history closes
+          : { location, city: location, month: "" })}>
           <SelectTrigger className="w-48" aria-label="Location"><SelectValue placeholder="Location" /></SelectTrigger>
           <SelectContent>
+            <SelectItem value={ALL_US}>All US</SelectItem>
             {cities.map((l) => (
               <SelectItem key={l.id} value={l.id}>{l.name}, {l.state}</SelectItem>
             ))}

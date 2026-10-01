@@ -105,3 +105,16 @@ describe("navigation with startUrlSync", () => {
     expect(store.getState()).toMatchObject({ page: "overview", city: "", unit: "C" });
   });
 });
+
+describe("All US default", () => {
+  it("defaults to All US (no city anywhere) and keeps it out of the URL", () => {
+    expect(DEFAULTS).toMatchObject({ location: "all", city: "" });
+    expect(parseFilters("").location).toBe("all");
+    expect(toSearch({ ...DEFAULTS, location: "all" })).toBe("");
+  });
+
+  it("keeps old ?city= links working: the city also becomes the Location", () => {
+    expect(parseFilters("?city=stockton-ca")).toMatchObject({ location: "stockton-ca", city: "stockton-ca" });
+    expect(parseFilters("?loc=miami-fl&city=stockton-ca")).toMatchObject({ location: "miami-fl", city: "stockton-ca" });
+  });
+});

@@ -18,6 +18,9 @@ export const PAGE_PATH: Record<Page, string> = { overview: "/", forecast: "/fore
 export const pageFromPath = (pathname: string): Page =>
   (Object.keys(PAGE_PATH) as Page[]).find((p) => p !== "overview" && pathname.replace(/\/+$/, "") === PAGE_PATH[p]) ?? "overview";
 
+/** Location value for the US-wide view (average across all cities with data); the default. */
+export const ALL_US = "all";
+
 export type Filters = {
   page: Page;
   location: string;
@@ -40,7 +43,7 @@ export type Filters = {
 };
 
 export const DEFAULTS: Filters = {
-  page: "overview", area: "", lead: "1", location: "stockton-ca", period: "week", preset: "90d", from: "", to: "",
+  page: "overview", area: "", lead: "1", location: ALL_US, period: "week", preset: "90d", from: "", to: "",
   metric: "temp_c", unit: "F", compare: "previous", year: "", month: "", city: "",
 };
 
@@ -76,7 +79,9 @@ export function parseFilters(search: string, pathname = "/"): Filters {
     page: pageFromPath(pathname),
     area: /^[A-Z]{2}$/.test(areaParam) || (areaParam && locationId.safeParse(areaParam).success) ? areaParam : "",
     lead: /^[1-7]$/.test(leadParam) ? leadParam : DEFAULTS.lead,
-    location: loc && locationId.safeParse(loc).success ? loc : DEFAULTS.location,
+    // Old links (?city=… without loc) open that city for the KPIs too.
+    location: loc && locationId.safeParse(loc).success ? loc
+      : !loc && cityParam && locationId.safeParse(cityParam).success ? cityParam : DEFAULTS.location,
     period: oneOf<Period>(get("period"), PERIODS, DEFAULTS.period),
     preset,
     from,

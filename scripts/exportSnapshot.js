@@ -113,6 +113,18 @@ for (const loc of locations) {
   });
 }
 
+// US-wide daily values (average across cities, as /stats?locations=all), so the default "All US" view loads one file.
+{
+  const base = { locations: "all", period: "day", from: windowFrom, to: dataEnd };
+  const temp = (await get("/stats", { ...base, metric: "temp_c" })).data;
+  const precip = (await get("/stats", { ...base, metric: "precip_mm" })).data;
+  write(dir, "daily-all.json", {
+    location_id: "all", from: windowFrom, days: WINDOW_DAYS,
+    temp: columns(temp, windowFrom, WINDOW_DAYS, ["min", "max", "avg", "n", "cities"]),
+    precip: columns(precip, windowFrom, WINDOW_DAYS, ["sum", "n", "cities"]),
+  });
+}
+
 // Forecast accuracy cannot be derived from daily data: pre-compute it for every preset range and its comparisons.
 const ranges = Object.values(presetRanges(dataEnd)).flatMap((r) => [r, ...compareRanges(r)]);
 const accuracy = {};

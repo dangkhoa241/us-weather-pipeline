@@ -42,6 +42,28 @@ function shiftRange({ from, to }, compare) {
   return { from: toDay(dayMs(from) - days * DAY_MS), to: toDay(dayMs(from) - DAY_MS) };
 }
 
+/** `locations=all`: every tracked city, averaged per period (see usAverage). */
+export const ALL_LOCATIONS = "all";
+
+/**
+ * US-wide rows: per period, the mean of each value over the cities that have it (nulls ignored, never 0);
+ * n_values / n_hours are summed and `cities` counts the cities with data in that period.
+ */
+export function usAverage(rows) {
+  const groups = new Map();
+  for (const r of rows) groups.set(r.period_start, [...(groups.get(r.period_start) ?? []), r]);
+  const mean = (g, f) => {
+    const v = g.map((r) => r[f]).filter((x) => x != null);
+    return v.length ? Math.round((v.reduce((a, x) => a + x, 0) / v.length) * 1000) / 1000 : null;
+  };
+  return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([period_start, g]) => ({
+    location_id: ALL_LOCATIONS, period_start,
+    min: mean(g, "min"), max: mean(g, "max"), avg: mean(g, "avg"), sum: mean(g, "sum"),
+    n_values: g.reduce((a, r) => a + r.n_values, 0), n_hours: g.reduce((a, r) => a + r.n_hours, 0),
+    cities: g.filter((r) => r.n_values > 0).length,
+  }));
+}
+
 const CHILD = { year: "half", half: "quarter", quarter: "month", month: "week", week: "day", day: "hour" };
 
 /** Drill-down key → local date range of that period (e.g. quarter "2025-Q3" → 2025-07-01..2025-09-30). */
@@ -141,13 +163,17 @@ export function createService({ warehouse, cache, store }) {
       if (!METRICS.includes(metric)) throw badRequest(`metric must be one of ${METRICS.join(", ")}`);
       if (!PERIODS.includes(period)) throw badRequest(`period must be one of ${PERIODS.join(", ")}`);
       if (compare != null && !COMPARE.includes(compare)) throw badRequest(`compare must be one of ${COMPARE.join(", ")}`);
-      await requireLocations(locations);
+      const all = locations.length === 1 && locations[0] === ALL_LOCATIONS;
+      const ids = all ? [...(await knownLocationIds())].sort() : locations;
+      if (!all) await requireLocations(ids);
       const range = resolveRange(from, to);
-      const result = await query("stats", { locationIds: locations, metric, period, ...range });
+      const shape = (rows) => (all ? usAverage(rows) : rows);
+      const result = await query("stats", { locationIds: ids, metric, period, ...range });
+      result.data = shape(result.data);
       result.meta.range = range;
       if (compare) {
         const other = shiftRange(range, compare);
-        result.compare = { ...other, data: (await dashboard.query("stats", { locationIds: locations, metric, period, ...other })).data };
+        result.compare = { ...other, data: shape((await dashboard.query("stats", { locationIds: ids, metric, period, ...other })).data) };
       }
       return result;
     },

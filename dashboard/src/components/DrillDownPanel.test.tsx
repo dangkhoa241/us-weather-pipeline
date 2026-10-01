@@ -35,12 +35,12 @@ describe("DrillDownPanel", () => {
     expect(screen.queryByRole("group")).not.toBeInTheDocument();
   });
 
-  it("close (×) hides it and clears city, year and month (KPI location stays)", async () => {
+  it("close (×) hides it, clears city, year and month, and goes back to All US", async () => {
     const user = userEvent.setup();
     useFilters.setState({ ...DEFAULTS, location: "miami-fl", city: "stockton-ca", year: "2025", month: "07" });
     renderPanel();
     await user.click(await screen.findByRole("button", { name: "Close city history" }));
-    expect(useFilters.getState()).toMatchObject({ city: "", year: "", month: "", location: "miami-fl" });
+    expect(useFilters.getState()).toMatchObject({ city: "", year: "", month: "", location: "all" });
     expect(screen.getByText("Click a city on the map to see its monthly history.")).toBeInTheDocument();
   });
 

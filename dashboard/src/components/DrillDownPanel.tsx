@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type StatsRow } from "@/lib/api";
 import { allYearsRange, dayPoints, drillLevel, monthName, monthPoints, rangeFor, yearPoints, yearsWithData } from "@/lib/drill";
-import { useFilters } from "@/store/filters";
+import { ALL_US, useFilters } from "@/store/filters";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TwinCharts, type TwinData } from "@/components/chart/TwinCharts";
@@ -94,7 +94,7 @@ function DrillDownCard({ city: cityId }: { city: string }) {
               </Select>
             )}
             <button type="button" aria-label="Close city history" className="rounded-md px-2 py-1 text-lg leading-none text-muted-foreground hover:bg-muted hover:text-foreground"
-              onClick={() => f.setFilters({ city: "", year: "", month: "" })}>×</button>
+              onClick={() => f.setFilters({ city: "", year: "", month: "", location: ALL_US })}>×</button>
           </CardAction>
         </CardHeader>
         {onSelect && <CardContent className="-mt-2 text-xs text-muted-foreground">Select a {level === "years" ? "year" : "month"} on either chart to drill down.</CardContent>}
