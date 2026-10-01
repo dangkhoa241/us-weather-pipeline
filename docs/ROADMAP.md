@@ -24,20 +24,25 @@ Approved free stack:
 
 ### Free-tier limits of services in use (checked 2026-09-29)
 
-| Service | Free limit | When exceeded | Card? | Our use: 20 cities | Our use: 150 cities |
+| Service | Free limit | When exceeded | Card? | Our use: 53 cities (current) | Note |
 |---|---|---|---|---|---|
-| NWS API | No published quota; needs a `User-Agent` with contact | Temporary block (403/429) | No | ~40 forecast req / 3 h, 1 alerts req / 15 min | ~300 req / 3 h |
-| Open-Meteo | Non-commercial only. 600 / min, 5,000 / hour, 10,000 / day *weighted* calls (a request counts extra per 10 variables and per 14 days) | 429 until the window resets | No | ~800 / day steady; first 3-year backfill ~2,000 once | ~6,000 / day steady (60%, too close); backfill ~15,000 (over the daily limit) |
-| Vercel Hobby (dashboard demo, static) | 100 GB Fast Data Transfer / month, 100 deployments / day, 45 min / build; non-commercial only | Project paused (Hobby is never billed) | No | ~0.5 MB gzipped per visit (≈ 200k visits / month) | same (static snapshot) |
+| NWS API | No published quota; needs a `User-Agent` with contact | Temporary block (403/429) | No | ~106 forecast req / 3 h (~40 s), 1 alerts req / h | fine |
+| Open-Meteo | Non-commercial only. 600 / min, 5,000 / hour, 10,000 / day *weighted* calls (a request counts extra per 10 variables and per 14 days) | 429 until the window resets | No | ~1,100 / day steady (11%); our cap 2,000 / h and 6,000 / day, backfill ≤ 75% of it | catch-up below |
+| Vercel Hobby (dashboard demo, static) | 100 GB Fast Data Transfer / month, 100 deployments / day, 45 min / build; non-commercial only | Project paused (Hobby is never billed) | No | ~0.5 MB gzipped per visit (≈ 200k visits / month) | static snapshot, size independent of traffic |
+| MongoDB Atlas M0 (NWS via GitHub Actions) | 512 MB storage | Writes fail | No | ~48 MB / day; 7-day TTL ≈ 335 MB data, ~370 MB with indexes (72%) | if > 430 MB: retention 5 days |
 | Discord webhook | ~30 messages / min per webhook | 429 | No | a few / day | a few / day |
 | GitHub Actions | Free on public repos (private: 2,000 min / month) | Jobs stop running | No | — | — |
-| MongoDB, ClickHouse, Redis (Docker) | Self-hosted; limited only by disk | Disk full | No | ~12 MB / day on disk (≈ 4 GB / year), mostly forecast snapshots | ~90 MB / day (≈ 32 GB / year) |
+| MongoDB, ClickHouse, Redis (Docker) | Self-hosted; limited only by disk | Disk full | No | ~32 MB / day on disk (≈ 12 GB / year), mostly forecast snapshots | local disk only |
 
 Deploy-target notes (not in use yet): Oracle Cloud Always Free requires a credit card to sign up.
-MongoDB Atlas M0 has 512 MB of storage; the raw store already holds ~260 MB (uncompressed), so M0 only works with
-aggressive retention. The BigQuery sandbox (no card) expires tables after 60 days.
+Atlas M0 holds only the last 7 days of NWS data (see the table); the full raw store stays local. The BigQuery sandbox (no card) expires tables after 60 days.
 
-Cost follow-ups (must be done before expanding to ~150 cities):
+Completion estimates after expanding to 53 cities (2026-10-01, budgets unchanged):
+- History (3 years × 33 new cities, ~3,300 weighted calls): ~1–3 days of Docker running.
+- om-backfill (90 days × 33 new cities + the first 20 from Aug 8, ~64,000 calls + ~840/day of new runs):
+  ~18 days at the full 6,000 calls/day (Docker on ≥ 4 h/day), ~30 days at ~2 h/day.
+
+Cost follow-ups:
 - [x] Open-Meteo usage budget: `api_usage` ledger per UTC hour/day (defaults 2,000 / 6,000 weighted calls), shared by history and om-backfill; jobs stop cleanly and resume
 - [x] Live `om-forecast` replaced by `om-backfill` (Single Runs, 1 weighted call per run/model/city)
 - [ ] Retention for raw `forecast_snapshots` / `observations_hourly` in MongoDB once they are loaded into the warehouse
@@ -59,7 +64,7 @@ Cost follow-ups (must be done before expanding to ~150 cities):
 - National Weather Service (`api.weather.gov`): 7-day + hourly forecasts, active alerts. No key; requires a `User-Agent` header.
 - Open-Meteo: archive API for history (last ~5 days are null or model-filled → skip them); forecast API for multi-model snapshots.
 
-**Scope:** ~150 major US cities (largest city in each state + Stockton, CA). A `locations` collection/table
+**Scope:** 53 US cities: the largest city of every state, Washington DC, Stockton (CA) and Miami (FL). A `locations` collection/table
 (`id, name, state, region, lat, lon, timezone, nws_office, grid_x, grid_y`; `timezone` is IANA, e.g. `America/Los_Angeles`); region is Northeast / Midwest / South / West. Every stage loops over it.
 
 ---
@@ -73,7 +78,7 @@ Cost follow-ups (must be done before expanding to ~150 cities):
 - [x] `Warehouse` adapter (`WAREHOUSE=clickhouse`): schema, inserts, watermark, period builder; nothing else imports `@clickhouse/client`
       (legacy `etlToClickHouse.js`, `clickhouseToRedis.js`, `backend/config/clickhouse.js` still do until Stages 2–4 rewrite them)
 - [x] Seed `locations` with 20 test cities
-- [ ] Expand `locations` to ~150 cities
+- [x] Expand `locations` to 53 cities (largest per state + DC + Stockton + Miami)
 
 ## Known bugs
 
@@ -118,7 +123,7 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
 - Observed history lags ~5 days (archive), so accuracy for the most recent days fills in later.
 - Rollups include partial days (e.g. the last archive day); the `hours` column tells complete days apart.
 - Forecast accuracy covers temperature on hourly forecasts only (NWS 12-hour periods and precipitation skill not yet).
-- `forecast_accuracy` is a plain view computed at query time; fine at 20 cities, may need materializing at 150.
+- `forecast_accuracy` is a plain view computed at query time; fine at 53 cities, may need materializing if it slows down.
 - `cityForecast` still shows the first day's live `icon_seamless` and `best_match` snapshots as extra "models".
 - The popular (pre-warmed) and benchmark queries use fixed dates; they should become relative ("last 7 days") in Stage 4.
 - Cache hit/miss counters are cumulative (never reset); per-day counters can come with the Pipeline Ops page.
