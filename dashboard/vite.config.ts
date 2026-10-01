@@ -17,7 +17,11 @@ export default defineConfig({
     },
     dedupe: ["zod"],
   },
-  server: { proxy: { "/api": API }, fs: { allow: [".."] } },
+  server: {
+    proxy: { "/api": API },
+    // The dev server may read this app plus only the shared API schema files outside it.
+    fs: { allow: [import.meta.dirname, path.resolve(import.meta.dirname, "../src/api"), path.resolve(import.meta.dirname, "../src/adapters/warehouse")] },
+  },
   preview: { proxy: { "/api": API } },
   // globals: lets React Testing Library clean up the DOM after each test automatically
   test: { globals: true, environment: "jsdom", setupFiles: ["./src/test/setup.ts"], include: ["src/**/*.test.{ts,tsx}"] },
