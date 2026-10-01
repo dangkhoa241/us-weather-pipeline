@@ -1,0 +1,17 @@
+{
+  "label": "v3",
+  "js_gzip_kb": 385.2,
+  "css_gzip_kb": 8.6,
+  "files": [
+    {
+      "file": "index-B44-uwv7.js",
+      "raw_kb": 1182.9,
+      "gzip_kb": 385.2
+    },
+    {
+      "file": "index-CVAgfdR_.css",
+      "raw_kb": 44.2,
+      "gzip_kb": 8.6
+    }
+  ]
+}
