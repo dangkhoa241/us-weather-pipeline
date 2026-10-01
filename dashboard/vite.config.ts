@@ -19,5 +19,6 @@ export default defineConfig({
   },
   server: { proxy: { "/api": API }, fs: { allow: [".."] } },
   preview: { proxy: { "/api": API } },
-  test: { environment: "jsdom", setupFiles: ["./src/test/setup.ts"], include: ["src/**/*.test.{ts,tsx}"] },
+  // globals: lets React Testing Library clean up the DOM after each test automatically
+  test: { globals: true, environment: "jsdom", setupFiles: ["./src/test/setup.ts"], include: ["src/**/*.test.{ts,tsx}"] },
 });
