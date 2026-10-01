@@ -1,0 +1,38 @@
+# Tests on every push and pull request: backend (cache + API) and dashboard (type check + Vitest/RTL).
+# No Docker or secrets needed. GitHub Actions is free for public repositories.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read               # least privilege: the job only needs to read the code
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            dashboard/package-lock.json
+      # --ignore-scripts: no third-party install scripts run in CI
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npm ci --ignore-scripts
+        working-directory: dashboard
+      - run: npx tsc -b
+        working-directory: dashboard
+      - run: npx vitest run
+        working-directory: dashboard

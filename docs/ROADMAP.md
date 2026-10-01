@@ -111,7 +111,7 @@ Cost follow-ups:
   the browser), forecasts, NWS periods/alerts and accuracy details; 17/17 demo checks, 0 CSP violations under a strict policy.
 - Forecast accuracy (90 days, 20 cities, lead day 1): ECMWF 2.1°F average error, ICON 2.3°F, HRRR 2.9°F, GFS 3.1°F;
   the best-match baseline 2.6°F. Error grows ~0.25°F per extra lead day.
-- Tests: 103 Vitest tests (12 cache + 19 API + 72 dashboard), no Docker needed; 17 automated checks on the static demo build.
+- Tests: 107 Vitest tests (33 backend + 74 dashboard), no Docker needed, run in GitHub Actions CI; 18 automated checks on the static demo build.
 
 ## Known limitations
 
@@ -252,7 +252,7 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       (7 days / 3 periods), dashed mean, ▲ max / ▼ min, PNG/CSV download, pill tabs for the period
 - [ ] Map toggles: metric / forecast error / active NWS alerts; 7-day forecast time slider
 
-- [x] API types shared with the backend (`src/api/schemas.js`), 72 dashboard tests (Vitest + React Testing Library)
+- [x] API types shared with the backend (`src/api/schemas.js`), 74 dashboard tests (Vitest + React Testing Library)
 - [x] Static demo on Vercel Hobby: `npm run export:snapshot` → `dashboard/public/data/`, `build:snapshot` mode with a
       "Demo data as of" badge, `dashboard/vercel.json` (strict CSP), `docs/DEPLOY_VERCEL.md`
 
@@ -270,6 +270,8 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       spread), active NWS alerts for the state; "Forecast as of" label in the demo
 - [x] Forecast Accuracy page: hero line, sortable leaderboard (lead days 1–7, bias, samples, rank), error vs lead day,
       map (best model per state / one model's error), bias by month, biggest misses, "how this is measured"
+- [x] "All US" default (US-wide averages; `/stats?locations=all`), no default city
+- [x] README with demo GIF (`npm run demo:gif`: Playwright + ffmpeg-static), architecture, numbers, compare & review summary; MIT license; CI workflow
 - [ ] Statistics page
 
 **More pages (Sat)**
