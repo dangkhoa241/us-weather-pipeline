@@ -61,7 +61,11 @@ try {
   const box = await page.locator("[data-map]").boundingBox();
   const ca = page.locator('[data-map] [data-state="CA"]');
   if (await ca.count()) await ca.first().click();
-  else await page.mouse.click(box.x + box.width * 0.11, box.y + box.height * 0.5);   // canvas maps: CA's position
+  else {
+    // Maps drawn without a DOM element per state expose the state's pixel position instead.
+    const pos = await page.evaluate(() => window.__mapStatePixel?.("CA") ?? null);
+    if (pos) await page.mouse.click(box.x + pos[0], box.y + pos[1]);
+  }
   await page.waitForTimeout(800);
   const mouseDrill = (await page.getAttribute("[data-map]", "data-map-level")) === "state";
   const marker = page.locator('[data-map] [data-location="los-angeles-ca"]');
