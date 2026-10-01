@@ -15,6 +15,8 @@ const FORMAT = 1;                 // bump when the file layout changes (the dash
 const MIN_WINDOW_DAYS = 731;      // at least 2 years: "last 12 months" compared with the same period last year
 const MAX_RANGE_DAYS = 4000;      // the API's longest range; used to find the earliest year with data
 const PRESET_DAYS = { "7d": 7, "30d": 30, "90d": 90, "365d": 365 };
+// Models the Forecast page shows (legacy and baseline forecasts are not exported).
+const FORECAST_MODELS = ["nws", "ecmwf_ifs025", "gfs_global", "icon_global", "gfs_hrrr"];
 const MAX_TOTAL_KB = 5 * 1024;    // fail if the snapshot gets big (Vercel serves it as static files)
 // Nothing internal may end up in a public snapshot.
 const FORBIDDEN = /localhost|127\.0\.0\.1|mongodb|clickhouse|redis:|:\/\/[^"]*@|password|etl_batch_id|stage2-|atlas/i;
@@ -138,7 +140,7 @@ const forecasts = {};
 for (const loc of locations) {
   const rows = (await get(`/forecast/${loc.id}`, { days: 8 })).data;
   const byModel = {};
-  for (const r of rows) {
+  for (const r of rows.filter((x) => FORECAST_MODELS.includes(x.model))) {
     const m = (byModel[r.model] ??= { issued_at: r.issued_at, start: r.target_time, hours: [] });
     const h = Math.round((Date.parse(`${r.target_time.replace(" ", "T")}Z`) - Date.parse(`${m.start.replace(" ", "T")}Z`)) / 3_600_000);
     m.hours.push([h, round1(r.temp_c), round1(r.precip_mm), r.precip_prob_pct]);

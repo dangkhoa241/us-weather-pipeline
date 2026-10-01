@@ -107,9 +107,11 @@ Cost follow-ups:
 - City drill-down chart (3 implementations compared): hand-rolled d3-scale/d3-shape SVG adds 10 KB gzipped (vs 17 KB
   ECharts, 108 KB Recharts), first render 185 ms, every month/day a keyboard-focusable button; drill state in the URL.
   Method: `docs/analysis/drilldown-chart.md`.
-- Static demo: 2.3 MB snapshot (317 KB gzipped) with daily data for 53 cities from 2023-01-01 (all years; monthly
-  values derived in the browser); 11/11 demo checks, 0 CSP violations under a strict policy.
-- Tests: 89 Vitest tests (12 cache + 19 API + 58 dashboard), no Docker needed; 14 automated checks on the static demo build.
+- Static demo: 2.9 MB snapshot (412 KB gzipped): daily data for 53 cities from 2023-01-01 (monthly values derived in
+  the browser), forecasts, NWS periods/alerts and accuracy details; 17/17 demo checks, 0 CSP violations under a strict policy.
+- Forecast accuracy (90 days, 20 cities, lead day 1): ECMWF 2.1°F average error, ICON 2.3°F, HRRR 2.9°F, GFS 3.1°F;
+  the best-match baseline 2.6°F. Error grows ~0.25°F per extra lead day.
+- Tests: 103 Vitest tests (12 cache + 19 API + 72 dashboard), no Docker needed; 17 automated checks on the static demo build.
 
 ## Known limitations
 
@@ -145,6 +147,14 @@ Security (low; from the security review of Stages 1–2, compose and workflows):
 - The API is not a Docker Compose service yet (run with `npm start`).
 - Dashboard: city dot values are means of yearly rows weighted by hours (same as the state values, not per-day exact);
   PNG downloads use the system sans-serif font (the web font isn't available to the exported image).
+- Forecast page: Open-Meteo model forecasts are only as fresh as the last manual `om-forecast` run (live collection is
+  manual by decision); NWS is fresh (GitHub Actions every 3 h). Scheduling `om-forecast` would cost ~5 weighted
+  calls per city per run (≈265 for 53 cities), well within the 2,000/hour budget — not done without a decision.
+- Accuracy page: model accuracy so far covers ~Jul 1 – Aug 7 for the original 20 cities (om-backfill works forward from
+  the oldest day); NWS appears once its forecasts can be matched with observations (~5-day archive lag). States
+  without tracked cities or enough pairs are hatched.
+- Biggest misses are dominated by the best-match baseline, whose issue time is approximate; some may be data artifacts.
+- Demo snapshot: accuracy map/bias/misses only for all US over the default 90-day range (other choices show a note).
 - Dashboard: KPI sparklines stay daily (the Period filter drives the trend chart); the map colors by temperature or
   precipitation only. The city chart scales its text with the width (SVG `viewBox`).
 - Static demo: data frozen at the snapshot date; forecast accuracy only for preset ranges; Zod runs "jitless" in the
@@ -243,7 +253,7 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       (7 days / 3 periods), dashed mean, ▲ max / ▼ min, PNG/CSV download, pill tabs for the period
 - [ ] Map toggles: metric / forecast error / active NWS alerts; 7-day forecast time slider
 
-- [x] API types shared with the backend (`src/api/schemas.js`), 58 dashboard tests (Vitest + React Testing Library)
+- [x] API types shared with the backend (`src/api/schemas.js`), 72 dashboard tests (Vitest + React Testing Library)
 - [x] Static demo on Vercel Hobby: `npm run export:snapshot` → `dashboard/public/data/`, `build:snapshot` mode with a
       "Demo data as of" badge, `dashboard/vercel.json` (strict CSP), `docs/DEPLOY_VERCEL.md`
 
@@ -256,7 +266,12 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
 - [ ] Place drill-down: US → Region → State → City
 - [ ] Charts: ~~temperature min/max band, rain bars~~ (done), calendar heatmap, wind rose, monthly box plot, anomaly vs normal, state ranking, temperature vs rain scatter
 - [ ] Tables: sortable, searchable, paginated, grouped by period, conditional colors, CSV export, click row to drill in
-- [ ] Pages: Overview, Forecast, Statistics, Forecast Accuracy
+- [x] Page tabs with real URLs (`/`, `/forecast`, `/accuracy`), Back/Forward, filters kept in the query string
+- [x] Forecast page: 7 daily cards (NWS periods), next 48 h twin charts, "Models disagree?" (daily high per model +
+      spread), active NWS alerts for the state; "Forecast as of" label in the demo
+- [x] Forecast Accuracy page: hero line, sortable leaderboard (lead days 1–7, bias, samples, rank), error vs lead day,
+      map (best model per state / one model's error), bias by month, biggest misses, "how this is measured"
+- [ ] Statistics page
 
 **More pages (Sat)**
 - [ ] Compare page (2–4 cities) *(cut first if short on time)*

@@ -91,6 +91,38 @@ try {
   check("synced crosshair on both charts", crosshairs === 2, `${crosshairs} crosshairs`);
   await page.locator("[data-drill-section]").screenshot({ path: new URL("../../docs/images/dashboard-demo-city.png", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1") });
 
+  // Page tabs: real URLs, Back/Forward.
+  await page.goto(`${base}?city=stockton-ca`, { waitUntil: "load" });
+  await page.getByRole("navigation", { name: "Pages" }).getByRole("link", { name: "Forecast" }).click();
+  await page.waitForTimeout(300);
+  const forecastUrl = new URL(page.url());
+  await page.goBack();
+  await page.waitForTimeout(300);
+  check("tabs: /forecast keeps the city, Back returns", forecastUrl.pathname === "/forecast" && forecastUrl.searchParams.get("city") === "stockton-ca"
+    && new URL(page.url()).pathname === "/", `${forecastUrl.pathname}${forecastUrl.search} → ${new URL(page.url()).pathname}`);
+
+  // Forecast page (frozen at the snapshot): label, daily cards, models chart.
+  await page.goto(`${base}forecast?city=stockton-ca`, { waitUntil: "load" });
+  await page.waitForSelector("[data-day]", { timeout: 15_000 }).catch(() => {});
+  await page.waitForTimeout(1500);
+  const issued = await page.locator("[data-forecast-issued]").textContent();
+  const days = await page.locator("[data-day]").count();
+  const modelSeries = await page.locator("[data-multiline]").first().getAttribute("data-series").catch(() => null);
+  check("forecast page: 'Forecast as of', cards, models", /^Forecast as of \d{4}-\d{2}-\d{2}$/.test(issued ?? "") && days >= 5 && Number(modelSeries) >= 3,
+    `${issued}; ${days} days; ${modelSeries} models`);
+  await page.screenshot({ path: new URL("../../docs/images/dashboard-demo-forecast.png", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1"), fullPage: true });
+
+  // Accuracy page: hero from data, leaderboard, map by state.
+  await page.goto(`${base}accuracy`, { waitUntil: "load" });
+  await page.waitForSelector("[data-leaderboard]", { timeout: 15_000 }).catch(() => {});
+  await page.waitForTimeout(1500);
+  const hero = await page.locator("[data-hero]").textContent();
+  const models = await page.locator("[data-leaderboard] tbody tr").count();
+  const colored = await page.locator("[data-accuracy-map] [data-state]").evaluateAll((els) => els.filter((e) => !e.style.fill.includes("hatch")).length);
+  check("accuracy page: hero, leaderboard, map", /is the most accurate model: \d+\.\d°F average error 1 day ahead/.test(hero ?? "") && models >= 4 && colored >= 10,
+    `${hero?.slice(0, 40)}…; ${models} models; ${colored} states`);
+  await page.screenshot({ path: new URL("../../docs/images/dashboard-demo-accuracy.png", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1"), fullPage: true });
+
   // Dark mode follows the system by default: same page with a dark color scheme.
   const dark = await browser.newPage({ viewport: { width: 1400, height: 1000 }, colorScheme: "dark" });
   await dark.goto(`${base}?city=stockton-ca&year=2025`, { waitUntil: "load" });
