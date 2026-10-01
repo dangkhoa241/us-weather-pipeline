@@ -120,10 +120,10 @@ describe("security headers, CORS, docs", () => {
     expect(other.headers.get("access-control-allow-origin")).not.toBe("https://evil.example");
   });
 
-  it("documents all 12 routes and serves a pinned Swagger UI under a CSP", async () => {
+  it("documents all 15 routes and serves a pinned Swagger UI under a CSP", async () => {
     const app = createApp({ service: fakeService() });
     const spec = await (await request(app, "/openapi.json")).json();
-    expect(Object.keys(spec.paths)).toHaveLength(12);
+    expect(Object.keys(spec.paths)).toHaveLength(15);
     expect(spec.paths["/api/v1/forecast/{locationId}"]).toBeDefined();
     const docs = await request(app, "/docs");
     expect(await docs.text()).toContain("swagger-ui-dist@5.33.0/swagger-ui-bundle.js");

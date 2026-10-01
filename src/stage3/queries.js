@@ -16,8 +16,21 @@ export const QUERY_TYPES = {
     run: (warehouse, p) => warehouse.mapByState(p),
   },
   accuracy: {
-    normalize: ({ from, to, locationIds }) => ({ from, to, locationIds: sortedUnique(locationIds) }),
+    normalize: ({ from, to, locationIds, state = "" }) => ({ from, to, locationIds: sortedUnique(locationIds), state }),
     run: (warehouse, p) => warehouse.accuracySummary(p),
+  },
+  accuracyStates: {
+    normalize: ({ from, to, lead = 1 }) => ({ from, to, lead }),
+    run: (warehouse, p) => warehouse.accuracyByState(p),
+  },
+  accuracyMonths: {
+    normalize: ({ from, to, locationIds, state = "", lead = 0 }) => ({ from, to, locationIds: sortedUnique(locationIds), state, lead }),
+    run: (warehouse, p) => warehouse.accuracyByMonth(p),
+  },
+  misses: {
+    normalize: ({ from, to, locationIds, state = "", lead = 0, limit = 10 }) =>
+      ({ from, to, locationIds: sortedUnique(locationIds), state, lead, limit }),
+    run: (warehouse, p) => warehouse.biggestMisses(p),
   },
   forecast: {
     normalize: ({ locationId, days = 7 }) => ({ locationId, days }),

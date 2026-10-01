@@ -49,6 +49,26 @@ export class Warehouse {
   async accuracySummary(q) { throw new Error("Warehouse.accuracySummary not implemented"); }
 
   /**
+   * Accuracy per state and model for one lead day (US map).
+   * @param {{ from: string, to: string, lead: number }} q
+   * @returns {Promise<Array<{ state: string, model: string, n: number, mae_c: number, bias_c: number }>>}
+   */
+  async accuracyByState(q) { throw new Error("Warehouse.accuracyByState not implemented"); }
+
+  /**
+   * Accuracy per month (UTC, "YYYY-MM-01") and model. Optional filters: locationIds, state, lead (0 = all lead days).
+   * @returns {Promise<Array<{ month: string, model: string, n: number, mae_c: number, bias_c: number }>>}
+   */
+  async accuracyByMonth(q) { throw new Error("Warehouse.accuracyByMonth not implemented"); }
+
+  /**
+   * The largest hourly errors, at most one per city and day; same filters as accuracyByMonth plus `limit`.
+   * @returns {Promise<Array<{ target_time: string, location_id: string, model: string, lead_days: number,
+   *          forecast_c: number, observed_c: number, error_c: number }>>}
+   */
+  async biggestMisses(q) { throw new Error("Warehouse.biggestMisses not implemented"); }
+
+  /**
    * One row per state for the US map, from the daily rollups over local days `from`..`to`.
    * @returns {Promise<Array<{ state: string, region: string, cities: number, temp_avg_c: number|null,
    *          temp_max_c: number|null, precip_mm_per_city: number|null }>>}

@@ -195,6 +195,21 @@ const DERIVED_DDL = [
     ) AS o ON f.location_id = o.location_id AND f.target_time = o.time`,
 ];
 
+// Filters shared by the accuracy queries (all values are query_params): target dates, optional cities, optional
+// state (via the locations table), optional lead day (0 = all lead days).
+const ACCURACY_FILTER = `
+        toDate(target_time) BETWEEN {from:Date} AND {to:Date}
+        AND (empty({ids:Array(String)}) OR location_id IN {ids:Array(String)})
+        AND (empty({state:String}) OR location_id IN (SELECT id FROM locations FINAL WHERE state = {state:String}))
+        AND ({lead:UInt8} = 0 OR lead_days = {lead:UInt8})`;
+
+function accuracyParams({ from, to, locationIds = [], state = "", lead = 0 }) {
+  if (!DAY.test(from) || !DAY.test(to)) throw new Error("from/to must be dates like 2024-01-31");
+  if (state && !/^[A-Z]{2}$/.test(state)) throw new Error("state must be a 2-letter code");
+  if (!Number.isInteger(lead) || lead < 0 || lead > 16) throw new Error("lead must be 0..16");
+  return { from, to, ids: locationIds ?? [], state, lead };
+}
+
 // Aggregates shared by the daily and monthly rollups (NULL when a day/month has no values).
 const ROLLUP_AGGREGATES = `
       min(temp_c), max(temp_c), round(avg(temp_c), 2),
@@ -281,17 +296,51 @@ export class ClickHouseWarehouse extends Warehouse {
     });
   }
 
-  async accuracySummary({ from, to, locationIds }) {
-    if (!DAY.test(from) || !DAY.test(to)) throw new Error("from/to must be dates like 2024-01-31");
+  async accuracySummary({ from, to, locationIds, state = "" }) {
     return this.#rows(`
       SELECT model, lead_days, count() AS n,
         round(avg(temp_abs_error_c), 2) AS mae_c, round(avg(temp_error_c), 2) AS bias_c
       FROM forecast_accuracy
-      WHERE toDate(target_time) BETWEEN {from:Date} AND {to:Date}
-        AND (empty({ids:Array(String)}) OR location_id IN {ids:Array(String)})
+      WHERE ${ACCURACY_FILTER}
       GROUP BY model, lead_days
       ORDER BY model, lead_days`,
-    { from, to, ids: locationIds ?? [] });
+    accuracyParams({ from, to, locationIds, state, lead: 0 }));
+  }
+
+  async accuracyByState({ from, to, lead }) {
+    return this.#rows(`
+      SELECT l.state AS state, a.model AS model, count() AS n,
+        round(avg(a.temp_abs_error_c), 2) AS mae_c, round(avg(a.temp_error_c), 2) AS bias_c
+      FROM forecast_accuracy AS a
+      INNER JOIN (SELECT id, state FROM locations FINAL) AS l ON l.id = a.location_id
+      WHERE toDate(a.target_time) BETWEEN {from:Date} AND {to:Date} AND a.lead_days = {lead:UInt8}
+      GROUP BY state, model
+      ORDER BY state, model`,
+    accuracyParams({ from, to, lead }));
+  }
+
+  async accuracyByMonth({ from, to, locationIds, state = "", lead = 0 }) {
+    return this.#rows(`
+      SELECT toString(toStartOfMonth(target_time)) AS month, model, count() AS n,
+        round(avg(temp_abs_error_c), 2) AS mae_c, round(avg(temp_error_c), 2) AS bias_c
+      FROM forecast_accuracy
+      WHERE ${ACCURACY_FILTER}
+      GROUP BY month, model
+      ORDER BY month, model`,
+    accuracyParams({ from, to, locationIds, state, lead }));
+  }
+
+  async biggestMisses({ from, to, locationIds, state = "", lead = 0, limit = 10 }) {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 50) throw new Error("limit must be 1..50");
+    return this.#rows(`
+      SELECT toString(target_time) AS target_time, location_id, model, lead_days,
+        round(forecast_temp_c, 1) AS forecast_c, round(observed_temp_c, 1) AS observed_c, round(temp_error_c, 1) AS error_c
+      FROM forecast_accuracy
+      WHERE ${ACCURACY_FILTER}
+      ORDER BY temp_abs_error_c DESC, target_time, model
+      LIMIT 1 BY location_id, toDate(target_time)
+      LIMIT {limit:UInt8}`,
+    { ...accuracyParams({ from, to, locationIds, state, lead }), limit });
   }
 
   async insert(table, rows) {

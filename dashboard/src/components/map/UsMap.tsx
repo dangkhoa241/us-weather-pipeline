@@ -44,7 +44,7 @@ const activate = (fn: () => void) => (e: React.KeyboardEvent) => {
 };
 
 export function UsMap({ states: rows, locations, metric, unit, selectedLocation, onSelectLocation, cityValues,
-  zoomState, onZoomState, hoveredState, onHoverState }: MapProps) {
+  zoomState, onZoomState, hoveredState, onHoverState, stateFill, legend, showCities = true, onStateClick }: MapProps) {
   const [ownZoom, setOwnZoom] = useState<string | null>(null);
   const [ownHover, setOwnHover] = useState<string | null>(null);
   const selectedState = zoomState !== undefined ? zoomState : ownZoom;
@@ -84,7 +84,7 @@ export function UsMap({ states: rows, locations, metric, unit, selectedLocation,
 
   return (
     <div data-map data-map-level={selectedState ? "state" : "us"} role="group" aria-label={`US map: ${label}`} className="flex flex-col gap-2">
-      <div className="flex h-8 items-center gap-2 text-sm">
+      <div className={`flex h-8 items-center gap-2 text-sm ${onStateClick ? "hidden" : ""}`}>
         {selectedState ? (
           <button type="button" className="rounded-md border px-2 py-1 hover:bg-muted" onClick={() => setZoom(null)}>← United States</button>
         ) : <span className="text-muted-foreground">Select a state to zoom in, or a city dot to open its history</span>}
@@ -106,13 +106,17 @@ export function UsMap({ states: rows, locations, metric, unit, selectedLocation,
             const value = values.get(code) ?? null;
             const row = byState.get(code);
             const name = String(f.properties?.name ?? code);
-            const text = `${name}: ${value == null ? "no data" : `${fmt(value)} ${valueUnit}`}${row ? `, ${row.cities} tracked ${row.cities === 1 ? "city" : "cities"}` : ""}`;
+            const override = stateFill?.get(code);
+            const text = stateFill ? `${name}: ${override?.label ?? "no data"}`
+              : `${name}: ${value == null ? "no data" : `${fmt(value)} ${valueUnit}`}${row ? `, ${row.cities} tracked ${row.cities === 1 ? "city" : "cities"}` : ""}`;
+            const click = () => (onStateClick ? onStateClick(code) : setZoom(code));
             return (
               <path key={code} d={d} data-state={code} data-hover={hovered === code || undefined}
-                fill={value == null ? "url(#map-nodata-hatch)" : colorFor(value, range, palette)}
+                fill={stateFill ? undefined : value == null ? "url(#map-nodata-hatch)" : colorFor(value, range, palette)}
+                style={stateFill ? { fill: override?.color ?? "url(#map-nodata-hatch)" } : undefined}
                 className="cursor-pointer outline-none focus-visible:opacity-80"
                 tabIndex={selectedState ? -1 : 0} role="button" aria-label={text}
-                onClick={() => setZoom(code)} onKeyDown={activate(() => setZoom(code))}
+                onClick={click} onKeyDown={activate(click)}
                 onMouseEnter={() => setHover(code)} onMouseLeave={() => setHover(null)}>
                 <title>{text}</title>
               </path>
@@ -127,7 +131,7 @@ export function UsMap({ states: rows, locations, metric, unit, selectedLocation,
                 vectorEffect="non-scaling-stroke" style={{ stroke: "var(--foreground)" }} />
             )}
           </g>
-          {dots.map(({ c, p }) => {
+          {showCities && dots.map(({ c, p }) => {
             const inView = !selectedState || c.state === selectedState;
             const value = cityValues?.get(c.id) ?? null;
             const loading = value == null;
@@ -159,7 +163,7 @@ export function UsMap({ states: rows, locations, metric, unit, selectedLocation,
           })}
         </g>
       </svg>
-      <Legend range={range} palette={palette} label={label} />
+      {legend ?? <Legend range={range} palette={palette} label={label} />}
     </div>
   );
 }

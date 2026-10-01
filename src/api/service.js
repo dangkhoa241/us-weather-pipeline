@@ -121,6 +121,19 @@ export function createService({ warehouse, cache, store }) {
     if (unknown.length) throw new ApiError(404, "not_found", `unknown location(s): ${unknown.join(", ")}`);
   }
 
+  /** Accuracy queries: target-date range, all US / one state / one (known) city, optional lead day 1..7. */
+  async function accuracyQuery(type, { from, to, location, state, lead, limit }) {
+    if (location && state) throw badRequest("use either location or state, not both");
+    if (location) await requireLocations([location]);
+    if (state != null && (typeof state !== "string" || !/^[A-Z]{2}$/.test(state))) throw badRequest("state must be a 2-letter code");
+    if (lead != null && (!Number.isInteger(lead) || lead < 1 || lead > LIMITS.maxLeadDays)) throw badRequest(`lead must be 1..${LIMITS.maxLeadDays}`);
+    const range = resolveRange(from, to);
+    const params = { ...range, locationIds: location ? [location] : [], state: state ?? "", lead: lead ?? 0, ...(limit != null ? { limit } : {}) };
+    const result = await query(type, params);
+    result.meta.range = range;
+    return result;
+  }
+
   return {
     locations: () => query("locations", {}),
 
@@ -169,12 +182,15 @@ export function createService({ warehouse, cache, store }) {
 
     alerts: ({ state } = {}) => query("alerts", { state: state ?? "" }),
 
-    async accuracy({ from, to, location }) {
-      if (location) await requireLocations([location]);
-      const range = resolveRange(from, to);
-      const result = await query("accuracy", { ...range, locationIds: location ? [location] : [] });
-      result.meta.range = range;
-      return result;
+    accuracy: ({ from, to, location, state }) => accuracyQuery("accuracy", { from, to, location, state }),
+
+    accuracyStates: ({ from, to, lead = 1 }) => accuracyQuery("accuracyStates", { from, to, lead }),
+
+    accuracyMonths: ({ from, to, location, state, lead }) => accuracyQuery("accuracyMonths", { from, to, location, state, lead }),
+
+    async accuracyMisses({ from, to, location, state, lead, limit = 10 }) {
+      if (!Number.isInteger(limit) || limit < 1 || limit > LIMITS.maxMisses) throw badRequest(`limit must be 1..${LIMITS.maxMisses}`);
+      return accuracyQuery("misses", { from, to, location, state, lead, limit });
     },
 
     async records({ location }) {

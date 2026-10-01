@@ -21,4 +21,6 @@ export const LIMITS = Object.freeze({
   maxRangeDays: 4000,    // ~11 years
   maxForecastDays: 16,
   maxRuns: 200,
+  maxLeadDays: 7,
+  maxMisses: 50,
 });

@@ -15,6 +15,9 @@ export const locationList = z.string().max(1000)
   .meta({ example: "stockton-ca,miami-fl", description: "comma-separated location ids" });
 
 export const metric = z.enum(METRICS);
+export const stateCode = z.string().regex(new RegExp(PATTERNS.state)).meta({ example: "CA" });
+export const leadDay = z.coerce.number().int().min(1).max(LIMITS.maxLeadDays)
+  .meta({ example: 1, description: "days between the forecast run and the forecast hour" });
 export const period = z.enum(PERIODS);
 export const compare = z.enum(COMPARE);
 
@@ -37,7 +40,13 @@ export const QUERY = {
   forecastParams: z.object({ locationId }).strict(),
   forecast: z.object({ days: z.coerce.number().int().min(1).max(LIMITS.maxForecastDays).default(7) }).strict(),
   alerts: z.object({ state: z.string().regex(new RegExp(PATTERNS.state)).optional() }).strict(),
-  accuracy: z.object({ location: locationId.optional(), ...range }).strict(),
+  accuracy: z.object({ location: locationId.optional(), state: stateCode.optional(), ...range }).strict(),
+  accuracyStates: z.object({ ...range, lead: leadDay.default(1) }).strict(),
+  accuracyMonths: z.object({ location: locationId.optional(), state: stateCode.optional(), ...range, lead: leadDay.optional() }).strict(),
+  accuracyMisses: z.object({
+    location: locationId.optional(), state: stateCode.optional(), ...range, lead: leadDay.optional(),
+    limit: z.coerce.number().int().min(1).max(LIMITS.maxMisses).default(10),
+  }).strict(),
   records: z.object({ location: locationId }).strict(),
   runs: z.object({
     limit: z.coerce.number().int().min(1).max(LIMITS.maxRuns).default(50),
@@ -61,6 +70,12 @@ export const ROW = {
     temp_avg_c: num, temp_max_c: num, precip_mm_per_city: num,
   }),
   accuracy: z.object({ model: z.string(), lead_days: z.number(), n: z.number(), mae_c: num, bias_c: num }),
+  accuracyState: z.object({ state: z.string(), model: z.string(), n: z.number(), mae_c: num, bias_c: num }),
+  accuracyMonth: z.object({ month: z.string(), model: z.string(), n: z.number(), mae_c: num, bias_c: num }),
+  miss: z.object({
+    target_time: z.string(), location_id: z.string(), model: z.string(), lead_days: z.number(),
+    forecast_c: num, observed_c: num, error_c: num,
+  }),
   forecast: z.object({
     model: z.string(), issued_at: z.string(), target_time: z.string(),
     temp_c: num, precip_mm: num, precip_prob_pct: num, wind_speed_ms: num,
@@ -106,6 +121,9 @@ export const RESPONSE = {
   periods: envelope(z.array(ROW.period)),
   alerts: envelope(z.array(ROW.alert)),
   accuracy: envelope(z.array(ROW.accuracy)),
+  accuracyStates: envelope(z.array(ROW.accuracyState)),
+  accuracyMonths: envelope(z.array(ROW.accuracyMonth)),
+  misses: envelope(z.array(ROW.miss)),
   records: envelope(ROW.records),
   any: envelope(z.any()),
 };

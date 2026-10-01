@@ -3,7 +3,7 @@
 // the state map are computed here from daily values with the same rules as the API; forecast accuracy is
 // pre-computed for the preset ranges and their comparisons.
 import { z } from "zod";
-import type { AccuracyRow, AlertRow, ForecastRow, LocationRow, MapRow, PeriodRow, StatsResponse, StatsRow } from "@/lib/api";
+import type { AccuracyMonthRow, AccuracyRow, AccuracyStateRow, AlertRow, AreaParams, MissRow, ForecastRow, LocationRow, MapRow, PeriodRow, StatsResponse, StatsRow } from "@/lib/api";
 import { compareRange, dayMs, setDataEnd, toDay } from "@/lib/dates";
 
 const SUPPORTED_FORMAT = 1;
@@ -112,6 +112,19 @@ async function statsFor(ids: string[], metric: string, period: string, from: str
   return aggregate(all.flat(), period);
 }
 
+type AccuracyDetails = {
+  range: { from: string; to: string };
+  states: Record<number, AccuracyStateRow[]>;
+  months: Record<number, AccuracyMonthRow[]>;
+  misses: Record<number, MissRow[]>;
+};
+const detailsMatch = (d: AccuracyDetails, p: AreaParams) => !p.location && !p.state && d.range.from === p.from && d.range.to === p.to;
+
+/** In the demo, accuracy details exist for this range only (the dashboard says so for other choices). */
+export async function snapshotAccuracyRange() {
+  return (await file<AccuracyDetails>("accuracy-details.json")).range;
+}
+
 // ---- API-compatible client ------------------------------------------------------------------------------------
 const meta = (range?: { from: string; to: string }) => ({ source: "snapshot", data_version: manifest?.snapshot ?? null, ...(range ? { range } : {}) });
 
@@ -180,9 +193,25 @@ export const snapshotApi = {
     return { data: state ? all.filter((a) => a.states.includes(state)) : all, meta: meta() };
   },
 
-  /** Pre-computed for the preset ranges and their comparisons; other ranges have no accuracy in the demo. */
-  async accuracy(p: { from: string; to: string; location?: string }) {
+  /** Pre-computed for the preset ranges and their comparisons (all US or one city); states are not in the demo. */
+  async accuracy(p: AreaParams) {
     const table = await file<Record<string, AccuracyRow[]>>("accuracy.json");
-    return { data: table[`${p.location ?? ""}|${p.from}|${p.to}`] ?? [], meta: meta(p) };
+    return { data: p.state ? [] : table[`${p.location ?? ""}|${p.from}|${p.to}`] ?? [], meta: meta(p) };
+  },
+
+  // Accuracy details are exported for all US over the default range only (keeps the snapshot small).
+  async accuracyStates(p: { from: string; to: string; lead: number }) {
+    const d = await file<AccuracyDetails>("accuracy-details.json");
+    return { data: (d.range.from === p.from && d.range.to === p.to ? d.states[p.lead] : null) ?? [], meta: meta(p) };
+  },
+
+  async accuracyMonths(p: AreaParams & { lead: number }) {
+    const d = await file<AccuracyDetails>("accuracy-details.json");
+    return { data: (detailsMatch(d, p) ? d.months[p.lead] : null) ?? [], meta: meta(p) };
+  },
+
+  async accuracyMisses(p: AreaParams & { lead: number; limit?: number }) {
+    const d = await file<AccuracyDetails>("accuracy-details.json");
+    return { data: ((detailsMatch(d, p) ? d.misses[p.lead] : null) ?? []).slice(0, p.limit ?? 10), meta: meta(p) };
   },
 };

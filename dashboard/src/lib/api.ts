@@ -12,6 +12,11 @@ export type StatsResponse = z.infer<typeof RESPONSE.stats>;
 export type ForecastRow = z.infer<typeof ROW.forecast>;
 export type PeriodRow = z.infer<typeof ROW.period>;
 export type AlertRow = z.infer<typeof ROW.alert>;
+export type AccuracyStateRow = z.infer<typeof ROW.accuracyState>;
+export type AccuracyMonthRow = z.infer<typeof ROW.accuracyMonth>;
+export type MissRow = z.infer<typeof ROW.miss>;
+/** Accuracy area: all US (both empty), one state or one city. */
+export type AreaParams = { from: string; to: string; location?: string; state?: string };
 
 export class ApiRequestError extends Error {
   status: number;
@@ -44,7 +49,10 @@ export const liveApi = {
   stats: (p: { locations: string; metric: string; period: string; from: string; to: string; compare?: string }) =>
     get("/stats", p, RESPONSE.stats),
   map: (p: { from: string; to: string }) => get("/map", p, RESPONSE.map),
-  accuracy: (p: { from: string; to: string; location?: string }) => get("/accuracy", p, RESPONSE.accuracy),
+  accuracy: (p: AreaParams) => get("/accuracy", p, RESPONSE.accuracy),
+  accuracyStates: (p: { from: string; to: string; lead: number }) => get("/accuracy/states", p, RESPONSE.accuracyStates),
+  accuracyMonths: (p: AreaParams & { lead: number }) => get("/accuracy/months", p, RESPONSE.accuracyMonths),
+  accuracyMisses: (p: AreaParams & { lead: number; limit?: number }) => get("/accuracy/misses", p, RESPONSE.misses),
   forecast: (locationId: string, days = 8) => get(`/forecast/${encodeURIComponent(locationId)}`, { days }, RESPONSE.forecast),
   forecastPeriods: (locationId: string) => get(`/forecast/${encodeURIComponent(locationId)}/periods`, {}, RESPONSE.periods),
   alerts: (state?: string) => get("/alerts", { state }, RESPONSE.alerts),

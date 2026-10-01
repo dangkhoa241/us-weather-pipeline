@@ -122,6 +122,17 @@ for (const location of ["", ...locations.map((l) => l.id)]) {
 }
 write(dir, "accuracy.json", accuracy);
 
+// Accuracy page details (map by state, bias by month, biggest misses) for all US over the dashboard's default range
+// (last 90 days) and lead days 1–7 only: other areas/ranges would multiply the snapshot size.
+const detailRange = presetRanges(dataEnd)["90d"];
+const details = { range: detailRange, states: {}, months: {}, misses: {} };
+for (let lead = 1; lead <= 7; lead += 1) {
+  details.states[lead] = (await get("/accuracy/states", { ...detailRange, lead })).data;
+  details.months[lead] = (await get("/accuracy/months", { ...detailRange, lead })).data;
+  details.misses[lead] = (await get("/accuracy/misses", { ...detailRange, lead, limit: 10 })).data;
+}
+write(dir, "accuracy-details.json", details);
+
 // Latest forecast per model and location, as compact arrays: hours after `start` → [temp_c, precip_mm, precip_prob_pct].
 const forecasts = {};
 for (const loc of locations) {

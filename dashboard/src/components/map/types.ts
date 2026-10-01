@@ -19,6 +19,11 @@ export type MapProps = {
   onZoomState?: (code: string | null) => void;
   hoveredState?: string | null;
   onHoverState?: (code: string | null) => void;
+  /** Override the state colors (e.g. best forecast model per state); states not in the map are hatched. */
+  stateFill?: Map<string, { color: string; label: string }>;
+  legend?: React.ReactNode;          // replaces the metric legend
+  showCities?: boolean;              // default true
+  onStateClick?: (code: string) => void;   // instead of zooming
 };
 
 /** The value a state is colored by, in display units. */
