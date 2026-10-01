@@ -12,6 +12,13 @@ export type MapProps = {
   unit: TempUnit;
   selectedLocation: string;
   onSelectLocation: (id: string) => void;
+  /** Value per city in display units; null/missing = "Data loading" (hollow grey dot). */
+  cityValues?: Map<string, number | null>;
+  /** Zoomed and hovered state can be controlled (linked with the table); otherwise the map keeps its own. */
+  zoomState?: string | null;
+  onZoomState?: (code: string | null) => void;
+  hoveredState?: string | null;
+  onHoverState?: (code: string | null) => void;
 };
 
 /** The value a state is colored by, in display units. */

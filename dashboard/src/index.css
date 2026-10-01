@@ -73,6 +73,11 @@
     --chart-4: oklch(0.371 0 0);
     --chart-5: oklch(0.269 0 0);
     --radius: 0.625rem;
+    --map-line: #ffffff;
+    --map-outline: #6b7280;
+    --map-nodata: #eceef1;
+    --map-hatch: #cfd3da;
+    --map-county: rgba(255, 255, 255, 0.6);
     --sidebar: oklch(0.985 0 0);
     --sidebar-foreground: oklch(0.145 0 0);
     --sidebar-primary: oklch(0.205 0 0);
@@ -107,6 +112,11 @@
     --chart-3: oklch(0.439 0 0);
     --chart-4: oklch(0.371 0 0);
     --chart-5: oklch(0.269 0 0);
+    --map-line: #1c1c1f;
+    --map-outline: #9ca3af;
+    --map-nodata: #26282d;
+    --map-hatch: #3a3e46;
+    --map-county: rgba(255, 255, 255, 0.28);
     --sidebar: oklch(0.205 0 0);
     --sidebar-foreground: oklch(0.985 0 0);
     --sidebar-primary: oklch(0.488 0.243 264.376);

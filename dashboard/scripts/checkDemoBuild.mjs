@@ -55,6 +55,11 @@ try {
   check("KPI cards have values", /\d/.test(avgTemp ?? ""), avgTemp);
   check("map rendered with states", (await page.locator("[data-map] [data-state]").count()) >= 50, await page.locator("[data-map] [data-state]").count());
 
+  const dotsWithData = await page.waitForFunction(() => document.querySelectorAll("[data-map] [data-location]:not([data-loading])").length >= 10, null, { timeout: 15_000 })
+    .then(() => true).catch(() => false);
+  const dots = await page.locator("[data-map] [data-location]").count();
+  check("53 city dots, most with values", dots === 53 && dotsWithData, `${dots} dots`);
+
   await page.screenshot({ path: new URL("../../docs/images/dashboard-demo.png", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1"), fullPage: true });
 
   // Another preset + comparison (computed from the daily snapshot) and a deep link.
