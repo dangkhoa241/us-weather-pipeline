@@ -91,6 +91,15 @@ try {
   check("synced crosshair on both charts", crosshairs === 2, `${crosshairs} crosshairs`);
   await page.locator("[data-drill-section]").screenshot({ path: new URL("../../docs/images/dashboard-demo-city.png", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1") });
 
+  // Dark mode follows the system by default: same page with a dark color scheme.
+  const dark = await browser.newPage({ viewport: { width: 1400, height: 1000 }, colorScheme: "dark" });
+  await dark.goto(`${base}?city=stockton-ca&year=2025`, { waitUntil: "load" });
+  await dark.waitForFunction(() => performance.getEntriesByName("drill-chart-ready").length > 0, null, { timeout: 30_000 });
+  await dark.waitForTimeout(1500);
+  check("dark mode follows the system", await dark.evaluate(() => document.documentElement.classList.contains("dark")));
+  await dark.screenshot({ path: new URL("../../docs/images/dashboard-demo-dark.png", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1"), fullPage: true });
+  await dark.close();
+
   const csp = await page.evaluate(() => window.__csp ?? []);
   check("no CSP violations", csp.length === 0, csp.join("; "));
   check("no /api requests (static demo)", apiCalls.length === 0, apiCalls.slice(0, 2).join(" "));

@@ -7,6 +7,9 @@ import App from "./App.tsx";
 import { startUrlSync } from "@/store/filters";
 import { isSnapshot } from "@/lib/api";
 import { initSnapshot } from "@/lib/snapshot";
+import { startTheme } from "@/lib/theme";
+
+startTheme();   // before the first render, so the page doesn't flash the wrong theme
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 5 * 60_000, retry: 1, refetchOnWindowFocus: false } },

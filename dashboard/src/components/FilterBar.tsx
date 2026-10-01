@@ -22,7 +22,7 @@ export function FilterBar() {
   const range = selectedRange(f);
 
   return (
-    <section aria-label="Filters" className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3">
+    <section aria-label="Filters" className="flex flex-wrap items-end gap-3 rounded-xl bg-card p-4 shadow-sm shadow-black/5 ring-1 ring-foreground/10">
       <Field label="Location">
         <Select value={f.location} onValueChange={(location) => f.setFilters({ location, month: "" })}>
           <SelectTrigger className="w-48" aria-label="Location"><SelectValue placeholder="Location" /></SelectTrigger>

@@ -4,13 +4,14 @@ import { MapPanel } from "@/components/MapPanel";
 import { DrillDownPanel } from "@/components/DrillDownPanel";
 import { TrendPanel } from "@/components/TrendPanel";
 import { Badge } from "@/components/ui/badge";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { isSnapshot } from "@/lib/api";
 import { snapshotManifest } from "@/lib/snapshot";
 
 export default function App() {
   const snapshot = isSnapshot ? snapshotManifest() : null;
   return (
-    <div className="mx-auto flex min-h-screen max-w-7xl flex-col gap-4 p-4">
+    <div className="mx-auto flex min-h-screen max-w-7xl flex-col gap-5 p-4 sm:p-6">
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-semibold">US Weather Pipeline</h1>
@@ -20,7 +21,10 @@ export default function App() {
             </Badge>
           )}
         </div>
-        {!isSnapshot && <a className="text-sm text-muted-foreground underline" href="/docs">API docs</a>}
+        <div className="flex items-center gap-3">
+          {!isSnapshot && <a className="text-sm text-muted-foreground underline" href="/docs">API docs</a>}
+          <ThemeToggle />
+        </div>
       </header>
       <FilterBar />
       <KpiCards />

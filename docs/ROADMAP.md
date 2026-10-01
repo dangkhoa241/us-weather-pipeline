@@ -109,7 +109,7 @@ Cost follow-ups:
   Method: `docs/analysis/drilldown-chart.md`.
 - Static demo: 2.3 MB snapshot (317 KB gzipped) with daily data for 53 cities from 2023-01-01 (all years; monthly
   values derived in the browser); 11/11 demo checks, 0 CSP violations under a strict policy.
-- Tests: 73 Vitest tests (12 cache + 19 API + 42 dashboard), no Docker needed.
+- Tests: 89 Vitest tests (12 cache + 19 API + 58 dashboard), no Docker needed; 14 automated checks on the static demo build.
 
 ## Known limitations
 
@@ -143,6 +143,8 @@ Security (low; from the security review of Stages 1–2, compose and workflows):
 - The `/docs` page allows `'unsafe-inline'` scripts (Swagger UI's init script); it has no user content and only the
   pinned CDN path is allowed for external scripts.
 - The API is not a Docker Compose service yet (run with `npm start`).
+- Dashboard: city dot values are means of yearly rows weighted by hours (same as the state values, not per-day exact);
+  PNG downloads use the system sans-serif font (the web font isn't available to the exported image).
 - Dashboard: KPI sparklines stay daily (the Period filter drives the trend chart); the map colors by temperature or
   precipitation only. The city chart scales its text with the width (SVG `viewBox`).
 - Static demo: data frozen at the snapshot date; forecast accuracy only for preset ranges; Zod runs "jitless" in the
@@ -233,9 +235,15 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
 - [x] US choropleth map (states, Albers USA with AK/HI insets, us-atlas TopoJSON)
 - [x] Map: click state → zoom + city markers; click city → select location (hand-rolled d3-geo, chosen in
       `docs/analysis/map-drilldown.md`; keyboard accessible)
+- [x] UI upgrade: map ~60% + linked state table ~40% (hover/click linked, sticky header); all 53 cities as dots
+      (glow + value, hollow grey while data is loading); hatched states without data; crisp borders + US outline;
+      county borders lazy-loaded on state zoom (separate ~260 KB gzipped chunk, never on first load)
+- [x] City history hidden until a city is clicked (fade/slide-in + scroll; × closes and clears `city/year/month`)
+- [x] Twin Temperature + Rain charts (drill-down and trend): synced crosshair/tooltip and drill-down, moving average
+      (7 days / 3 periods), dashed mean, ▲ max / ▼ min, PNG/CSV download, pill tabs for the period
 - [ ] Map toggles: metric / forecast error / active NWS alerts; 7-day forecast time slider
 
-- [x] API types shared with the backend (`src/api/schemas.js`), 42 dashboard tests (Vitest + React Testing Library)
+- [x] API types shared with the backend (`src/api/schemas.js`), 58 dashboard tests (Vitest + React Testing Library)
 - [x] Static demo on Vercel Hobby: `npm run export:snapshot` → `dashboard/public/data/`, `build:snapshot` mode with a
       "Demo data as of" badge, `dashboard/vercel.json` (strict CSP), `docs/DEPLOY_VERCEL.md`
 
@@ -254,7 +262,8 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
 - [ ] Compare page (2–4 cities) *(cut first if short on time)*
 - [ ] Records page
 - [ ] Pipeline Ops page
-- [ ] Dark mode, inline errors (no `alert()`), freshness badge, missing data shown as gaps
+- [x] Dark mode (follows the system, toggle stored per browser), inline errors (no `alert()`), missing data shown as gaps
+- [ ] Freshness badge
 
 ## Cross-cutting
 

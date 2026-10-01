@@ -74,6 +74,7 @@
     --chart-5: oklch(0.269 0 0);
     --radius: 0.625rem;
     --c-temp: #e8590c;
+    --c-hot: #c92a2a;
     --c-cool: #3b82c4;
     --c-rain: #2f80ed;
     --c-ma: #7c3aed;
@@ -118,6 +119,7 @@
     --chart-4: oklch(0.371 0 0);
     --chart-5: oklch(0.269 0 0);
     --c-temp: #ff8a4c;
+    --c-hot: #ff6b6b;
     --c-cool: #6cb2ff;
     --c-rain: #5aa9ff;
     --c-ma: #b794f6;

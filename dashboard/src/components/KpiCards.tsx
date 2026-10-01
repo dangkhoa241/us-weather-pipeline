@@ -82,10 +82,10 @@ export function KpiCards() {
   const cards: CardSpec[] = [
     { key: "tempAvg", title: "Avg temperature", value: (k) => toUnit(k.tempAvg, f.unit), unit: deg, deltaOf: t("tempAvg"), series: avgSeries },
     { key: "tempMax", title: "Max temperature", value: (k) => toUnit(k.tempMax, f.unit), unit: deg, deltaOf: t("tempMax"),
-      series: tempRows.map((r) => toUnit(r.max, f.unit)), color: "#d73027" },
+      series: tempRows.map((r) => toUnit(r.max, f.unit)), color: "--c-hot" },
     { key: "tempMin", title: "Min temperature", value: (k) => toUnit(k.tempMin, f.unit), unit: deg, deltaOf: t("tempMin"),
-      series: tempRows.map((r) => toUnit(r.min, f.unit)), color: "#313695" },
-    { key: "rainTotal", title: "Total rain", value: (k) => k.rainTotal, unit: " mm", deltaOf: plain("rainTotal"), series: rainSeries, color: "#2171b5" },
+      series: tempRows.map((r) => toUnit(r.min, f.unit)), color: "--c-cool" },
+    { key: "rainTotal", title: "Total rain", value: (k) => k.rainTotal, unit: " mm", deltaOf: plain("rainTotal"), series: rainSeries, color: "--c-rain" },
     { key: "rainyDays", title: "Rainy days (≥ 1 mm)", value: (k) => k.rainyDays, unit: "", deltaOf: plain("rainyDays"), digits: 0 },
     { key: "forecastMae", title: "Forecast error (day 1)", value: (k) => deltaToUnit(k.forecastMae, f.unit), unit: deg,
       deltaOf: t("forecastMae") },
