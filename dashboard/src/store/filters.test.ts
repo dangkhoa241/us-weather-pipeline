@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { act, renderHook } from "@testing-library/react";
-import { DEFAULTS, createFilterStore, parseFilters, selectedRange, startUrlSync, toSearch } from "@/store/filters";
+import { DEFAULTS, createFilterStore, pageFromPath, pageHref, parseFilters, selectedRange, startUrlSync, toSearch } from "@/store/filters";
 
 describe("parseFilters / toSearch", () => {
   it("uses the defaults for an empty query string", () => {
@@ -65,5 +65,43 @@ describe("startUrlSync", () => {
     const store = createFilterStore(parseFilters(window.location.search));
     stop = startUrlSync(store, window);
     expect(window.location.search).toBe("?unit=C");
+  });
+});
+
+describe("pages and accuracy filters", () => {
+  it("maps paths to pages (unknown paths → overview)", () => {
+    expect(pageFromPath("/forecast")).toBe("forecast");
+    expect(pageFromPath("/accuracy/")).toBe("accuracy");
+    expect(pageFromPath("/")).toBe("overview");
+    expect(pageFromPath("/admin")).toBe("overview");
+  });
+
+  it("builds real page links that keep the filters", () => {
+    expect(pageHref({ ...DEFAULTS, unit: "C", city: "miami-fl" }, "forecast")).toBe("/forecast?unit=C&city=miami-fl");
+    expect(pageHref({ ...DEFAULTS, page: "forecast" }, "overview")).toBe("/");
+  });
+
+  it("validates area (state or city) and lead day", () => {
+    expect(parseFilters("?area=CA&lead=3", "/accuracy")).toMatchObject({ page: "accuracy", area: "CA", lead: "3" });
+    expect(parseFilters("?area=stockton-ca").area).toBe("stockton-ca");
+    expect(parseFilters("?area=<script>&lead=9")).toMatchObject({ area: "", lead: "1" });
+  });
+});
+
+describe("navigation with startUrlSync", () => {
+  let stop: () => void;
+  afterEach(() => stop?.());
+
+  it("pushes /forecast with the filters and goes back to / on popstate", () => {
+    window.history.replaceState(null, "", "/?unit=C");
+    const store = createFilterStore(parseFilters(window.location.search, window.location.pathname));
+    stop = startUrlSync(store, window);
+    act(() => store.getState().setFilters({ page: "forecast", city: "denver-co" }));
+    expect(`${window.location.pathname}${window.location.search}`).toBe("/forecast?unit=C&city=denver-co");
+    act(() => {
+      window.history.replaceState(null, "", "/?unit=C");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(store.getState()).toMatchObject({ page: "overview", city: "", unit: "C" });
   });
 });
