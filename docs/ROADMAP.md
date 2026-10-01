@@ -34,6 +34,10 @@ Approved free stack:
 | GitHub Actions | Free on public repos (private: 2,000 min / month) | Jobs stop running | No | — | — |
 | MongoDB, ClickHouse, Redis (Docker) | Self-hosted; limited only by disk | Disk full | No | ~32 MB / day on disk (≈ 12 GB / year), mostly forecast snapshots | local disk only |
 
+AWS (in progress, target mid-October 2026; README "AWS deployment"): always-free allowances: Lambda 1 M requests + 400,000 GB-s / month,
+DynamoDB 25 GB, SNS 1 M publishes, CloudFront 1 TB transfer + 10 M requests / month, EventBridge Scheduler 14 M invocations / month.
+S3 is not always free (12-month tier or sign-up credits, depending on the account): keep it to a few hundred MB with a lifecycle rule.
+A credit card is required to open an AWS account; set a $1 budget alert before deploying anything, and re-check these limits at sign-up.
 Deploy-target notes (not in use yet): Oracle Cloud Always Free requires a credit card to sign up.
 Atlas M0 holds only the last 7 days of NWS data (see the table); the full raw store stays local. The BigQuery sandbox (no card) expires tables after 60 days.
 

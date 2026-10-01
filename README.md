@@ -25,7 +25,7 @@
 
 Error grows by about 0.25 °F for each extra day of lead time. The scores compare hourly forecasts with observed temperatures: about 65,000 pairs per model, from 20 cities, 2026-06-29 to 2026-09-26. Method: [How this is measured](#how-accuracy-is-measured).
 
-## Product design (my ideas)
+## Design decisions
 
 I designed the product and its features. Claude Code implemented them under my direction, using a compare-3-implementations-and-review process from my earlier ExpenseTracker project.
 
@@ -85,6 +85,34 @@ flowchart LR
 - **Stage 3** puts a versioned cache in front of the warehouse. The landing page's queries are pre-warmed after each load.
 - **Stage 4** serves the API: one Zod definition per route drives validation, the OpenAPI docs and the dashboard's TypeScript types.
 - **Stage 5** is the dashboard: React + TypeScript, with hand-rolled d3 for the map and charts.
+
+## AWS deployment (🚧 in progress, target: mid-October 2026)
+
+> **Status: in progress, not deployed yet.** The local Docker stack and the Vercel demo above are what runs today.
+
+```mermaid
+flowchart LR
+  EB["EventBridge Scheduler<br/>cron rules"] --> L["Lambda<br/>fetcher (Stage 1)"]
+  NWS["NWS API"] --> L
+  OM["Open-Meteo"] --> L
+  L --> S3[("S3<br/>raw store")]
+  S3 --> ETL["Lambda<br/>ETL + aggregates"]
+  ETL --> DDB[("DynamoDB<br/>cache")]
+  DDB --> API["Lambda<br/>Hono API"]
+  L -->|failures, heat waves| SNS["SNS<br/>alerts"]
+  CF["CloudFront<br/>dashboard (S3 origin)"] --> API
+```
+
+| Adapter interface | Current implementation | AWS version (in progress) |
+|---|---|---|
+| `RawStore` | MongoDB | S3 |
+| `CacheStore` | Redis | DynamoDB |
+| `Scheduler` | node-cron | EventBridge |
+| `Notifier` | console | SNS |
+
+The adapter design already allows the switch through `.env` (e.g. `RAW_STORE=s3`, `CACHE_STORE=dynamodb`); the AWS adapters are being built.
+
+**All on the free tier:** Lambda (1 M requests / month), DynamoDB (25 GB), SNS (1 M publishes), CloudFront (1 TB transfer / month) and EventBridge Scheduler (14 M invocations / month) have always-free allowances; S3 stays at a few hundred MB with a retention rule. A **$1 AWS budget alert** is set before anything is deployed, and the limits are checked again at sign-up and recorded in the [roadmap](docs/ROADMAP.md).
 
 ## By the numbers
 
