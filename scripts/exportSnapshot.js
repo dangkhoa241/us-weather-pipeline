@@ -12,7 +12,8 @@ import { config } from "../src/config.js";
 const API = `http://${config.host === "0.0.0.0" ? "127.0.0.1" : config.host}:${config.port}/api/v1`;
 const OUT = new URL("../dashboard/public/data/", import.meta.url);
 const FORMAT = 1;                 // bump when the file layout changes (the dashboard checks it)
-const WINDOW_DAYS = 731;          // 2 years: enough for "last 12 months" compared with the same period last year
+const MIN_WINDOW_DAYS = 731;      // at least 2 years: "last 12 months" compared with the same period last year
+const MAX_RANGE_DAYS = 4000;      // the API's longest range; used to find the earliest year with data
 const PRESET_DAYS = { "7d": 7, "30d": 30, "90d": 90, "365d": 365 };
 const MAX_TOTAL_KB = 5 * 1024;    // fail if the snapshot gets big (Vercel serves it as static files)
 // Nothing internal may end up in a public snapshot.
@@ -80,7 +81,17 @@ const t0 = Date.now();
 const locations = (await get("/locations")).data;
 // The API's default range ends at the latest complete observation day; use it as "data as of".
 const dataEnd = (await get("/map")).meta.range.to;
-const windowFrom = toDay(dayMs(dataEnd) - (WINDOW_DAYS - 1) * DAY_MS);
+// The window starts on Jan 1 of the earliest year any city has data for, so the drill-down covers every year
+// (monthly values are derived from the daily columns in the dashboard). One period=year call per city.
+const searchFrom = toDay(dayMs(dataEnd) - (MAX_RANGE_DAYS - 1) * DAY_MS);
+let firstYear = dataEnd.slice(0, 4);
+for (const loc of locations) {
+  const years = (await get("/stats", { locations: loc.id, metric: "temp_c", period: "year", from: searchFrom, to: dataEnd })).data;
+  for (const r of years) if (r.n_values > 0 && r.period_start.slice(0, 4) < firstYear) firstYear = r.period_start.slice(0, 4);
+}
+const minFrom = toDay(dayMs(dataEnd) - (MIN_WINDOW_DAYS - 1) * DAY_MS);
+const windowFrom = `${firstYear}-01-01` < minFrom ? `${firstYear}-01-01` : minFrom;
+const WINDOW_DAYS = (dayMs(dataEnd) - dayMs(windowFrom)) / DAY_MS + 1;
 const snapshotId = `snapshot-${dataEnd}`;
 const dir = new URL(`${snapshotId}/`, OUT);
 rmSync(OUT, { recursive: true, force: true });   // keep only the current snapshot

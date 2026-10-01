@@ -104,8 +104,12 @@ Cost follow-ups:
   up to 282 MB) and smallest dependency tree (116 vs 168–174 packages). Method and data: `docs/analysis/api-layer.md`.
 - Dashboard map (3 implementations compared): hand-rolled d3-geo adds 47 KB gzipped (vs 71 KB react-simple-maps, 83 KB
   ECharts), first render 149 ms, 51 keyboard-focusable labelled states/cities. Method: `docs/analysis/map-drilldown.md`.
-- Static demo: 750 KB snapshot (140 KB gzipped) for 20 cities × 2 years; 0 CSP violations under a strict policy.
-- Tests: 62 Vitest tests (12 cache + 19 API + 31 dashboard), no Docker needed.
+- City drill-down chart (3 implementations compared): hand-rolled d3-scale/d3-shape SVG adds 10 KB gzipped (vs 17 KB
+  ECharts, 108 KB Recharts), first render 185 ms, every month/day a keyboard-focusable button; drill state in the URL.
+  Method: `docs/analysis/drilldown-chart.md`.
+- Static demo: 2.3 MB snapshot (317 KB gzipped) with daily data for 53 cities from 2023-01-01 (all years; monthly
+  values derived in the browser); 11/11 demo checks, 0 CSP violations under a strict policy.
+- Tests: 73 Vitest tests (12 cache + 19 API + 42 dashboard), no Docker needed.
 
 ## Known limitations
 
@@ -139,8 +143,8 @@ Security (low; from the security review of Stages 1–2, compose and workflows):
 - The `/docs` page allows `'unsafe-inline'` scripts (Swagger UI's init script); it has no user content and only the
   pinned CDN path is allowed for external scripts.
 - The API is not a Docker Compose service yet (run with `npm start`).
-- Dashboard: the Period filter is kept in the URL but not used yet (KPI sparklines are daily); the map colors by
-  temperature or precipitation only.
+- Dashboard: KPI sparklines stay daily (the Period filter drives the trend chart); the map colors by temperature or
+  precipitation only. The city chart scales its text with the width (SVG `viewBox`).
 - Static demo: data frozen at the snapshot date; forecast accuracy only for preset ranges; Zod runs "jitless" in the
   browser (no `new Function`, required by the CSP).
 - Legacy `backend/` (rewritten in Stage 4): CORS allows any origin, errors return internal messages to the client, and
@@ -231,14 +235,18 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       `docs/analysis/map-drilldown.md`; keyboard accessible)
 - [ ] Map toggles: metric / forecast error / active NWS alerts; 7-day forecast time slider
 
-- [x] API types shared with the backend (`src/api/schemas.js`), 31 dashboard tests (Vitest + React Testing Library)
+- [x] API types shared with the backend (`src/api/schemas.js`), 42 dashboard tests (Vitest + React Testing Library)
 - [x] Static demo on Vercel Hobby: `npm run export:snapshot` → `dashboard/public/data/`, `build:snapshot` mode with a
       "Demo data as of" badge, `dashboard/vercel.json` (strict CSP), `docs/DEPLOY_VERCEL.md`
 
 **Drill-down, charts, tables (Fri)**
+- [x] City drill-down chart below the map: years → 12 months of a year (only years with data; future months empty) →
+      days of a month, breadcrumb City › Year › Month, state in the URL (`year`, `month`); follows the Metric filter
+      (temperature avg line + min/max band, rain bars). Hand-rolled d3 SVG, chosen in `docs/analysis/drilldown-chart.md`
+- [x] Trend chart over the selected range grouped by the Period filter (week/month/quarter/half/year)
 - [ ] Time drill-down: Year → Half → Quarter → Month → Week → Day → Hour, with breadcrumb
 - [ ] Place drill-down: US → Region → State → City
-- [ ] Charts: temperature min/max band, rain bars, calendar heatmap, wind rose, monthly box plot, anomaly vs normal, state ranking, temperature vs rain scatter
+- [ ] Charts: ~~temperature min/max band, rain bars~~ (done), calendar heatmap, wind rose, monthly box plot, anomaly vs normal, state ranking, temperature vs rain scatter
 - [ ] Tables: sortable, searchable, paginated, grouped by period, conditional colors, CSV export, click row to drill in
 - [ ] Pages: Overview, Forecast, Statistics, Forecast Accuracy
 

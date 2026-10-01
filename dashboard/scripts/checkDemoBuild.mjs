@@ -68,6 +68,14 @@ try {
   await page.waitForTimeout(600);
   check("drill-down works offline", (await page.getAttribute("[data-map]", "data-map-level")) === "state");
 
+  // City chart: the oldest year in the snapshot, then drill into December (days derived from the daily columns).
+  await page.goto(`${base}?loc=stockton-ca&year=2023`, { waitUntil: "load" });
+  await page.waitForFunction(() => performance.getEntriesByName("drill-chart-ready").length > 0, null, { timeout: 30_000 });
+  const dec = page.locator('[data-drill-panel] [data-key="12"][role="button"]');
+  if (await dec.count()) { await dec.focus(); await page.keyboard.press("Enter"); await page.waitForTimeout(600); }
+  const dayCount = await page.locator("[data-drill-panel] [data-chart]").getAttribute("data-points");
+  check("city chart: 2023 → December days", new URL(page.url()).searchParams.get("month") === "12" && dayCount === "31", `${dayCount} points`);
+
   const csp = await page.evaluate(() => window.__csp ?? []);
   check("no CSP violations", csp.length === 0, csp.join("; "));
   check("no /api requests (static demo)", apiCalls.length === 0, apiCalls.slice(0, 2).join(" "));
