@@ -7,8 +7,11 @@ import { defineConfig } from "vitest/config";
 // so the browser talks to one origin and no CORS is needed.
 const API = "http://127.0.0.1:3000";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss()],
+  // `vite build --mode snapshot` (npm run build:snapshot) makes the static demo read public/data/ instead of /api.
+  // Set here rather than in a .env.snapshot file, so the repository has no .env files at all.
+  define: mode === "snapshot" ? { "import.meta.env.VITE_DATA_MODE": JSON.stringify("snapshot") } : {},
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
@@ -25,4 +28,4 @@ export default defineConfig({
   preview: { proxy: { "/api": API } },
   // globals: lets React Testing Library clean up the DOM after each test automatically
   test: { globals: true, environment: "jsdom", setupFiles: ["./src/test/setup.ts"], include: ["src/**/*.test.{ts,tsx}"] },
-});
+}));

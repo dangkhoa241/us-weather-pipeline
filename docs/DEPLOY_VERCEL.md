@@ -32,7 +32,7 @@ previous snapshot, so the repository only ever holds one. Each push to `main` re
    - **Root Directory:** click *Edit* and choose `dashboard`.
    - **Framework Preset:** Vite (detected). Leave **Build Command**, **Output Directory** and **Install Command**
      empty: `dashboard/vercel.json` sets them (`npm ci`, `npm run build:snapshot`, `dist`).
-   - **Environment Variables:** none. (`VITE_DATA_MODE=snapshot` comes from `dashboard/.env.snapshot` in the repo.)
+   - **Environment Variables:** none. (`npm run build:snapshot` builds in snapshot mode; see `dashboard/vite.config.ts`.)
 4. Click **Deploy**. After ~1 minute you get `https://<project>.vercel.app`.
 
 ## 3. Check the settings (once)
