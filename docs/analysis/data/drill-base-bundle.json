@@ -1,0 +1,17 @@
+{
+  "label": "drill-base",
+  "js_gzip_kb": 374.8,
+  "css_gzip_kb": 8.5,
+  "files": [
+    {
+      "file": "index-CucClJYN.js",
+      "raw_kb": 1155.1,
+      "gzip_kb": 374.8
+    },
+    {
+      "file": "index-Ok2HfJVe.css",
+      "raw_kb": 43.9,
+      "gzip_kb": 8.5
+    }
+  ]
+}

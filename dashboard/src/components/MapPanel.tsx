@@ -76,7 +76,7 @@ export function MapPanel() {
         ) : (
           <>
             <UsMap states={map.data?.data ?? []} locations={locations.data?.data ?? []} metric={f.metric} unit={f.unit}
-              selectedLocation={f.location} onSelectLocation={(location) => f.setFilters({ location })} />
+              selectedLocation={f.location} onSelectLocation={(location) => f.setFilters({ location, month: "" })} />
             <StatesTable rows={rows} valueLabel={label} />
           </>
         )}

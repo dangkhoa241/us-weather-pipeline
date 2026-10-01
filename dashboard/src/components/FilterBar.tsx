@@ -24,7 +24,7 @@ export function FilterBar() {
   return (
     <section aria-label="Filters" className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3">
       <Field label="Location">
-        <Select value={f.location} onValueChange={(location) => f.setFilters({ location })}>
+        <Select value={f.location} onValueChange={(location) => f.setFilters({ location, month: "" })}>
           <SelectTrigger className="w-48" aria-label="Location"><SelectValue placeholder="Location" /></SelectTrigger>
           <SelectContent>
             {(locations.data?.data ?? []).map((l) => (

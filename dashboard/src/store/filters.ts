@@ -20,15 +20,20 @@ export type Filters = {
   metric: Metric;
   unit: TempUnit;
   compare: Compare;
+  // City drill-down (DrillDownPanel): year "" = latest year with data (months), "YYYY" = that year's months,
+  // "all" = one value per year; month "MM" = the days of that month (needs a year).
+  year: string;
+  month: string;
 };
 
 export const DEFAULTS: Filters = {
   location: "stockton-ca", period: "week", preset: "90d", from: "", to: "",
-  metric: "temp_c", unit: "F", compare: "previous",
+  metric: "temp_c", unit: "F", compare: "previous", year: "", month: "",
 };
 
 const URL_KEYS: Record<keyof Filters, string> = {
   location: "loc", period: "period", preset: "range", from: "from", to: "to", metric: "metric", unit: "unit", compare: "compare",
+  year: "year", month: "month",
 };
 
 const oneOf = <T extends string>(value: string | null, allowed: Record<T, unknown>, fallback: T): T =>
@@ -46,6 +51,10 @@ export function parseFilters(search: string): Filters {
     preset = DEFAULTS.preset;
   }
   if (preset !== "custom") from = to = "";
+  const yearParam = get("year") ?? "";
+  const year = yearParam === "all" || (/^\d{4}$/.test(yearParam) && Number(yearParam) >= 1990 && Number(yearParam) <= 2100) ? yearParam : "";
+  const monthParam = get("month") ?? "";
+  const month = /^\d{4}$/.test(year) && /^(0[1-9]|1[0-2])$/.test(monthParam) ? monthParam : "";
   return {
     location: loc && locationId.safeParse(loc).success ? loc : DEFAULTS.location,
     period: oneOf<Period>(get("period"), PERIODS, DEFAULTS.period),
@@ -55,6 +64,8 @@ export function parseFilters(search: string): Filters {
     metric: oneOf<Metric>(get("metric"), METRICS, DEFAULTS.metric),
     unit: oneOf<TempUnit>(get("unit"), { F: 1, C: 1 }, DEFAULTS.unit),
     compare: oneOf<Compare>(get("compare"), COMPARES, DEFAULTS.compare),
+    year,
+    month,
   };
 }
 
@@ -82,6 +93,7 @@ export const useFilters = createFilterStore(typeof window === "undefined" ? DEFA
 
 const pick = (s: FilterStore): Filters => ({
   location: s.location, period: s.period, preset: s.preset, from: s.from, to: s.to, metric: s.metric, unit: s.unit, compare: s.compare,
+  year: s.year, month: s.month,
 });
 
 /**

@@ -1,6 +1,8 @@
 import { FilterBar } from "@/components/FilterBar";
 import { KpiCards } from "@/components/KpiCards";
 import { MapPanel } from "@/components/MapPanel";
+import { DrillDownPanel } from "@/components/DrillDownPanel";
+import { TrendPanel } from "@/components/TrendPanel";
 import { Badge } from "@/components/ui/badge";
 import { isSnapshot } from "@/lib/api";
 import { snapshotManifest } from "@/lib/snapshot";
@@ -23,6 +25,8 @@ export default function App() {
       <FilterBar />
       <KpiCards />
       <MapPanel />
+      <DrillDownPanel />
+      <TrendPanel />
     </div>
   );
 }
