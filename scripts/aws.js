@@ -6,14 +6,20 @@
 
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { delimiter } from "node:path";
+import { fileURLToPath } from "node:url";
 import { config } from "../src/config.js";
 
 const INFRA = new URL("../infra/", import.meta.url);
 const EMAIL = /^[A-Za-z0-9._+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;   // also keeps shell metacharacters out (Windows runs sam via cmd)
+const USER_AGENT = /^[A-Za-z0-9 ._\/:@()+,;-]{10,200}$/;          // no quotes or cmd metacharacters (& | < > ^ % !)
 
 const common = ["--profile", config.aws.deployProfile, "--region", config.aws.region];
 // Deploys use the deploy profile from ~/.aws: drop the app's runtime credential settings loaded from .env.
 const { AWS_PROFILE, AWS_SHARED_CREDENTIALS_FILE, AWS_CONFIG_FILE, ...deployEnv } = process.env;
+// `sam build` installs production dependencies only, so it finds esbuild (a devDependency) on PATH.
+const pathKey = Object.keys(deployEnv).find((k) => k.toUpperCase() === "PATH") ?? "PATH";
+deployEnv[pathKey] = [fileURLToPath(new URL("../node_modules/.bin", import.meta.url)), deployEnv[pathKey]].join(delimiter);
 const run = (cmd, args, { capture = false } = {}) => {
   const res = spawnSync(cmd, args, {
     cwd: INFRA, stdio: capture ? ["ignore", "pipe", "inherit"] : "inherit", encoding: "utf8",
@@ -33,9 +39,13 @@ switch (command) {
   case "deploy": {
     const email = config.aws.alertEmail;
     if (!email || !EMAIL.test(email)) throw new Error("set ALERT_EMAIL in .env (docs/SETUP_AWS.md step 6)");
-    // Only templates with Lambda functions need a build (Part 1 has none).
+    const userAgent = config.http.nwsUserAgent;
+    if (!USER_AGENT.test(userAgent)) {
+      throw new Error('set NWS_USER_AGENT in .env with a contact, e.g. "us-weather-pipeline/1.0 (contact: you@example.com)"');
+    }
+    // Only templates with Lambda functions need a build (Part 3 bundles the NWS collector with esbuild).
     if (readFileSync(new URL("template.yaml", INFRA), "utf8").includes("AWS::Serverless::Function")) sam(["build", "--cached"]);
-    sam(["deploy", ...common, "--parameter-overrides", `AlertEmail=${email}`]);
+    sam(["deploy", ...common, "--parameter-overrides", `AlertEmail=${email}`, `NwsUserAgent="${userAgent}"`]);
     console.log("[aws] deployed. Stack outputs → .env: SNS_TOPIC_ARN (NOTIFIER=sns), RAW_ARCHIVE_BUCKET (RAW_ARCHIVE=s3).");
     break;
   }

@@ -2,7 +2,9 @@ AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >-
   us-weather-pipeline on AWS (Free plan, us-east-2). Part 1: SNS topic for pipeline failures and heat alerts,
-  with an email subscription. Part 2: private S3 bucket with a 30-day copy of the raw API responses. Every resource gets the stack tag Project=us-weather-pipeline (samconfig.toml).
+  with an email subscription. Part 2: private S3 bucket with a 30-day copy of the raw API responses.
+  Part 3: Lambda that collects NWS alerts (hourly) and forecasts (every 3 h) into MongoDB Atlas + the archive.
+  Every resource gets the stack tag Project=us-weather-pipeline (samconfig.toml).
   Remove everything with `npm run aws:teardown`.
 
 Parameters:
@@ -12,6 +14,17 @@ Parameters:
     AllowedPattern: "^[A-Za-z0-9._+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"
     ConstraintDescription: must be an email address
     Description: Receives the alerts (AWS sends a confirmation email first). Passed by `npm run aws:deploy` from ALERT_EMAIL in .env.
+
+  NwsUserAgent:
+    Type: String
+    MinLength: 10
+    Description: NWS User-Agent with a contact. Passed by `npm run aws:deploy` from NWS_USER_AGENT in .env.
+
+  AtlasUriParameter:
+    Type: String
+    Default: /weather-pipeline/atlas-mongo-uri
+    AllowedPattern: "^/weather-pipeline/[A-Za-z0-9_.-]+$"
+    Description: Name (not value) of the SSM SecureString with the Atlas connection string.
 
 Resources:
   # Free tier: 1,000 email deliveries and 1 M publishes / month. Expected: a few emails / day (warn + error only).
@@ -96,6 +109,112 @@ Resources:
               - !Sub "${RawArchiveBucket.Arn}/*"
             Condition: { Bool: { "aws:SecureTransport": "false" } }
 
+  # Part 3: NWS collection (replaces the GitHub Actions schedules). No VPC (public internet, so no NAT Gateway).
+  # Free tier: 1 M requests + 400,000 GB-s / month. Expected: 24 alerts + 8 forecast runs / day ≈ 1,000 invocations
+  # and < 10,000 GB-s / month (256 MB, ~20 s alerts, ~60 s forecasts; 2.5%). The Atlas URI is an SSM SecureString
+  # (AWS-managed key aws/ssm) created by hand (docs/SETUP_AWS.md step 10); it is never in this template.
+  NwsCollectorLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: /aws/lambda/weather-pipeline-nws-collector
+      RetentionInDays: 7          # CloudWatch Logs free tier: 5 GB ingest; expected < 50 MB / month
+      Tags:
+        - { Key: Project, Value: us-weather-pipeline }
+
+  # Only what the function needs; capped by the boundary (the deploy policy refuses roles without it).
+  NwsCollectorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/weather-pipeline-boundary"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: nws-collector
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: Logs
+                Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub "${NwsCollectorLogGroup.Arn}"     # ends in :* (all streams of this group)
+              - Sid: ReadAtlasUri          # SecureString with aws/ssm: that key's policy allows decryption via SSM
+                Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${AtlasUriParameter}"
+              - Sid: WriteRawArchive
+                Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub "${RawArchiveBucket.Arn}/nws-*"   # the NWS sources only: nws-forecast/, nws-alerts/
+              - Sid: PublishAlerts
+                Effect: Allow
+                Action: sns:Publish
+                Resource: !Ref AlertsTopic
+      Tags:
+        - { Key: Project, Value: us-weather-pipeline }
+
+  NwsCollectorFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [src/lambda/nwsCollector.js]
+        Format: esm
+        OutExtension: [.js=.mjs]
+        Target: node22
+        Minify: false
+        Sourcemap: false
+        External: ["@aws-sdk/*"]     # the Node.js 22 runtime ships AWS SDK v3
+        # mongodb (CommonJS) inside an ES module bundle needs require()
+        Banner: ["js=import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);"]
+    Properties:
+      FunctionName: weather-pipeline-nws-collector
+      Description: NWS alerts + forecasts → MongoDB Atlas and the S3 raw archive (Stage 6a part 3)
+      CodeUri: ../
+      Handler: nwsCollector.handler
+      Runtime: nodejs22.x
+      Architectures: [arm64]
+      MemorySize: 256
+      Timeout: 300             # forecasts ≈ 106 NWS requests at ≥ 250 ms each, plus retries
+      Role: !GetAtt NwsCollectorRole.Arn
+      LoggingConfig:
+        LogGroup: !Ref NwsCollectorLogGroup
+      Environment:
+        Variables:
+          MONGO_URI_SSM_PARAM: !Ref AtlasUriParameter
+          MONGO_DB: weather
+          RAW_RETENTION_DAYS: "7"      # same TTL as the GitHub workflows (Atlas M0: 512 MB)
+          NWS_USER_AGENT: !Ref NwsUserAgent
+          NOTIFIER: sns
+          SNS_TOPIC_ARN: !Ref AlertsTopic
+          SNS_MIN_LEVEL: warn
+          RAW_ARCHIVE: s3
+          RAW_ARCHIVE_BUCKET: !Ref RawArchiveBucket
+          RAW_ARCHIVE_MAX_PUTS_PER_DAY: "32"   # 24 alerts + 8 forecast runs; own ledger in Atlas
+          TZ: UTC
+      Events:
+        AlertsHourly:
+          Type: Schedule
+          Properties:
+            Name: weather-pipeline-nws-alerts
+            Description: NWS alerts every hour
+            Schedule: cron(23 * * * ? *)
+            Input: '{"mode":"alerts"}'
+        ForecastsEvery3Hours:
+          Type: Schedule
+          Properties:
+            Name: weather-pipeline-nws-forecasts
+            Description: NWS forecasts every 3 hours
+            Schedule: cron(7 0/3 * * ? *)
+            Input: '{"mode":"forecast"}'
+      Tags:
+        Project: us-weather-pipeline
+
 Outputs:
   AlertsTopicArn:
     Description: Put this in .env as SNS_TOPIC_ARN (with NOTIFIER=sns)
@@ -103,3 +222,6 @@ Outputs:
   RawArchiveBucketName:
     Description: Put this in .env as RAW_ARCHIVE_BUCKET (with RAW_ARCHIVE=s3)
     Value: !Ref RawArchiveBucket
+  NwsCollectorFunctionName:
+    Description: Test with `aws lambda invoke` (docs/SETUP_AWS.md step 10)
+    Value: !Ref NwsCollectorFunction

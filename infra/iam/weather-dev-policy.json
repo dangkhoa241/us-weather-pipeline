@@ -73,6 +73,7 @@
         "s3:GetBucketTagging",
         "s3:PutBucketTagging",
         "s3:GetObject",
+        "s3:GetObjectVersion",
         "s3:PutObject"
       ],
       "Resource": [
@@ -144,6 +145,10 @@
         "lambda:TagResource",
         "lambda:UntagResource",
         "lambda:ListTags",
+        "lambda:GetPolicy",
+        "lambda:ListVersionsByFunction",
+        "lambda:GetRuntimeManagementConfig",
+        "lambda:GetFunctionCodeSigningConfig",
         "lambda:InvokeFunction"
       ],
       "Resource": "arn:aws:lambda:us-east-2:<ACCOUNT_ID>:function:weather-pipeline-*"
@@ -156,7 +161,9 @@
         "iam:DeleteRole",
         "iam:TagRole",
         "iam:UntagRole",
-        "iam:GetRolePolicy"
+        "iam:GetRolePolicy",
+        "iam:ListRolePolicies",
+        "iam:ListAttachedRolePolicies"
       ],
       "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/weather-pipeline-*"
     },
@@ -212,6 +219,7 @@
         "events:DescribeRule",
         "events:PutTargets",
         "events:RemoveTargets",
+        "events:ListTargetsByRule",
         "events:TagResource",
         "events:UntagResource",
         "events:ListTagsForResource"
@@ -229,6 +237,8 @@
         "logs:TagResource",
         "logs:UntagResource",
         "logs:ListTagsForResource",
+        "logs:TagLogGroup",
+        "logs:ListTagsLogGroup",
         "logs:FilterLogEvents",
         "logs:GetLogEvents"
       ],

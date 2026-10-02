@@ -4,8 +4,11 @@ import { config } from "../../config.js";
 import { MongoRawStore } from "./mongoRawStore.js";
 import { S3RawArchive } from "./s3RawArchive.js";
 
-/** @param {object} [overrides] connection settings, e.g. { uri, db } for a second store (Atlas sync) */
-export function createRawStore(kind = config.adapters.rawStore, overrides = {}) {
+/**
+ * @param {object} [overrides] connection settings, e.g. { uri, db } for a second store (Atlas sync)
+ * @param {{ archive?: boolean }} [options] archive: attach RAW_ARCHIVE (default: only without overrides)
+ */
+export function createRawStore(kind = config.adapters.rawStore, overrides = {}, { archive = !Object.keys(overrides).length } = {}) {
   let store;
   switch (kind) {
     case "mongo":
@@ -15,8 +18,9 @@ export function createRawStore(kind = config.adapters.rawStore, overrides = {}) 
     default:
       throw new Error(`Unknown RAW_STORE "${kind}". Supported: mongo`);
   }
-  // The raw archive belongs to the main store only (not to a second store such as the Atlas sync source).
-  if (!Object.keys(overrides).length) store.archive = createRawArchive();
+  // The raw archive belongs to the main store only (not to a second store such as the Atlas sync source);
+  // the Lambda passes archive: true because its main store is Atlas.
+  if (archive) store.archive = createRawArchive();
   return store;
 }
 

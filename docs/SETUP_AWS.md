@@ -170,11 +170,54 @@ HTTPS only, versioning off, objects deleted after 30 days. Stage 1 uploads one g
 4. After the next forecast run, the log shows `[archive:s3] nws-forecast/... : 106 response(s), ... KB`. A failed
    upload only logs a warning; the pipeline goes on.
 
+## 10. Part 3: NWS collection on Lambda (replaces the GitHub Actions schedules)
+
+GitHub skips or delays scheduled workflows, so NWS collection moves to a Lambda `weather-pipeline-nws-collector`
+(Node.js 22, arm64, 256 MB, 5 min timeout, **no VPC**, so no NAT Gateway). Two EventBridge rules invoke it:
+`weather-pipeline-nws-alerts` (hourly at :23, `{"mode":"alerts"}`) and `weather-pipeline-nws-forecasts`
+(every 3 h at :07, `{"mode":"forecast"}`). It writes to the same Atlas collections as the workflows (7-day TTL),
+archives the raw responses to `s3://weather-pipeline-raw-<ACCOUNT_ID>/nws-*`, and emails a failed run through SNS.
+Logs: `/aws/lambda/weather-pipeline-nws-collector`, kept 7 days. The function's role (with the boundary) may only:
+`ssm:GetParameter` on the Atlas parameter, `s3:PutObject` on `nws-*` in the bucket, `sns:Publish` on the alerts topic,
+and write its own logs.
+
+1. **Update `weather-dev-pipeline`** (IAM → Policies → Edit → JSON, `<ACCOUNT_ID>` replaced as in step 2). New:
+   `s3:GetObjectVersion` (SAM artifacts), `lambda:GetPolicy`, `lambda:ListVersionsByFunction`,
+   `lambda:GetRuntimeManagementConfig`, `lambda:GetFunctionCodeSigningConfig`, `iam:ListRolePolicies`,
+   `iam:ListAttachedRolePolicies`, `events:ListTargetsByRule`, `logs:TagLogGroup`, `logs:ListTagsLogGroup`.
+   The boundary and runtime policies don't change.
+2. **Store the Atlas URI in SSM** (the same value as the GitHub secret `ATLAS_MONGO_URI`). Console → **Systems
+   Manager → Parameter Store → Create parameter**:
+   - Name `/weather-pipeline/atlas-mongo-uri`, Tier **Standard**, Type **SecureString**,
+     KMS key source **My current account**, KMS key ID **`alias/aws/ssm`** (the AWS-managed key: free, no customer key);
+   - Value: the `mongodb+srv://...` string; Tags: `Project` = `us-weather-pipeline` → **Create parameter**.
+
+   (The console keeps it out of your shell history. Rotating the Atlas password later: edit the value; the Lambda
+   picks it up on its next cold start or after the next failed run.)
+3. **Atlas network access** must allow Lambda's changing IPs: `0.0.0.0/0` is already there for GitHub Actions
+   (docs/SETUP_CLOUD_COLLECTION.md); keep it.
+4. **`.env`**: `NWS_USER_AGENT` must have your contact (it's passed to the Lambda as a stack parameter).
+5. `npm run aws:deploy` (it bundles the function with esbuild, then shows the change set; review it, then `y`).
+6. **Test** (as `weather-dev`):
+
+   ```powershell
+   aws lambda invoke --function-name weather-pipeline-nws-collector --payload '{\"mode\":\"alerts\"}' `
+     --cli-binary-format raw-in-base64-out --profile weather-dev --region us-east-2 out.json; Get-Content out.json
+   aws logs tail /aws/lambda/weather-pipeline-nws-collector --since 15m --profile weather-dev --region us-east-2
+   ```
+
+   Expect `"status":"success"` and `[archive:s3] nws-alerts/...` in the log. Do the same with `forecast`, then
+   check that `npm run sync:atlas` brings the new rows home. Delete `out.json`.
+7. **After a day of good scheduled runs**, turn off the GitHub schedules: remove the `schedule:` block from
+   `.github/workflows/nws-alerts.yml` and `nws-forecasts.yml` (keep `workflow_dispatch` as a manual fallback).
+8. **S3 PUTs:** the Lambda archives up to 32 objects / day (its own cap, ledger in Atlas). Lower the local cap in `.env`
+   to `RAW_ARCHIVE_MAX_PUTS_PER_DAY=20`, so both together stay ≤ ~1,560 PUTs / month (free tier 2,000).
+
 ## Remove everything: `npm run aws:teardown`
 
 Empties the raw archive bucket (`aws s3 rm --recursive`; CloudFormation can't delete a non-empty bucket), then runs
 `sam delete` for the `weather-pipeline` stack (it asks for confirmation). This deletes every resource the
-stack created, plus the code SAM uploaded. All resources carry the tag `Project=us-weather-pipeline`, so leftovers
+stack created, plus the code SAM uploaded. The SSM parameter (step 10) is manual: delete it by hand. All resources carry the tag `Project=us-weather-pipeline`, so leftovers
 are easy to find in **Resource Groups & Tag Editor**. The IAM users, policies and access keys are manual (steps 2–4):
 delete them by hand if you're done with AWS.
 

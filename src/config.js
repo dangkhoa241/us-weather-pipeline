@@ -111,5 +111,7 @@ export const config = Object.freeze({
     stackName: env.AWS_STACK_NAME || "weather-pipeline",
     rawArchiveBucket: env.RAW_ARCHIVE_BUCKET || null,                       // RAW_ARCHIVE=s3: stack output RawArchiveBucketName
     rawArchiveMaxPutsPerDay: int(env.RAW_ARCHIVE_MAX_PUTS_PER_DAY, 50),     // hard cap (S3 free tier: 2,000 PUTs / month)
+    // Lambda only (Stage 6a part 3): SSM SecureString holding the Atlas connection string, read at cold start.
+    mongoUriParam: env.MONGO_URI_SSM_PARAM || null,
   },
 });

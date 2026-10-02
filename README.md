@@ -88,7 +88,11 @@ flowchart LR
 
 ## AWS deployment (🚧 in progress, target: mid-October 2026)
 
-> **Status: in progress, not deployed yet.** The local Docker stack and the Vercel demo above are what runs today.
+> **Status: in progress.** The local Docker stack and the Vercel demo above are what runs today. Deployed on AWS so far
+> (Free plan, us-east-2, one SAM stack in `infra/template.yaml`): SNS email alerts and a 30-day S3 raw archive.
+> Ready to deploy: a Lambda that collects NWS alerts (hourly) and forecasts (every 3 h) on EventBridge schedules into
+> MongoDB Atlas + the archive, replacing the GitHub Actions schedules (GitHub skips scheduled runs). The Atlas URI is an
+> SSM SecureString read at cold start; the role is capped by a permissions boundary. Setup: [docs/SETUP_AWS.md](docs/SETUP_AWS.md).
 
 ```mermaid
 flowchart LR
