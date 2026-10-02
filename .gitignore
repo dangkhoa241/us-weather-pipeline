@@ -21,6 +21,11 @@ yarn-error.log*
 *.pem
 *.key
 credentials*
+# AWS: CLI credentials stay in ~/.aws; console access-key downloads; SAM build output
+.aws/
+*accessKeys*.csv
+*_credentials.csv
+.aws-sam/
 
 # OS files
 .DS_Store

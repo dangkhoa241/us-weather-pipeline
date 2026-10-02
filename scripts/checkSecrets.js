@@ -18,7 +18,11 @@ const RULES = [
   { name: "connection string with password", re: /\b(?:mongodb(?:\+srv)?|redis|postgres(?:ql)?|mysql|clickhouse):\/\/[^\s:@/"'`]+:([^\s@/"'`]+)@/g, secretGroup: 1 },
   { name: "password assignment", re: /\b\w*PASSWORD\w*\s*[:=]\s*["']?([^\s"'#]+)/gi, secretGroup: 1 },
   { name: "GitHub token", re: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{30,}|\bgithub_pat_[A-Za-z0-9_]{40,}/g },
-  { name: "AWS access key", re: /\bAKIA[0-9A-Z]{16}\b/g },
+  // AWS: long-term (AKIA) and temporary (ASIA) access key IDs, and secret keys / session tokens in assignments and
+  // credential files (placeholders like <your secret> are allowed).
+  { name: "AWS access key", re: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g },
+  { name: "AWS secret access key", re: /\baws_?secret_?access_?key\b["']?\s*[:=]\s*["']?([A-Za-z0-9/+=]{40})(?![A-Za-z0-9/+=])/gi, secretGroup: 1 },
+  { name: "AWS session token", re: /\baws_?session_?token\b["']?\s*[:=]\s*["']?([A-Za-z0-9/+=]{100,})/gi, secretGroup: 1 },
   { name: "Slack token", re: /\bxox[abprs]-[A-Za-z0-9-]{10,}/g },
   { name: "Discord webhook URL", re: /discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+/g },
   { name: "private key", re: /-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/g },
