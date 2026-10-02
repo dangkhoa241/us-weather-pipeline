@@ -7,6 +7,7 @@ import { Cloud, CloudFog, CloudLightning, CloudRain, CloudSun, Moon, Snowflake, 
 import { api, isSnapshot, type AlertRow } from "@/lib/api";
 import { conditionOf, dailyCards, dedupeAlerts, local, modelDailyHighs, next48, type Condition } from "@/lib/forecast";
 import { MODELS } from "@/lib/models";
+import { liveTime } from "@/lib/snapshot";
 import { fmt, toUnit, type TempUnit } from "@/lib/units";
 import { useFilters } from "@/store/filters";
 import { FilterBar } from "@/components/FilterBar";
@@ -61,7 +62,7 @@ function CityForecast({ id, name, state, tz, unit }: { id: string; name: string;
         <CardHeader>
           <CardTitle className="text-lg">{name}</CardTitle>
           <CardDescription data-forecast-issued>
-            {nwsIssued ? (isSnapshot ? `Forecast as of ${nwsIssued.slice(0, 10)}` : `NWS forecast issued ${fmtLocal(nwsIssued, tz)} (local time)`) : "Loading forecast…"}
+            {nwsIssued ? (isSnapshot && !liveTime("forecasts") ? `Forecast as of ${nwsIssued.slice(0, 10)}` : `NWS forecast issued ${fmtLocal(nwsIssued, tz)} (local time)`) : "Loading forecast…"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -113,7 +114,7 @@ function CityForecast({ id, name, state, tz, unit }: { id: string; name: string;
       <Card>
         <CardHeader>
           <CardTitle>Active NWS alerts · {state}</CardTitle>
-          <CardDescription>{isSnapshot ? "Alerts active when the demo snapshot was taken." : "Alerts that have not expired, for the whole state."}</CardDescription>
+          <CardDescription>{!isSnapshot ? "Alerts that have not expired, for the whole state." : liveTime("alerts") ? `Alerts that had not expired at ${liveTime("alerts")!.slice(0, 16).replace("T", " ")} UTC, for the whole state.` : "Alerts active when the demo snapshot was taken."}</CardDescription>
         </CardHeader>
         <CardContent>
           {alerts.error ? <Problem what="alerts" error={alerts.error} /> : alerts.isPending ? <Skeleton className="h-20" /> : (

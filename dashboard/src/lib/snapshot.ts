@@ -2,6 +2,8 @@
 // but reads the JSON files written by `npm run export:snapshot` (public/data/). Stats, periods, comparisons and
 // the state map are computed here from daily values with the same rules as the API; forecast accuracy is
 // pre-computed for the preset ranges and their comparisons.
+// Live data (Stage 6a part 4): when the build sets VITE_LIVE_DATA_URL (CloudFront), recent history, forecasts and alerts
+// are fetched from there first; any live file that fails, times out or doesn't validate falls back to the bundled one.
 import { z } from "zod";
 import type { AccuracyMonthRow, AccuracyRow, AccuracyStateRow, AlertRow, AreaParams, MissRow, ForecastRow, LocationRow, MapRow, PeriodRow, StatsResponse, StatsRow } from "@/lib/api";
 import { compareRange, dayMs, setDataEnd, toDay } from "@/lib/dates";
@@ -26,6 +28,68 @@ type Daily = {
 let manifest: SnapshotManifest | null = null;
 const files = new Map<string, Promise<unknown>>();
 
+// ---- Live files (CloudFront) --------------------------------------------------------------------------------------
+const LIVE_URL: string = import.meta.env.VITE_LIVE_DATA_URL ?? "";
+const LIVE_TIMEOUT_MS = 4000;
+const LIVE_FORMAT = 1;
+const DAY_MS = 86_400_000;
+const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const col = z.array(z.number().nullable());
+const recentSchema = z.object({
+  format: z.literal(LIVE_FORMAT), generated_at: z.string(), data_as_of: isoDay, from: isoDay, days: z.number().int().min(1).max(400),
+  cities: z.record(z.string(), z.object({ temp: z.object({ min: col, max: col, avg: col, n: col }), precip: z.object({ sum: col, n: col }) })),
+  all: z.object({ temp: z.object({ min: col, max: col, avg: col, n: col, cities: col }), precip: z.object({ sum: col, n: col, cities: col }) }),
+});
+const forecastsSchema = z.object({
+  format: z.literal(LIVE_FORMAT), generated_at: z.string(), forecasts: z.record(z.string(), z.unknown()), periods: z.record(z.string(), z.unknown()),
+});
+const alertsSchema = z.object({ format: z.literal(LIVE_FORMAT), generated_at: z.string(), alerts: z.array(z.unknown()) });
+type Recent = z.infer<typeof recentSchema>;
+type RecentColumns = Pick<Daily, "temp" | "precip">;
+
+/** Where the history shown comes from: CloudFront ("live") or the files bundled with the build ("snapshot"). */
+export type DataSource = { kind: "live" | "snapshot"; data_as_of: string; generated_at: string };
+let source: DataSource | null = null;
+let recent: Recent | null = null;
+let shift = 0;   // days the live history runs past the bundled snapshot (accuracy stays as bundled)
+const liveTimes = new Map<"forecasts" | "alerts", string>();
+let liveForecasts: Promise<z.infer<typeof forecastsSchema> | null> | null = null;
+
+/** A live file, or null if none is configured or it fails, takes longer than LIVE_TIMEOUT_MS or doesn't validate. */
+async function fetchLive<S extends z.ZodType>(name: string, schema: S): Promise<z.infer<S> | null> {
+  if (!LIVE_URL) return null;
+  try {
+    const res = await fetch(`${LIVE_URL}/${name}`, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(LIVE_TIMEOUT_MS) });
+    if (!res.ok) return null;
+    const parsed = schema.safeParse(await res.json());
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+type Columns = Record<string, (number | null)[] | undefined>;
+
+/** Lay recent live days over a bundled daily file: live wins on days it has data for; the window grows to its end. */
+export function withRecent(d: Daily, r: RecentColumns | undefined, rFrom: string, rDays: number): Daily {
+  if (!r) return d;
+  const offset = Math.round((dayMs(rFrom) - dayMs(d.from)) / DAY_MS);
+  const days = Math.max(d.days, offset + rDays);
+  const grow = (cols: Columns) =>
+    Object.fromEntries(Object.entries(cols).map(([k, a]) => [k, a && [...a, ...new Array<null>(Math.max(0, days - a.length)).fill(null)]]));
+  const out = { ...d, days, temp: grow(d.temp), precip: grow(d.precip) } as Daily;
+  for (let j = 0; j < rDays; j += 1) {
+    const i = offset + j;
+    if (i < 0) continue;
+    for (const group of ["temp", "precip"] as const) {
+      const live = r[group] as Columns;
+      if (live.n?.[j] == null) continue;   // no live value that day: keep the bundled one
+      for (const [k, a] of Object.entries(out[group] as Columns)) if (a) a[i] = live[k]?.[j] ?? null;
+    }
+  }
+  return out;
+}
+
 async function fetchJson(url: string): Promise<unknown> {
   const res = await fetch(url, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`Demo data not available (${res.status})`);
@@ -38,16 +102,47 @@ export async function initSnapshot(): Promise<SnapshotManifest> {
   if (!parsed.success) throw new Error("Demo data manifest is invalid");
   if (parsed.data.format !== SUPPORTED_FORMAT) throw new Error(`Demo data format ${parsed.data.format} is not supported`);
   manifest = parsed.data;
-  setDataEnd(manifest.data_as_of);
+  recent = await fetchLive("recent.json", recentSchema);
+  const end = recent && recent.data_as_of > manifest.data_as_of ? recent.data_as_of : manifest.data_as_of;
+  shift = Math.round((dayMs(end) - dayMs(manifest.data_as_of)) / DAY_MS);
+  source = recent
+    ? { kind: "live", data_as_of: end, generated_at: recent.generated_at }
+    : { kind: "snapshot", data_as_of: manifest.data_as_of, generated_at: manifest.generated_at };
+  setDataEnd(end);
   return manifest;
 }
 
 export const snapshotManifest = () => manifest;
+export const dataSource = () => source;
+/** When the live forecasts / alerts shown were published, or null while the bundled file is shown. */
+export const liveTime = (kind: "forecasts" | "alerts") => liveTimes.get(kind) ?? null;
+
+async function load(name: string): Promise<unknown> {
+  if (name === "forecasts.json" || name === "periods.json") {
+    liveForecasts ??= fetchLive("forecasts.json", forecastsSchema);
+    const live = await liveForecasts;
+    if (live) {
+      liveTimes.set("forecasts", live.generated_at);
+      return name === "forecasts.json" ? live.forecasts : live.periods;
+    }
+  }
+  if (name === "alerts.json") {
+    const live = await fetchLive("alerts.json", alertsSchema);
+    if (live) {
+      liveTimes.set("alerts", live.generated_at);
+      return live.alerts;
+    }
+  }
+  const data = await fetchJson(`/data/${manifest!.snapshot}/${name}`);
+  const city = /^daily-(.+)\.json$/.exec(name)?.[1];
+  if (!city || !recent) return data;
+  return withRecent(data as Daily, city === "all" ? recent.all : recent.cities[city], recent.from, recent.days);
+}
 
 function file<T>(name: string): Promise<T> {
   if (!manifest) throw new Error("Demo data not loaded");
   if (!/^[a-z0-9.-]+\.json$/.test(name)) throw new Error("Invalid data file");
-  if (!files.has(name)) files.set(name, fetchJson(`/data/${manifest.snapshot}/${name}`));
+  if (!files.has(name)) files.set(name, load(name));
   return files.get(name) as Promise<T>;
 }
 
@@ -122,15 +217,24 @@ type AccuracyDetails = {
   months: Record<number, AccuracyMonthRow[]>;
   misses: Record<number, MissRow[]>;
 };
-const detailsMatch = (d: AccuracyDetails, p: AreaParams) => !p.location && !p.state && d.range.from === p.from && d.range.to === p.to;
+// Accuracy is computed locally and only bundled. With live history the presets end `shift` days later, so a range is
+// also looked up `shift` days earlier: "last 90 days" shows the bundled "last 90 days" (the page says "as of").
+type Range = { from: string; to: string };
+const back = (r: Range, days = shift): Range => ({ from: toDay(dayMs(r.from) - days * DAY_MS), to: toDay(dayMs(r.to) - days * DAY_MS) });
+const sameRange = (a: Range, b: Range) => a.from === b.from && a.to === b.to;
+const rangeMatch = (d: AccuracyDetails, p: Range) => sameRange(d.range, p) || sameRange(d.range, back(p));
+const detailsMatch = (d: AccuracyDetails, p: AreaParams) => !p.location && !p.state && rangeMatch(d, p);
 
 /** In the demo, accuracy details exist for this range only (the dashboard says so for other choices). */
 export async function snapshotAccuracyRange() {
-  return (await file<AccuracyDetails>("accuracy-details.json")).range;
+  return back((await file<AccuracyDetails>("accuracy-details.json")).range, -shift);
 }
 
+/** Last day of the bundled snapshot: forecast accuracy is "as of" this day even when history is live. */
+export const accuracyAsOf = () => manifest?.data_as_of ?? null;
+
 // ---- API-compatible client ------------------------------------------------------------------------------------
-const meta = (range?: { from: string; to: string }) => ({ source: "snapshot", data_version: manifest?.snapshot ?? null, ...(range ? { range } : {}) });
+const meta = (range?: { from: string; to: string }) => ({ source: source?.kind ?? "snapshot", data_version: manifest?.snapshot ?? null, ...(range ? { range } : {}) });
 
 export const snapshotApi = {
   async locations() {
@@ -200,13 +304,14 @@ export const snapshotApi = {
   /** Pre-computed for the preset ranges and their comparisons (all US or one city); states are not in the demo. */
   async accuracy(p: AreaParams) {
     const table = await file<Record<string, AccuracyRow[]>>("accuracy.json");
-    return { data: p.state ? [] : table[`${p.location ?? ""}|${p.from}|${p.to}`] ?? [], meta: meta(p) };
+    const key = (r: Range) => `${p.location ?? ""}|${r.from}|${r.to}`;
+    return { data: p.state ? [] : table[key(p)] ?? table[key(back(p))] ?? [], meta: meta(p) };
   },
 
   // Accuracy details are exported for all US over the default range only (keeps the snapshot small).
   async accuracyStates(p: { from: string; to: string; lead: number }) {
     const d = await file<AccuracyDetails>("accuracy-details.json");
-    return { data: (d.range.from === p.from && d.range.to === p.to ? d.states[p.lead] : null) ?? [], meta: meta(p) };
+    return { data: (rangeMatch(d, p) ? d.states[p.lead] : null) ?? [], meta: meta(p) };
   },
 
   async accuracyMonths(p: AreaParams & { lead: number }) {

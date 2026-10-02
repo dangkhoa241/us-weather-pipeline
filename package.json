@@ -20,6 +20,7 @@
     "sync:atlas": "node fetchWeather.js sync-atlas",
     "check:secrets": "node scripts/checkSecrets.js",
     "aws:validate": "node scripts/aws.js validate",
+    "aws:build": "node scripts/aws.js build",
     "aws:deploy": "node scripts/aws.js deploy",
     "aws:teardown": "node scripts/aws.js teardown",
     "bench:dashboard": "node scripts/benchDashboard.js",

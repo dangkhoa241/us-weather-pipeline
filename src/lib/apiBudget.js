@@ -48,7 +48,7 @@ export class ApiBudget {
     const used = await this.usage(now);
     for (const period of ["hour", "day"]) {
       if (used[period] + cost > this.limits[period]) {
-        throw new BudgetExceeded(`${this.api} ${period}ly budget reached (${Math.round(used[period])} of ${this.limits[period]} weighted calls)`);
+        throw new BudgetExceeded(`${this.api} ${period === "day" ? "daily" : "hourly"} budget reached (${Math.round(used[period])} of ${this.limits[period]} weighted calls)`);
       }
     }
     const keys = periodKeys(now);

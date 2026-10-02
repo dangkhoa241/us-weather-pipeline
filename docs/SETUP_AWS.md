@@ -28,6 +28,7 @@ When you're done, tell Claude Code and it will deploy Part 1 with `npm run aws:d
 | AWS Lambda | Part 3: NWS alerts + forecasts collector | ✅ listed | no Lambda@Edge |
 | Amazon EventBridge | Part 3: hourly + every-3-hours schedules | ✅ listed | — |
 | Amazon CloudWatch Logs | Part 3: Lambda logs (7-day retention) | ✅ listed | (CloudWatch: no cross-account / cross-Region dashboards) |
+| Amazon CloudFront | Part 4: serves the live dashboard JSON (OAC, PriceClass_100) | ✅ listed (checked 2026-10-02) | no Lambda@Edge (not used) |
 | AWS CloudFormation | AWS SAM deploys through it | ✅ listed | no StackSets |
 | AWS IAM, AWS STS | the `weather-dev` user, `aws sts get-caller-identity` | ✅ listed | — |
 | AWS Systems Manager (Parameter Store) | Part 3: config/secrets (standard parameters) | ✅ listed | (multi-account multi-Region data syncs) |
@@ -215,6 +216,73 @@ and write its own logs.
    are `"off"` in docker-compose; both arrive via sync-atlas), so set its cap in `.env` to
    `RAW_ARCHIVE_MAX_PUTS_PER_DAY=10` (~6 / day expected: Open-Meteo forecast 4, history 1, baseline 1):
    ~660 PUTs / month expected (33%), ≤ 806 even at both caps (40% of the free 2,000).
+
+**S3 PUT budget (free tier: 2,000 / month, shared by everything in the account)**
+
+| Writer | Per day | Expected / month | Hard cap / day → month |
+|---|---|---|---|
+| NWS collector Lambda (archive: alerts every 3 h + 8 forecast runs) | 16 | 480 | 16 → 496 (`RAW_ARCHIVE_MAX_PUTS_PER_DAY` in the template) |
+| Local fetcher (archive: Open-Meteo forecast 4, history 1, baseline 1) | ~6 | ~180 | 10 → 310 (`.env`) |
+| Dashboard publisher Lambda (part 4: 8 runs × 2 files + `recent.json` once) | 17 | 510 | 17 → 527 (`DASHBOARD_MAX_PUTS_PER_DAY`) |
+| **Total** | ~39 | **~1,170 (59%)** | **≤ 1,333 (67%)** |
+
+Each cap is a ledger in MongoDB (Atlas for the Lambdas, local for the fetcher). Past it, uploads are skipped and
+logged, and the publisher sends an SNS email. S3 GETs: only CloudFront cache misses read the 3 dashboard files,
+at most a few per edge location every 30 min (~3,000 / month expected, 15% of the free 20,000).
+
+## 11. Part 4: live dashboard data (S3 + CloudFront, design B)
+
+A second Lambda, `weather-pipeline-dashboard-publisher` (Node.js 22, arm64, 256 MB, 4 min timeout, no VPC), writes three
+JSON files to `s3://weather-pipeline-raw-<ACCOUNT_ID>/dashboard/`. A CloudFront distribution serves **only that prefix**.
+CloudFront signs its requests with Origin Access Control, and the bucket policy allows `s3:GetObject` on `dashboard/*`
+only from that one distribution (`AWS:SourceArn`). The bucket stays private and Block Public Access stays fully on.
+The raw archive (`nws-*/`, `open-meteo-*/`) can't be read through CloudFront.
+
+| File | Content | Written | `Cache-Control` |
+|---|---|---|---|
+| `recent.json` | last 60 days of daily temperature/precipitation per city + All US (Open-Meteo archive) | daily 06:35 UTC | `max-age=900, s-maxage=10800` |
+| `forecasts.json` | latest hourly forecast per model (NWS from Atlas, 4 Open-Meteo models) + NWS day/night periods | every 3 h at :35 | `max-age=300, s-maxage=1800` |
+| `alerts.json` | active NWS alerts (from Atlas) | every 3 h at :35 | `max-age=300, s-maxage=1800` |
+
+The cache times follow the schedule. CloudFront keeps a file for at most about 1/6 of the time until the next upload
+(30 min of a 3-hour cycle, 3 h of a day), and the browser keeps it for 5–15 min. There are no invalidations, so no
+extra requests are needed.
+
+The dashboard (Vercel) loads its bundled snapshot first, then tries `recent.json` from CloudFront (4 s timeout,
+validated with Zod). The live days are laid over the bundled daily files, and the header shows **Live · data as of
+…**. If CloudFront fails, times out or returns something unexpected, the bundled data stays and the header shows
+**Snapshot · data as of …**. Forecasts and alerts fall back on their own in the same way. Forecast accuracy always
+comes from the bundled snapshot (it needs the local ClickHouse history).
+
+CloudFront settings: PriceClass_100, the default `*.cloudfront.net` certificate, `https-only`, GET/HEAD only,
+compression on, and the managed `CachingOptimized` cache policy. There is no WAF, no custom domain, no Route 53, no
+access or real-time logs, and no Lambda@Edge or CloudFront Functions. CORS comes from a response headers policy (a
+custom one, because the AWS-managed CORS policies allow every origin). It allows only `https://us-weather-pipeline.vercel.app`
+(stack parameter `DashboardOrigin`), `http://localhost:5173` and `http://localhost:4173`, with no credentials, and adds
+`nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` and HSTS.
+
+The function's role (with the boundary) may only call `ssm:GetParameter` on the Atlas parameter, `s3:PutObject` on
+`dashboard/*` (no read, list or delete), `sns:Publish` on the alerts topic, and write its own logs. The boundary and
+runtime policies don't change.
+
+1. **Update `weather-dev-pipeline`** (IAM → Policies → Edit → JSON, `<ACCOUNT_ID>` replaced as in step 2). Add the new
+   statement `Part4CloudFrontDashboard` from [weather-dev-policy.json](../infra/iam/weather-dev-policy.json). It covers
+   create/read/update/delete/tag for CloudFront distributions, origin access controls and response headers policies
+   in this account: exactly the permissions CloudFormation's handlers for these three resource types use.
+2. `npm run aws:deploy` (review the change set, then `y`). Creating a distribution takes ~5 min.
+3. Test (as `weather-dev`):
+
+   ```powershell
+   aws lambda invoke --function-name weather-pipeline-dashboard-publisher --payload '{\"parts\":[\"history\",\"forecasts\",\"alerts\"]}' `
+     --cli-binary-format raw-in-base64-out --profile weather-dev --region us-east-2 out.json; Get-Content out.json
+   curl.exe -sI https://<DashboardDataUrl>/recent.json -H "Origin: https://us-weather-pipeline.vercel.app"
+   ```
+
+   Expect `"status":"success"`, then `200`, `access-control-allow-origin: https://us-weather-pipeline.vercel.app` and
+   the `cache-control` above. `https://<DashboardDataUrl>/../nws-alerts/` and other prefixes must return `403`.
+   Delete `out.json`.
+4. Put the stack output `DashboardDataUrl` in `dashboard/vite.config.ts` (`LIVE_DATA_URL`) and add it to `connect-src`
+   in `dashboard/vercel.json`, then push (Vercel rebuilds). The header should then show **Live**.
 
 ## Remove everything: `npm run aws:teardown`
 

@@ -65,7 +65,7 @@ export const compass = (deg) => (deg == null ? null : COMPASS[Math.round(deg / 2
 const floorHour = (date) => new Date(Math.floor(date.getTime() / HOUR_MS) * HOUR_MS);
 
 /** Latest run time per model, from Open-Meteo's meta.json. Missing/failed → not in the map. */
-async function fetchRunTimes(models, run) {
+export async function fetchRunTimes(models, run) {
   const runTimes = new Map();
   for (const model of models) {
     const domain = RUN_DOMAIN[model];

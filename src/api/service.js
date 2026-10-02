@@ -7,6 +7,7 @@
 import { createDashboard, cacheStatus, VERSION_KEY } from "../stage3/dashboard.js";
 import { archiveEndDay } from "../stage1/openMeteoHistory.js";
 import { COLLECTIONS } from "../collections.js";
+import { ALL_LOCATIONS, usAverage } from "../publish/usAverage.js";
 import { COMPARE, DRILL_LEVELS, LIMITS, METRICS, PERIODS, STAGES } from "./params.js";
 
 export class ApiError extends Error {
@@ -42,27 +43,7 @@ function shiftRange({ from, to }, compare) {
   return { from: toDay(dayMs(from) - days * DAY_MS), to: toDay(dayMs(from) - DAY_MS) };
 }
 
-/** `locations=all`: every tracked city, averaged per period (see usAverage). */
-export const ALL_LOCATIONS = "all";
-
-/**
- * US-wide rows: per period, the mean of each value over the cities that have it (nulls ignored, never 0);
- * n_values / n_hours are summed and `cities` counts the cities with data in that period.
- */
-export function usAverage(rows) {
-  const groups = new Map();
-  for (const r of rows) groups.set(r.period_start, [...(groups.get(r.period_start) ?? []), r]);
-  const mean = (g, f) => {
-    const v = g.map((r) => r[f]).filter((x) => x != null);
-    return v.length ? Math.round((v.reduce((a, x) => a + x, 0) / v.length) * 1000) / 1000 : null;
-  };
-  return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([period_start, g]) => ({
-    location_id: ALL_LOCATIONS, period_start,
-    min: mean(g, "min"), max: mean(g, "max"), avg: mean(g, "avg"), sum: mean(g, "sum"),
-    n_values: g.reduce((a, r) => a + r.n_values, 0), n_hours: g.reduce((a, r) => a + r.n_hours, 0),
-    cities: g.filter((r) => r.n_values > 0).length,
-  }));
-}
+export { ALL_LOCATIONS, usAverage };
 
 const CHILD = { year: "half", half: "quarter", quarter: "month", month: "week", week: "day", day: "hour" };
 

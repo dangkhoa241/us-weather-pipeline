@@ -49,8 +49,8 @@ try {
   check("CSP header served", Boolean(res.headers()["content-security-policy"]), res.headers()["content-security-policy"]);
   await page.waitForFunction(() => performance.getEntriesByName("map-ready").length > 0, null, { timeout: 30_000 });
   await page.waitForTimeout(1500);
-  const badge = await page.getByText(/^Demo data as of \d{4}-\d{2}-\d{2}$/).textContent().catch(() => null);
-  check("'Demo data as of' badge", Boolean(badge), badge);
+  const badge = await page.getByText(/(Live|Snapshot) · data as of \d{4}-\d{2}-\d{2}$/).textContent().catch(() => null);
+  check("data source badge", Boolean(badge), badge);
   const avgTemp = await page.locator("section[aria-label='Key figures'] p.text-2xl").first().textContent();
   check("KPI cards have values", /\d/.test(avgTemp ?? ""), avgTemp);
   const subject = await page.locator("[data-kpi-subject]").textContent();

@@ -9,7 +9,7 @@ import { bestModelByState, biasWord, errorToUnit, heroLine, leaderboard, LEAD_DA
 import { colorFor, extent } from "@/lib/colors";
 import { local } from "@/lib/forecast";
 import { MODELS, MODEL_BY_ID, modelName } from "@/lib/models";
-import { snapshotAccuracyRange } from "@/lib/snapshot";
+import { accuracyAsOf, dataSource, snapshotAccuracyRange } from "@/lib/snapshot";
 import { fmt, type TempUnit } from "@/lib/units";
 import { selectedRange, useFilters } from "@/store/filters";
 import { FilterBar } from "@/components/FilterBar";
@@ -60,6 +60,11 @@ export function AccuracyPage() {
         {demoLimited && (
           <CardContent className="text-xs text-muted-foreground">
             Demo snapshot: the map, bias and misses are pre-computed for all US over {demoRange.data!.from} – {demoRange.data!.to} only.
+          </CardContent>
+        )}
+        {isSnapshot && dataSource()?.kind === "live" && (
+          <CardContent className="text-xs text-muted-foreground" data-accuracy-as-of>
+            Forecast accuracy is computed on the local pipeline: as of {accuracyAsOf()}, for the same-length period ending that day.
           </CardContent>
         )}
       </Card>

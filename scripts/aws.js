@@ -1,6 +1,6 @@
 // scripts/aws.js
 // Thin wrapper around the AWS SAM CLI for the weather-pipeline stack (infra/template.yaml, infra/samconfig.toml).
-// Usage: npm run aws:validate | aws:deploy | aws:teardown
+// Usage: npm run aws:validate | aws:build | aws:deploy | aws:teardown
 // Credentials: the deploy profile AWS_DEPLOY_PROFILE (default weather-dev) from ~/.aws; nothing secret is passed or stored here.
 // Cost guard (CLAUDE.md): before every deploy, list the resources with their free-tier limits and get an OK.
 
@@ -47,6 +47,9 @@ switch (command) {
   case "validate":
     sam(["validate", "--lint", ...common]);
     break;
+  case "build":   // bundle the Lambdas with esbuild (deploy does this too); no AWS changes
+    sam(["build", "--cached"]);
+    break;
   case "deploy": {
     const email = config.aws.alertEmail;
     if (!email || !EMAIL.test(email)) throw new Error("set ALERT_EMAIL in .env (docs/SETUP_AWS.md step 6)");
@@ -56,7 +59,10 @@ switch (command) {
     }
     // Only templates with Lambda functions need a build (Part 3 bundles the NWS collector with esbuild).
     if (readFileSync(new URL("template.yaml", INFRA), "utf8").includes("AWS::Serverless::Function")) sam(["build", "--cached"]);
-    sam(["deploy", ...common, "--parameter-overrides", `AlertEmail=${email}`, `NwsUserAgent="${userAgent}"`]);
+    // Optional: `npm run aws:deploy -- --no-execute-changeset` only creates the change set, to review before executing.
+    const extra = process.argv.slice(3).filter((a) => a === "--no-execute-changeset");
+    sam(["deploy", ...common, ...extra, "--parameter-overrides", `AlertEmail=${email}`, `NwsUserAgent="${userAgent}"`]);
+    if (extra.length) { console.log("[aws] change set created, NOT executed (review it, then run npm run aws:deploy)."); break; }
     console.log("[aws] deployed. Stack outputs → .env: SNS_TOPIC_ARN (NOTIFIER=sns), RAW_ARCHIVE_BUCKET (RAW_ARCHIVE=s3).");
     break;
   }
@@ -70,6 +76,6 @@ switch (command) {
     break;
   }
   default:
-    console.error("Usage: node scripts/aws.js validate|deploy|teardown");
+    console.error("Usage: node scripts/aws.js validate|build|deploy|teardown");
     process.exitCode = 1;
 }

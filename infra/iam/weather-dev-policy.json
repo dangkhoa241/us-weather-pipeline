@@ -248,6 +248,34 @@
       ]
     },
     {
+      "Sid": "Part4CloudFrontDashboard",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:CreateDistribution",
+        "cloudfront:CreateDistributionWithTags",
+        "cloudfront:GetDistribution",
+        "cloudfront:GetDistributionConfig",
+        "cloudfront:UpdateDistribution",
+        "cloudfront:DeleteDistribution",
+        "cloudfront:TagResource",
+        "cloudfront:UntagResource",
+        "cloudfront:ListTagsForResource",
+        "cloudfront:CreateOriginAccessControl",
+        "cloudfront:GetOriginAccessControl",
+        "cloudfront:UpdateOriginAccessControl",
+        "cloudfront:DeleteOriginAccessControl",
+        "cloudfront:CreateResponseHeadersPolicy",
+        "cloudfront:GetResponseHeadersPolicy",
+        "cloudfront:UpdateResponseHeadersPolicy",
+        "cloudfront:DeleteResponseHeadersPolicy"
+      ],
+      "Resource": [
+        "arn:aws:cloudfront::<ACCOUNT_ID>:distribution/*",
+        "arn:aws:cloudfront::<ACCOUNT_ID>:origin-access-control/*",
+        "arn:aws:cloudfront::<ACCOUNT_ID>:response-headers-policy/*"
+      ]
+    },
+    {
       "Sid": "Part3ConfigParameters",
       "Effect": "Allow",
       "Action": [

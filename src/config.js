@@ -113,5 +113,10 @@ export const config = Object.freeze({
     rawArchiveMaxPutsPerDay: int(env.RAW_ARCHIVE_MAX_PUTS_PER_DAY, 50),     // hard cap (S3 free tier: 2,000 PUTs / month)
     // Lambda only (Stage 6a part 3): SSM SecureString holding the Atlas connection string, read at cold start.
     mongoUriParam: env.MONGO_URI_SSM_PARAM || null,
+    // Lambda only (Stage 6a part 4): live dashboard files, written to <bucket>/<prefix> and served by CloudFront.
+    dashboardBucket: env.DASHBOARD_BUCKET || null,
+    dashboardPrefix: env.DASHBOARD_PREFIX || "dashboard/",
+    dashboardMaxPutsPerDay: int(env.DASHBOARD_MAX_PUTS_PER_DAY, 17),   // 8 runs × 2 files + 1 history file
+    dashboardRecentDays: int(env.DASHBOARD_RECENT_DAYS, 60),           // days of history in recent.json
   },
 });

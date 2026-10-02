@@ -8,6 +8,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import { config } from "../src/config.js";
+import { DAY_MS, columns, compactForecast, dayMs, publicJson, toDay } from "../src/publish/snapshotFormat.js";
 
 const API = `http://${config.host === "0.0.0.0" ? "127.0.0.1" : config.host}:${config.port}/api/v1`;
 const OUT = new URL("../dashboard/public/data/", import.meta.url);
@@ -15,16 +16,7 @@ const FORMAT = 1;                 // bump when the file layout changes (the dash
 const MIN_WINDOW_DAYS = 731;      // at least 2 years: "last 12 months" compared with the same period last year
 const MAX_RANGE_DAYS = 4000;      // the API's longest range; used to find the earliest year with data
 const PRESET_DAYS = { "7d": 7, "30d": 30, "90d": 90, "365d": 365 };
-// Models the Forecast page shows (legacy and baseline forecasts are not exported).
-const FORECAST_MODELS = ["nws", "ecmwf_ifs025", "gfs_global", "icon_global", "gfs_hrrr"];
 const MAX_TOTAL_KB = 5 * 1024;    // fail if the snapshot gets big (Vercel serves it as static files)
-// Nothing internal may end up in a public snapshot.
-const FORBIDDEN = /localhost|127\.0\.0\.1|mongodb|clickhouse|redis:|:\/\/[^"]*@|password|etl_batch_id|stage2-|atlas/i;
-
-const DAY_MS = 86_400_000;
-const toDay = (ms) => new Date(ms).toISOString().slice(0, 10);
-const dayMs = (day) => Date.parse(`${day}T00:00:00Z`);
-const round1 = (v) => (v == null ? null : Math.round(v * 10) / 10);
 
 let calls = 0;
 async function get(path, params = {}) {
@@ -60,20 +52,9 @@ function compareRanges({ from, to }) {
   ];
 }
 
-/** Daily rows → column arrays aligned to the window (null where a day is missing). */
-function columns(rows, from, days, fields) {
-  const out = Object.fromEntries(fields.map((f) => [f, new Array(days).fill(null)]));
-  for (const r of rows) {
-    const i = Math.round((dayMs(r.period_start) - dayMs(from)) / DAY_MS);
-    if (i >= 0 && i < days) for (const f of fields) out[f][i] = f === "n" ? r.n_values : round1(r[f]);
-  }
-  return out;
-}
-
 const files = {};
 function write(dir, name, data) {
-  const text = JSON.stringify(data);
-  if (FORBIDDEN.test(text)) throw new Error(`${name} contains a forbidden value (${text.match(FORBIDDEN)[0]}); not writing the snapshot`);
+  const text = publicJson(name, data);   // throws on anything internal (hostnames, connection strings, run ids)
   mkdirSync(dir, { recursive: true });
   writeFileSync(new URL(name, dir), text);
   files[name] = { bytes: text.length, gzip_bytes: gzipSync(text).length, sha256: createHash("sha256").update(text).digest("hex").slice(0, 16) };
@@ -150,14 +131,7 @@ write(dir, "accuracy-details.json", details);
 // Latest forecast per model and location, as compact arrays: hours after `start` → [temp_c, precip_mm, precip_prob_pct].
 const forecasts = {};
 for (const loc of locations) {
-  const rows = (await get(`/forecast/${loc.id}`, { days: 8 })).data;
-  const byModel = {};
-  for (const r of rows.filter((x) => FORECAST_MODELS.includes(x.model))) {
-    const m = (byModel[r.model] ??= { issued_at: r.issued_at, start: r.target_time, hours: [] });
-    const h = Math.round((Date.parse(`${r.target_time.replace(" ", "T")}Z`) - Date.parse(`${m.start.replace(" ", "T")}Z`)) / 3_600_000);
-    m.hours.push([h, round1(r.temp_c), round1(r.precip_mm), r.precip_prob_pct]);
-  }
-  forecasts[loc.id] = byModel;
+  forecasts[loc.id] = compactForecast((await get(`/forecast/${loc.id}`, { days: 8 })).data);
 }
 write(dir, "forecasts.json", forecasts);
 

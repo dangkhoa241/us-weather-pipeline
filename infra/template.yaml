@@ -4,6 +4,8 @@ Description: >-
   us-weather-pipeline on AWS (Free plan, us-east-2). Part 1: SNS topic for pipeline failures and heat alerts,
   with an email subscription. Part 2: private S3 bucket with a 30-day copy of the raw API responses.
   Part 3: Lambda that collects NWS alerts (hourly) and forecasts (every 3 h) into MongoDB Atlas + the archive.
+  Part 4: Lambda that publishes the live dashboard JSON (every 3 h) under dashboard/ in the same bucket, served
+  read-only by a CloudFront distribution through Origin Access Control (the bucket stays private).
   Every resource gets the stack tag Project=us-weather-pipeline (samconfig.toml).
   Remove everything with `npm run aws:teardown`.
 
@@ -25,6 +27,12 @@ Parameters:
     Default: /weather-pipeline/atlas-mongo-uri
     AllowedPattern: "^/weather-pipeline/[A-Za-z0-9_.-]+$"
     Description: Name (not value) of the SSM SecureString with the Atlas connection string.
+
+  DashboardOrigin:
+    Type: String
+    Default: https://us-weather-pipeline.vercel.app
+    AllowedPattern: "^https://[a-z0-9.-]+$"
+    Description: The dashboard's browser origin, the only non-localhost origin CORS allows on the live data.
 
 Resources:
   # Free tier: 1,000 email deliveries and 1 M publishes / month. Expected: a few emails / day (warn + error only).
@@ -63,8 +71,10 @@ Resources:
       Endpoint: !Ref AlertEmail
 
   # Part 2: raw API responses (RAW_ARCHIVE=s3), one gzipped object per source and Stage 1 run.
-  # Expected: ~22 PUTs / day (caps: Lambda 16 + local 10 RAW_ARCHIVE_MAX_PUTS_PER_DAY, S3 free tier 2,000 / month) and
-  # ~175 MB stored (30-day lifecycle; free tier 5 GB). Versioning stays off, so a deleted object is gone.
+  # Part 4: also the live dashboard files under dashboard/ (3 small JSON files, overwritten every 3 h / daily).
+  # Expected PUTs: ~22 / day archive + 17 / day dashboard ≈ 1,190 / month (caps: Lambda 16 + local 10 + dashboard 17
+  # ≤ 1,333 / month; S3 free tier 2,000) and ~175 MB stored (30-day lifecycle; free tier 5 GB). Versioning stays off,
+  # so a deleted object is gone.
   # `npm run aws:teardown` empties the bucket before deleting the stack.
   RawArchiveBucket:
     Type: AWS::S3::Bucket
@@ -108,6 +118,16 @@ Resources:
               - !GetAtt RawArchiveBucket.Arn
               - !Sub "${RawArchiveBucket.Arn}/*"
             Condition: { Bool: { "aws:SecureTransport": "false" } }
+          # Part 4: only this CloudFront distribution (signed requests through OAC) may read, and only dashboard/.
+          # A service principal limited by AWS:SourceArn is not "public", so Block Public Access stays fully on.
+          - Sid: CloudFrontReadsDashboardOnly
+            Effect: Allow
+            Principal: { Service: cloudfront.amazonaws.com }
+            Action: s3:GetObject
+            Resource: !Sub "${RawArchiveBucket.Arn}/dashboard/*"
+            Condition:
+              StringEquals:
+                "AWS:SourceArn": !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${DashboardDistribution}"
 
   # Part 3: NWS collection (replaces the GitHub Actions schedules). No VPC (public internet, so no NAT Gateway).
   # Free tier: 1 M requests + 400,000 GB-s / month. Expected: 24 alerts + 8 forecast runs / day ≈ 1,000 invocations
@@ -215,6 +235,169 @@ Resources:
       Tags:
         Project: us-weather-pipeline
 
+  # Part 4: live dashboard data (docs/analysis/live-dashboard.md, design B). The publisher writes 3 JSON files to
+  # s3://<bucket>/dashboard/; CloudFront serves them. Free tier: Lambda as part 3 (8 runs / day ≈ 240 / month, ~1 min
+  # each at 256 MB ≈ 3,600 GB-s, 1%); S3 ≤ 17 PUTs / day (cap DASHBOARD_MAX_PUTS_PER_DAY).
+  DashboardPublisherLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: /aws/lambda/weather-pipeline-dashboard-publisher
+      RetentionInDays: 7          # expected < 10 MB / month
+      Tags:
+        - { Key: Project, Value: us-weather-pipeline }
+
+  DashboardPublisherRole:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/weather-pipeline-boundary"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: dashboard-publisher
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: Logs
+                Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub "${DashboardPublisherLogGroup.Arn}"
+              - Sid: ReadAtlasUri          # reads NWS forecasts/alerts the collector stored; writes the PUT ledger
+                Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${AtlasUriParameter}"
+              - Sid: WriteDashboardFiles   # write only: no read, list or delete
+                Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub "${RawArchiveBucket.Arn}/dashboard/*"
+              - Sid: PublishAlerts
+                Effect: Allow
+                Action: sns:Publish
+                Resource: !Ref AlertsTopic
+      Tags:
+        - { Key: Project, Value: us-weather-pipeline }
+
+  DashboardPublisherFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [src/lambda/dashboardPublisher.js]
+        Format: esm
+        OutExtension: [.js=.mjs]
+        Target: node22
+        Minify: false
+        Sourcemap: false
+        External: ["@aws-sdk/*"]
+        Banner: ["js=import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);"]
+    Properties:
+      FunctionName: weather-pipeline-dashboard-publisher
+      Description: Live dashboard JSON (history, forecasts, alerts) → S3 dashboard/, served by CloudFront (Stage 6a part 4)
+      CodeUri: ../
+      Handler: dashboardPublisher.handler
+      Runtime: nodejs22.x
+      Architectures: [arm64]
+      MemorySize: 256
+      Timeout: 240             # ~53 history + 53 forecast Open-Meteo requests at ≥ 250 ms each, plus Atlas reads
+      Role: !GetAtt DashboardPublisherRole.Arn
+      LoggingConfig:
+        LogGroup: !Ref DashboardPublisherLogGroup
+      Environment:
+        Variables:
+          MONGO_URI_SSM_PARAM: !Ref AtlasUriParameter
+          MONGO_DB: weather
+          NWS_USER_AGENT: !Ref NwsUserAgent      # User-Agent of every outgoing request (src/lib/http.js)
+          NOTIFIER: sns
+          SNS_TOPIC_ARN: !Ref AlertsTopic
+          SNS_MIN_LEVEL: warn
+          DASHBOARD_BUCKET: !Ref RawArchiveBucket
+          DASHBOARD_PREFIX: dashboard/
+          DASHBOARD_MAX_PUTS_PER_DAY: "17"     # 8 runs × 2 files + recent.json once a day
+          DASHBOARD_RECENT_DAYS: "60"
+          TZ: UTC
+      Events:
+        # After the collector (forecasts at :07, alerts at :23). Together: one run every 3 h.
+        HistoryDaily:
+          Type: Schedule
+          Properties:
+            Name: weather-pipeline-dashboard-daily
+            Description: Live dashboard history + forecasts + alerts, once a day
+            Schedule: cron(35 6 * * ? *)
+            Input: '{"parts":["history","forecasts","alerts"]}'
+        LiveEvery3Hours:
+          Type: Schedule
+          Properties:
+            Name: weather-pipeline-dashboard-3h
+            Description: Live dashboard forecasts + alerts every 3 hours
+            Schedule: cron(35 0,3,9,12,15,18,21 * * ? *)
+            Input: '{"parts":["forecasts","alerts"]}'
+      Tags:
+        Project: us-weather-pipeline
+
+  # Read-only CDN in front of dashboard/. No WAF, no custom domain, no logging, no edge functions; PriceClass_100.
+  # Always free: 1 TB out + 10 M requests / month. Expected (100 visits / day): ~10,000 requests, < 1 GB (< 1%).
+  DashboardOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: weather-pipeline-dashboard-oac
+        Description: CloudFront signs its S3 requests; the bucket policy allows only this distribution
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # CORS for the dashboard origin and the local Vite dev/preview servers only (no credentials, GET/HEAD).
+  DashboardResponseHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: weather-pipeline-dashboard-cors
+        Comment: CORS for the dashboard origin + localhost, nosniff
+        CorsConfig:
+          AccessControlAllowCredentials: false
+          AccessControlAllowHeaders: { Items: [Accept] }
+          AccessControlAllowMethods: { Items: [GET, HEAD] }
+          AccessControlAllowOrigins: { Items: [!Ref DashboardOrigin, "http://localhost:5173", "http://localhost:4173"] }
+          AccessControlMaxAgeSec: 600
+          OriginOverride: true
+        SecurityHeadersConfig:
+          ContentTypeOptions: { Override: true }
+          FrameOptions: { FrameOption: DENY, Override: true }
+          ReferrerPolicy: { ReferrerPolicy: no-referrer, Override: true }
+          StrictTransportSecurity: { AccessControlMaxAgeSec: 63072000, IncludeSubdomains: false, Override: true }
+
+  DashboardDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: weather-pipeline live dashboard data (read-only)
+        Enabled: true
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_100
+        Origins:
+          - Id: dashboard-s3
+            DomainName: !GetAtt RawArchiveBucket.RegionalDomainName
+            OriginPath: /dashboard
+            S3OriginConfig: { OriginAccessIdentity: "" }   # empty: OAC instead of the legacy OAI
+            OriginAccessControlId: !GetAtt DashboardOriginAccessControl.Id
+        DefaultCacheBehavior:
+          TargetOriginId: dashboard-s3
+          ViewerProtocolPolicy: https-only
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6   # managed CachingOptimized: honours the files' Cache-Control
+          ResponseHeadersPolicyId: !Ref DashboardResponseHeadersPolicy
+        ViewerCertificate: { CloudFrontDefaultCertificate: true }   # *.cloudfront.net, no custom domain
+      Tags:
+        - { Key: Project, Value: us-weather-pipeline }
+
 Outputs:
   AlertsTopicArn:
     Description: Put this in .env as SNS_TOPIC_ARN (with NOTIFIER=sns)
@@ -225,3 +408,9 @@ Outputs:
   NwsCollectorFunctionName:
     Description: Test with `aws lambda invoke` (docs/SETUP_AWS.md step 10)
     Value: !Ref NwsCollectorFunction
+  DashboardPublisherFunctionName:
+    Description: Test with `aws lambda invoke` (docs/SETUP_AWS.md step 11)
+    Value: !Ref DashboardPublisherFunction
+  DashboardDataUrl:
+    Description: Live dashboard data base URL (LIVE_DATA_URL in dashboard/vite.config.ts, connect-src in dashboard/vercel.json)
+    Value: !Sub "https://${DashboardDistribution.DomainName}"
