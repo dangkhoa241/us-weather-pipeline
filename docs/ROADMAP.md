@@ -33,7 +33,7 @@ Approved free stack:
 | Discord webhook | ~30 messages / min per webhook | 429 | No | a few / day | a few / day |
 | GitHub Actions | Free on public repos (private: 2,000 min / month) | Jobs stop running | No | — | — |
 | MongoDB, ClickHouse, Redis (Docker) | Self-hosted; limited only by disk | Disk full | No | ~32 MB / day on disk (≈ 12 GB / year), mostly forecast snapshots | local disk only |
-| AWS SNS (Stage 6a part 1, not deployed yet) | Always free: 1 M publishes, 1,000 email deliveries / month | Free plan: covered by sign-up credits, never billed; credits used up → account closes | No (Free plan) | warn/error only: a few emails / day (< 150 / month) | SNS_MIN_LEVEL=warn; one email per alerts run |
+| AWS SNS (Stage 6a part 1, deployed 2026-10-01, us-east-2) | Always free: 1 M publishes, 1,000 email deliveries / month | Free plan: covered by sign-up credits, never billed; credits used up → account closes | No (Free plan) | warn/error only: a few emails / day (< 150 / month) | SNS_MIN_LEVEL=warn; one email per alerts run |
 
 AWS (Stage 6a, docs/SETUP_AWS.md; cost guard in CLAUDE.md): **Free plan** account (new sign-up experience, until 2027-04-02).
 No charges are possible: usage above the always-free allowances is paid from the sign-up credits ($100 + up to $100), and
@@ -298,7 +298,8 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
 - [x] Part 1 code: `SnsNotifier` (NOTIFIER=sns; warn/error emailed, failures never break the pipeline, credentials
       redacted), heat alerts (new NWS heat alerts for tracked cities, one email per run), SAM template (SNS topic,
       HTTPS-only topic policy, email subscription), `npm run aws:validate | aws:deploy | aws:teardown`; tests with a mocked SDK client
-- [ ] Part 1 deploy (after the setup steps are confirmed and the resource list is OK'd)
+- [x] Part 1 deploy: stack `weather-pipeline` in us-east-2, email subscription confirmed; `.env` NOTIFIER=sns +
+      SNS_TOPIC_ARN, test alert sent (2026-10-01)
 - [ ] Part 2: raw API responses also archived to S3 (private, SSE-S3, 30-day lifecycle), RAW_ARCHIVE=s3
 - [ ] Part 3: NWS alerts fetcher as an hourly Lambda (EventBridge) → Atlas + S3, logs 7 days; function roles must set
       `PermissionsBoundary: weather-pipeline-boundary` (the deploy policy refuses roles without it)
@@ -325,7 +326,7 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
 - [ ] RawStore → S3
 - [ ] CacheStore → DynamoDB
 - [ ] Scheduler → EventBridge
-- [ ] Notifier → SNS
+- [x] Notifier → SNS (Stage 6a part 1)
 
 ## Schedule
 
