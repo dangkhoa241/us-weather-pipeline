@@ -38,7 +38,7 @@ Approved free stack:
 | Amazon EventBridge rules (part 3) | Scheduled rules: no charge | — | No | 2 rules, 32 invocations / day | hourly at most |
 | CloudWatch Logs (part 3) | Always free: 5 GB ingest + 5 GB storage / month | Free plan: credits | No | < 50 MB / month | 7-day retention |
 | SSM Parameter Store (part 3) | Standard parameters free; SecureString with the AWS-managed key `aws/ssm` (KMS: 20,000 free requests / month) | Standard throughput: throttled, not billed | No | 1 parameter, ≤ ~1,000 reads / month (cold starts) | no customer KMS key |
-| AWS S3 raw archive (Stage 6a part 2, deployed 2026-10-02, us-east-2) | 12-month free tier: 5 GB storage, 2,000 PUT + 20,000 GET / month (Free plan: over that is paid from the credits, never billed) | Free plan: credits; used up → account closes | No (Free plan) | caps: Lambda 32 + local 20 PUTs / day ≤ ~1,560 / month (78%); first day: 6 objects, 3.2 MB; ~175 MB held by the 30-day rule (3.5%); GET only by hand | one object per source and run; ≤ 1 per source per hour; hard cap RAW_ARCHIVE_MAX_PUTS_PER_DAY=50 (≤ 1,500 / month); 32 MB per source and run |
+| AWS S3 raw archive (Stage 6a part 2, deployed 2026-10-02, us-east-2) | 12-month free tier: 5 GB storage, 2,000 PUT + 20,000 GET / month (Free plan: over that is paid from the credits, never billed) | Free plan: credits; used up → account closes | No (Free plan) | ~30 PUTs / day ≈ 900 / month (45%); caps Lambda 16 + local 20 / day ≤ 1,116 / month (56%); first day: 6 objects, 3.2 MB; ~175 MB held by the 30-day rule (3.5%); GET only by hand | one object per source and run; ≤ 1 per source per hour; hard cap RAW_ARCHIVE_MAX_PUTS_PER_DAY=50 (≤ 1,500 / month); 32 MB per source and run |
 
 AWS (Stage 6a, docs/SETUP_AWS.md; cost guard in CLAUDE.md): **Free plan** account (new sign-up experience, until 2027-04-02).
 No charges are possible: usage above the always-free allowances is paid from the sign-up credits ($100 + up to $100), and
@@ -129,7 +129,7 @@ Cost follow-ups:
 - Forecast accuracy (90 days, 20 cities, lead day 1): ECMWF 2.1°F average error, ICON 2.3°F, HRRR 2.9°F, GFS 3.1°F;
   the best-match baseline 2.6°F. Error grows ~0.25°F per extra lead day.
 - AWS (Free plan, $0): NWS collection on Lambda + EventBridge (~960 runs / month, ~2% of the free GB-s; forecast run
-  106 requests → ~9,000 rows in ~88 s at 168 MB), SNS alerts, 30-day S3 archive (≤ 78% of free PUTs by hard caps);
+  106 requests → ~9,000 rows in ~88 s at 168 MB), SNS alerts, 30-day S3 archive (~45% of free PUTs, ≤ 56% by hard caps);
   one SAM stack, permissions boundary on every role, removed by `npm run aws:teardown`.
 - Tests: 107 Vitest tests (33 backend + 74 dashboard), no Docker needed, run in GitHub Actions CI; 18 automated checks on the static demo build.
 
@@ -144,7 +144,8 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
   locations (Atlas already has them; a new city needs one manual `seed:locations` against Atlas). Heat-alert emails can
   arrive twice if alerts are run locally by hand (`npm run fetch` / `fetch:watch` outside Docker), because Atlas and the
   local store each see the alert as new. The Docker fetcher has alerts off.
-- S3 raw archive: NWS alerts are kept at most once per hour (they are fetched every 15 min); `om-backfill` is not
+- S3 raw archive: NWS alerts are kept once per 3-hour UTC slot (00, 03, … UTC; fetched hourly), so a failed run at
+  those hours leaves a 3-hour gap; `om-backfill` is not
   archived; a run's responses for one source stop being archived past 32 MB (only a big history catch-up); skipped
   or failed uploads are logged, not retried.
 - `best_match` baseline: `issued_at` is approximate (target − N days) and `lead_hours` is null; compare it by lead day only.
@@ -340,7 +341,7 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       alerts (`ALERTS_CRON: "off"` in docker-compose; they arrive via sync-atlas); local `RAW_ARCHIVE_MAX_PUTS_PER_DAY=20`
 - [x] Part 4 design: live dashboard without the laptop (`docs/analysis/live-dashboard.md`); chose B (S3 + CloudFront
       static JSON, daily history Lambda, accuracy published locally)
-- [ ] Part 4 build: archive NWS alerts every 3 h (S3 PUTs ~45%), history-updater Lambda, S3 + CloudFront (OAC), backfill,
+- [ ] Part 4 build: archive NWS alerts every 3 h (S3 PUTs ~45%; code done, not deployed), history-updater Lambda, S3 + CloudFront (OAC), backfill,
       dashboard reads CloudFront with bundled-snapshot fallback, CSP `connect-src`
 
 ## Cross-cutting

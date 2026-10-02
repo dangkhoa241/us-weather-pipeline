@@ -3,7 +3,8 @@
 // Each Stage 1 run collects its responses per source and uploads ONE gzipped NDJSON object per source:
 //   s3://<bucket>/<source>/<yyyy>/<mm>/<dd>/<HHMMSS>Z-<batch>.json.gz   (one line: { url, fetched_at, body })
 // One object per run instead of per response keeps PUT requests far below the S3 free tier (2,000 / month):
-// at most one upload per source per UTC hour, and RAW_ARCHIVE_MAX_PUTS_PER_DAY overall (ledger in api_usage).
+// at most one upload per source per UTC hour (NWS alerts: per 3-hour UTC slot), and RAW_ARCHIVE_MAX_PUTS_PER_DAY
+// overall (ledger in api_usage).
 // Credentials come from the AWS SDK's default chain (AWS_PROFILE → ~/.aws). A failed upload is logged and
 // swallowed: the archive must never break the pipeline.
 
@@ -15,6 +16,8 @@ import { redact } from "../notifier/snsNotifier.js";
 const BUCKET = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
 const SOURCE = /^[a-z0-9-]+$/;
 const MAX_RUN_BYTES = 32 * 1024 * 1024;   // per source and run (uncompressed); a big history catch-up is cut here
+// Sources archived less often than hourly: only runs in UTC hours divisible by N (alerts run hourly on Lambda).
+const EVERY_HOURS = { "nws-alerts": 3 };
 
 /** S3 key for one run of one source, from the UTC upload time. */
 export function objectKey(source, batchId, now = new Date()) {
@@ -60,8 +63,13 @@ export class S3RawArchive {
     const pending = [...this.buffers].filter(([, buf]) => buf.lines.length);
     this.buffers.clear();
     for (const [source, { lines }] of pending) {
+      const every = EVERY_HOURS[source] ?? 1;
+      if (now.getUTCHours() % every !== 0) {
+        console.log(`[archive:s3] ${source}: skipped (archived every ${every} h)`);
+        continue;
+      }
       try {
-        // At most one object per source per UTC hour (alerts run every 15 min), and a daily cap overall.
+        // At most one object per source per UTC hour (alerts run every 15 min locally), and a daily cap overall.
         await new ApiBudget(store, `s3-archive:${source}`, { perHour: 1, perDay: Infinity }).reserve(1, now);
         await new ApiBudget(store, "s3-archive", { perHour: Infinity, perDay: this.maxPutsPerDay }).reserve(1, now);
         const key = objectKey(source, batchId, now);

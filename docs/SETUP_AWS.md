@@ -210,8 +210,9 @@ and write its own logs.
    check that `npm run sync:atlas` brings the new rows home. Delete `out.json`.
 7. **After a day of good scheduled runs**, turn off the GitHub schedules: remove the `schedule:` block from
    `.github/workflows/nws-alerts.yml` and `nws-forecasts.yml` (keep `workflow_dispatch` as a manual fallback).
-8. **S3 PUTs:** the Lambda archives up to 32 objects / day (its own cap, ledger in Atlas). Lower the local cap in `.env`
-   to `RAW_ARCHIVE_MAX_PUTS_PER_DAY=20`, so both together stay ≤ ~1,560 PUTs / month (free tier 2,000).
+8. **S3 PUTs:** the Lambda archives up to 16 objects / day (alerts once per 3-hour UTC slot + 8 forecast runs; its own
+   cap, ledger in Atlas). Keep the local cap in `.env` at `RAW_ARCHIVE_MAX_PUTS_PER_DAY=20` (~14 / day expected):
+   ~900 PUTs / month expected (45%), ≤ 1,116 even at both caps (56% of the free 2,000).
 
 ## Remove everything: `npm run aws:teardown`
 

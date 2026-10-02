@@ -63,7 +63,7 @@ Resources:
       Endpoint: !Ref AlertEmail
 
   # Part 2: raw API responses (RAW_ARCHIVE=s3), one gzipped object per source and Stage 1 run.
-  # Expected: ~38 PUTs / day (capped at RAW_ARCHIVE_MAX_PUTS_PER_DAY=50, S3 free tier 2,000 / month) and
+  # Expected: ~30 PUTs / day (caps: Lambda 16 + local 20 RAW_ARCHIVE_MAX_PUTS_PER_DAY, S3 free tier 2,000 / month) and
   # ~175 MB stored (30-day lifecycle; free tier 5 GB). Versioning stays off, so a deleted object is gone.
   # `npm run aws:teardown` empties the bucket before deleting the stack.
   RawArchiveBucket:
@@ -195,7 +195,7 @@ Resources:
           SNS_MIN_LEVEL: warn
           RAW_ARCHIVE: s3
           RAW_ARCHIVE_BUCKET: !Ref RawArchiveBucket
-          RAW_ARCHIVE_MAX_PUTS_PER_DAY: "32"   # 24 alerts + 8 forecast runs; own ledger in Atlas
+          RAW_ARCHIVE_MAX_PUTS_PER_DAY: "16"   # 8 alerts (every 3 h) + 8 forecast runs; own ledger in Atlas
           TZ: UTC
       Events:
         AlertsHourly:

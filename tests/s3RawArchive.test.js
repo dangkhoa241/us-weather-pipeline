@@ -29,11 +29,11 @@ describe("S3RawArchive (mocked AWS SDK client)", () => {
     const archive = make(send);
     archive.add("nws-forecast", "https://api.weather.gov/a", { properties: { periods: [1] } }, NOW);
     archive.add("nws-forecast", "https://api.weather.gov/b", { properties: { periods: [2] } }, NOW);
-    archive.add("nws-alerts", "https://api.weather.gov/alerts/active", { features: [] }, NOW);
+    archive.add("open-meteo-forecast", "https://api.open-meteo.com/v1/forecast", { hourly: {} }, NOW);
     await archive.flush(new FakeStore(), "stage1-forecast-20261001T204239123Z-abcd1234", NOW);
 
     expect(send).toHaveBeenCalledTimes(2);
-    const [forecast, alerts] = send.mock.calls.map(([cmd]) => cmd);
+    const [forecast, om] = send.mock.calls.map(([cmd]) => cmd);
     expect(forecast).toBeInstanceOf(PutObjectCommand);
     expect(forecast.input).toMatchObject({
       Bucket: BUCKET,
@@ -45,7 +45,7 @@ describe("S3RawArchive (mocked AWS SDK client)", () => {
       { url: "https://api.weather.gov/a", fetched_at: NOW.toISOString(), body: { properties: { periods: [1] } } },
       { url: "https://api.weather.gov/b", fetched_at: NOW.toISOString(), body: { properties: { periods: [2] } } },
     ]);
-    expect(alerts.input.Key).toMatch(/^nws-alerts\/2026\/10\/01\//);
+    expect(om.input.Key).toMatch(/^open-meteo-forecast\/2026\/10\/01\//);
   });
 
   it("clears the buffers after a flush (nothing uploaded twice, nothing uploaded for an empty run)", async () => {
@@ -58,15 +58,26 @@ describe("S3RawArchive (mocked AWS SDK client)", () => {
     expect(send).toHaveBeenCalledTimes(1);
   });
 
-  it("uploads at most one object per source per UTC hour (alerts run every 15 min)", async () => {
+  it("uploads at most one object per source per UTC hour", async () => {
     const send = vi.fn(async () => ({}));
     const archive = make(send);
     const store = new FakeStore();
     for (const minutes of [0, 15, 30, 45, 60]) {
-      archive.add("nws-alerts", "u", {}, NOW);
+      archive.add("nws-forecast", "u", {}, NOW);
       await archive.flush(store, "b", new Date(Date.parse("2026-10-01T20:00:00Z") + minutes * 60_000));
     }
-    expect(send.mock.calls.map(([cmd]) => cmd.input.Key.slice(0, 29))).toEqual(["nws-alerts/2026/10/01/200000Z", "nws-alerts/2026/10/01/210000Z"]);
+    expect(send.mock.calls.map(([cmd]) => cmd.input.Key.slice(0, 31))).toEqual(["nws-forecast/2026/10/01/200000Z", "nws-forecast/2026/10/01/210000Z"]);
+  });
+
+  it("archives NWS alerts only in UTC hours divisible by 3 (hourly runs → 8 objects / day)", async () => {
+    const send = vi.fn(async () => ({}));
+    const archive = make(send);
+    const store = new FakeStore();
+    for (let hour = 0; hour < 24; hour += 1) {
+      archive.add("nws-alerts", "u", {}, NOW);
+      await archive.flush(store, "b", new Date(Date.parse("2026-10-01T00:23:00Z") + hour * 3_600_000));
+    }
+    expect(send.mock.calls.map(([cmd]) => cmd.input.Key.slice(22, 24))).toEqual(["00", "03", "06", "09", "12", "15", "18", "21"]);
   });
 
   it("stops at RAW_ARCHIVE_MAX_PUTS_PER_DAY across sources", async () => {
