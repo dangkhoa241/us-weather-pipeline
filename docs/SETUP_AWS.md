@@ -277,6 +277,10 @@ runtime policies don't change.
    policies in this account: the permissions CloudFormation's handlers use for these three resource types. The schema
    also lists `cloudfront:CreateDistributionWithTags`, but the IAM console flags it as invalid, so it's left out
    (`CreateDistribution` + `TagResource` cover it).
+
+   The same file has a second statement, `ReadLambdaLogs`. It holds `logs:FilterLogEvents` and `logs:GetLogEvents` on
+   `/aws/lambda/weather-pipeline-*` (for `aws logs tail` in the tests). These two actions were dropped from the console
+   copy of `weather-dev-pipeline` to fit its size limit; the repo copy of that policy still lists them.
 2. `npm run aws:deploy` (review the change set, then `y`). Creating a distribution takes ~5 min.
 3. Test (as `weather-dev`):
 

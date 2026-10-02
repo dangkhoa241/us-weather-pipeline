@@ -27,6 +27,18 @@
         "arn:aws:cloudfront::<ACCOUNT_ID>:origin-access-control/*",
         "arn:aws:cloudfront::<ACCOUNT_ID>:response-headers-policy/*"
       ]
+    },
+    {
+      "Sid": "ReadLambdaLogs",
+      "Effect": "Allow",
+      "Action": [
+        "logs:FilterLogEvents",
+        "logs:GetLogEvents"
+      ],
+      "Resource": [
+        "arn:aws:logs:us-east-2:<ACCOUNT_ID>:log-group:/aws/lambda/weather-pipeline-*",
+        "arn:aws:logs:us-east-2:<ACCOUNT_ID>:log-group:/aws/lambda/weather-pipeline-*:*"
+      ]
     }
   ]
 }
