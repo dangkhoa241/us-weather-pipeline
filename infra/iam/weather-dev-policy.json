@@ -2,17 +2,27 @@
   "Version": "2012-10-17",
   "Statement": [
     {
+      "Sid": "WhoAmI",
+      "Effect": "Allow",
+      "Action": "sts:GetCallerIdentity",
+      "Resource": "*"
+    },
+    {
       "Sid": "IdentityAndTemplateChecks",
       "Effect": "Allow",
       "Action": [
-        "sts:GetCallerIdentity",
         "cloudformation:ValidateTemplate",
         "cloudformation:GetTemplateSummary",
         "cloudformation:ListStacks",
         "logs:DescribeLogGroups",
         "ssm:DescribeParameters"
       ],
-      "Resource": "*"
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "us-east-2"
+        }
+      }
     },
     {
       "Sid": "CloudFormationStacks",
@@ -138,19 +148,31 @@
       "Resource": "arn:aws:lambda:us-east-2:<ACCOUNT_ID>:function:weather-pipeline-*"
     },
     {
-      "Sid": "Part3LambdaRoles",
+      "Sid": "Part3ReadDeleteTagRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole",
+        "iam:DeleteRole",
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:GetRolePolicy"
+      ],
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/weather-pipeline-*"
+    },
+    {
+      "Sid": "Part3RolesOnlyWithBoundary",
       "Effect": "Allow",
       "Action": [
         "iam:CreateRole",
-        "iam:DeleteRole",
-        "iam:GetRole",
-        "iam:TagRole",
-        "iam:UntagRole",
         "iam:PutRolePolicy",
-        "iam:GetRolePolicy",
         "iam:DeleteRolePolicy"
       ],
-      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/weather-pipeline-*"
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/weather-pipeline-*",
+      "Condition": {
+        "StringEquals": {
+          "iam:PermissionsBoundary": "arn:aws:iam::<ACCOUNT_ID>:policy/weather-pipeline-boundary"
+        }
+      }
     },
     {
       "Sid": "Part3AttachOnlyLambdaLoggingPolicy",
@@ -163,6 +185,9 @@
       "Condition": {
         "ArnEquals": {
           "iam:PolicyARN": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        },
+        "StringEquals": {
+          "iam:PermissionsBoundary": "arn:aws:iam::<ACCOUNT_ID>:policy/weather-pipeline-boundary"
         }
       }
     },

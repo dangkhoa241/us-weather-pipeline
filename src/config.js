@@ -98,10 +98,11 @@ export const config = Object.freeze({
     webhookUrl: env.DISCORD_WEBHOOK_URL || null,
   },
 
-  // AWS (Stage 6, docs/SETUP_AWS.md). Credentials are never configured here: the AWS SDK reads them from ~/.aws
-  // for AWS_PROFILE (the SDK reads AWS_PROFILE / AWS_REGION from the environment itself; listed for clarity).
+  // AWS (Stage 6, docs/SETUP_AWS.md). Credentials are never configured here: the AWS SDK reads them for AWS_PROFILE
+  // from the files in AWS_SHARED_CREDENTIALS_FILE / AWS_CONFIG_FILE (default ~/.aws); it reads those variables itself.
   aws: {
-    profile: env.AWS_PROFILE || null,
+    profile: env.AWS_PROFILE || null,                 // runtime (publish/write only): weather-runtime
+    deployProfile: env.AWS_DEPLOY_PROFILE || "weather-dev", // SAM deploys only (scripts/aws.js)
     region: env.AWS_REGION || "us-east-2",
     snsTopicArn: env.SNS_TOPIC_ARN || null,       // output of the weather-pipeline stack (NOTIFIER=sns)
     snsMinLevel: env.SNS_MIN_LEVEL || "warn",      // info | warn | error: lowest level that is emailed

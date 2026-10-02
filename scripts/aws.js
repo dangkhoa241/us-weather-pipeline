@@ -1,7 +1,7 @@
 // scripts/aws.js
 // Thin wrapper around the AWS SAM CLI for the weather-pipeline stack (infra/template.yaml, infra/samconfig.toml).
 // Usage: npm run aws:validate | aws:deploy | aws:teardown
-// Credentials: the AWS_PROFILE in .env (default weather-dev) from ~/.aws; nothing secret is passed or stored here.
+// Credentials: the deploy profile AWS_DEPLOY_PROFILE (default weather-dev) from ~/.aws; nothing secret is passed or stored here.
 // Cost guard (CLAUDE.md): before every deploy, list the resources with their free-tier limits and get an OK.
 
 import { spawnSync } from "node:child_process";
@@ -11,9 +11,11 @@ import { config } from "../src/config.js";
 const INFRA = new URL("../infra/", import.meta.url);
 const EMAIL = /^[A-Za-z0-9._+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;   // also keeps shell metacharacters out (Windows runs sam via cmd)
 
-const common = ["--profile", config.aws.profile ?? "weather-dev", "--region", config.aws.region];
+const common = ["--profile", config.aws.deployProfile, "--region", config.aws.region];
+// Deploys use the deploy profile from ~/.aws: drop the app's runtime credential settings loaded from .env.
+const { AWS_PROFILE, AWS_SHARED_CREDENTIALS_FILE, AWS_CONFIG_FILE, ...deployEnv } = process.env;
 const sam = (args) => {
-  const res = spawnSync("sam", args, { cwd: INFRA, stdio: "inherit", shell: process.platform === "win32" });
+  const res = spawnSync("sam", args, { cwd: INFRA, stdio: "inherit", shell: process.platform === "win32", env: deployEnv });
   if (res.error) throw new Error(`could not run the SAM CLI (${res.error.message}); install it: docs/SETUP_AWS.md step 5`);
   if (res.status !== 0) process.exit(res.status ?? 1);
 };

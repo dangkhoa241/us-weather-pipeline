@@ -300,7 +300,8 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       HTTPS-only topic policy, email subscription), `npm run aws:validate | aws:deploy | aws:teardown`; tests with a mocked SDK client
 - [ ] Part 1 deploy (after the setup steps are confirmed and the resource list is OK'd)
 - [ ] Part 2: raw API responses also archived to S3 (private, SSE-S3, 30-day lifecycle), RAW_ARCHIVE=s3
-- [ ] Part 3: NWS alerts fetcher as an hourly Lambda (EventBridge) → Atlas + S3, logs 7 days
+- [ ] Part 3: NWS alerts fetcher as an hourly Lambda (EventBridge) → Atlas + S3, logs 7 days; function roles must set
+      `PermissionsBoundary: weather-pipeline-boundary` (the deploy policy refuses roles without it)
 
 ## Cross-cutting
 

@@ -68,6 +68,9 @@ services:
       MONGO_URI: mongodb://mongo:27017
       CLICKHOUSE_URL: http://clickhouse:8123
       REDIS_URL: redis://redis:6379
+      # The runtime AWS profile is mounted at /home/node/.aws (see volumes); host paths from .env don't apply here.
+      AWS_SHARED_CREDENTIALS_FILE: /home/node/.aws/credentials
+      AWS_CONFIG_FILE: /home/node/.aws/config
     depends_on:
       mongo:
         condition: service_healthy
@@ -76,7 +79,8 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      # AWS credentials for NOTIFIER=sns, read-only and only when AWS_CONFIG_DIR is set in .env (else an empty folder).
+      # AWS credentials for NOTIFIER=sns: read-only, only when AWS_CONFIG_DIR is set in .env (else an empty folder).
+      # Point it at a folder holding only the publish-only weather-runtime profile, never the deploy keys.
       - ${AWS_CONFIG_DIR:-./infra/no-aws}:/home/node/.aws:ro
     init: true                   # forwards SIGTERM so `docker compose stop` shuts the watcher down cleanly
     restart: unless-stopped

@@ -41,40 +41,43 @@ a paid plan, so don't.
 Open the account menu (top right of the console) and copy the 12-digit **Account ID**. You'll paste it into the
 policy in the next step. It isn't a secret, but it stays out of the repository: the repo only has `<ACCOUNT_ID>`.
 
-## 2. Create the least-privilege policy
+## 2. Create three policies (boundary, deploy, runtime)
 
-The policy allows exactly what this project uses, only in **us-east-2**, and only on resources named
-`weather-pipeline-*` (plus the bucket AWS SAM creates for uploads). It covers Parts 1–3, so you only set it up once:
+Everything is limited to **us-east-2** and to resources named `weather-pipeline-*` (plus the bucket AWS SAM creates
+for uploads). The policies cover Parts 1–3, so you only set them up once.
 
-| Statement | Why |
-|---|---|
-| `IdentityAndTemplateChecks` | `aws sts get-caller-identity`, `sam validate`, listing stacks and log groups |
-| `CloudFormationStacks`, `SamTransform` | deploy and delete the `weather-pipeline` stack (and SAM's own helper stack) |
-| `SamArtifactBucket` | the `aws-sam-cli-managed-default-*` bucket where SAM uploads code |
-| `Part1SnsAlertsTopic` | create the alerts topic and email subscription; **publish** alerts |
-| `Part2RawArchiveBucket` | create the private, encrypted archive bucket with a 30-day lifecycle; **write** raw responses |
-| `Part3Lambda*`, `Part3ScheduleRules`, `Part3LambdaLogs` | the scheduled Lambda, its role (can only get the AWS logging policy, can only be passed to Lambda), the hourly rule and its log group |
-| `Part3ConfigParameters` | SSM Parameter Store (standard, free) under `/weather-pipeline/` for the Lambda's config, e.g. the Atlas URI as a SecureString |
+| Policy (file in `infra/iam/`) | Attached to | What it allows |
+|---|---|---|
+| **`weather-pipeline-boundary`** ([json](../infra/iam/weather-pipeline-boundary.json)) | every role the stack creates (permissions boundary) | the most a Lambda role can ever do: write its logs, publish to the alerts topic, read/write archive objects, read `/weather-pipeline/` parameters |
+| **`weather-dev-pipeline`** ([json](../infra/iam/weather-dev-policy.json)) | user `weather-dev` (deploys) | deploy/delete the stack with SAM; create roles **only with the boundary attached**; pass roles only to Lambda |
+| **`weather-runtime-pipeline`** ([json](../infra/iam/weather-runtime-policy.json)) | user `weather-runtime` (the app) | `sns:Publish` on the alerts topic; `s3:PutObject` to the archive (Part 2). Nothing else. |
 
-Steps:
-1. Open [`infra/iam/weather-dev-policy.json`](../infra/iam/weather-dev-policy.json) and replace every `<ACCOUNT_ID>`
-   with your account ID. Do this in a copy outside the repo, or undo it before committing.
-2. Console → **IAM → Policies → Create policy → JSON**. Paste the edited JSON and choose **Next**.
-3. Name it **`weather-dev-pipeline`**, then choose **Create policy**.
+Why the boundary: without it, a leaked deploy key could create a `weather-pipeline-*` role with an admin inline policy
+and take over the account. With it, every such role is capped by `weather-pipeline-boundary`. The deploy user
+can't change or remove the boundary.
 
-## 3. Create the IAM user `weather-dev`
+Steps (repeat for each file, **boundary first**, because the deploy policy refers to it):
+1. Open the JSON file and replace every `<ACCOUNT_ID>` with your account ID. Do this in a copy outside the repo,
+   or undo it before committing.
+2. Console → **IAM → Policies → Create policy → JSON**. Paste the edited JSON, then choose **Next**.
+3. Name it exactly as in the table (`weather-pipeline-boundary`, `weather-dev-pipeline`, `weather-runtime-pipeline`),
+   then choose **Create policy**.
 
-1. **IAM → Users → Create user**. User name: **`weather-dev`**.
-   Leave "Provide user access to the AWS Management Console" **unchecked**: this user is for the CLI only.
-2. **Permissions → Attach policies directly**, tick **`weather-dev-pipeline`** (only this one), then
-   **Next → Create user**.
+## 3. Create two IAM users and block public S3 access
 
-## 4. Create an access key (for the CLI)
+1. **IAM → Users → Create user**: **`weather-dev`**. Leave "Provide user access to the AWS Management Console"
+   **unchecked** (CLI only). **Attach policies directly** → only **`weather-dev-pipeline`** → **Create user**.
+2. Again for **`weather-runtime`** with only **`weather-runtime-pipeline`**.
+3. **S3 → Block Public Access settings for this account → Edit** → tick **Block all public access → Save**.
+   It's free, and it means no bucket in this account can ever be made public by mistake.
 
-1. **IAM → Users → weather-dev → Security credentials → Create access key**.
-2. Use case: **Command Line Interface (CLI)**. Tick the confirmation, then choose **Next → Create access key**.
-3. Keep the page open for step 6. **Don't download the .csv** (if you did, delete it after step 6). The secret
-   is shown only once. If you lose it, deactivate the key and create a new one.
+## 4. Create an access key for each user
+
+1. **IAM → Users → weather-dev → Security credentials → Create access key** → use case
+   **Command Line Interface (CLI)** → tick the confirmation → **Create access key**.
+2. Keep the page open for step 6. **Don't download the .csv** (if you did, delete it after step 6). The secret is
+   shown only once; if it's lost, deactivate the key and create a new one.
+3. Repeat for **weather-runtime** when you get to step 6.
 
 ## 5. Install the AWS CLI and AWS SAM CLI on Windows
 
@@ -95,45 +98,51 @@ aws --version     # aws-cli/2.x
 sam --version     # SAM CLI, version 1.x
 ```
 
-## 6. `aws configure` (credentials stay in `~/.aws`)
+## 6. `aws configure` (credentials stay outside the repo)
 
-Use a named profile so these keys are only used when asked for:
+**Deploy profile** (in the default `~/.aws`):
 
 ```powershell
 aws configure --profile weather-dev
-#   AWS Access Key ID:      <paste from step 4>
-#   AWS Secret Access Key:  <paste from step 4>
+#   AWS Access Key ID / Secret Access Key: <from step 4, weather-dev>
 #   Default region name:    us-east-2
 #   Default output format:  json
+aws sts get-caller-identity --profile weather-dev     # ...:user/weather-dev
 ```
 
-This writes `%USERPROFILE%\.aws\credentials` and `%USERPROFILE%\.aws\config`, **outside the repository**. Check it:
+**Runtime profile**, in its own folder `~/.aws-runtime`, so the app and the Docker fetcher never see the deploy keys:
 
 ```powershell
-aws sts get-caller-identity --profile weather-dev
-# "Arn": "arn:aws:iam::<ACCOUNT_ID>:user/weather-dev"
+$env:AWS_SHARED_CREDENTIALS_FILE = "$HOME\.aws-runtime\credentials"
+$env:AWS_CONFIG_FILE = "$HOME\.aws-runtime\config"
+aws configure --profile weather-runtime               # keys from step 4 (weather-runtime), us-east-2, json
+aws sts get-caller-identity --profile weather-runtime # ...:user/weather-runtime
+Remove-Item Env:AWS_SHARED_CREDENTIALS_FILE, Env:AWS_CONFIG_FILE
 ```
 
-Then add these lines to your local **`.env`**. It is git-ignored and holds no secrets; the AWS SDK reads the keys
-from `~/.aws`:
+Then add these lines to your local **`.env`**. It is git-ignored and holds no secrets, only names and paths:
 
 ```dotenv
-AWS_PROFILE=weather-dev
+AWS_PROFILE=weather-runtime
+AWS_SHARED_CREDENTIALS_FILE=C:/Users/<you>/.aws-runtime/credentials
+AWS_CONFIG_FILE=C:/Users/<you>/.aws-runtime/config
+AWS_DEPLOY_PROFILE=weather-dev            # npm run aws:deploy / aws:teardown use ~/.aws with this profile
 AWS_REGION=us-east-2
 ALERT_EMAIL=<your email for SNS alerts>
-# Only if the Docker fetcher should send alerts too: mounts ~/.aws read-only into the container
-AWS_CONFIG_DIR=C:/Users/<you>/.aws
+AWS_CONFIG_DIR=C:/Users/<you>/.aws-runtime   # mounted read-only into the Docker fetcher
 ```
 
 ## 7. Credential rules (enforced)
 
-- Keys live **only** in `~/.aws`. Never put them in `.env`, code, docs, CI or chat.
-- `npm run check:secrets` fails on AWS access key IDs (`AKIA…`, `ASIA…`) and on `aws_secret_access_key` values
+- Keys live **only** in `~/.aws` (deploy) and `~/.aws-runtime` (runtime). Never put them in `.env`, code, docs,
+  CI or chat.
+- `npm run check:secrets` fails on AWS access key IDs (`AKIA…`, `ASIA…`), secret access keys and session tokens
   anywhere in the git history or working tree.
 - `.gitignore` covers `.aws/`, `*accessKeys*.csv` (the console download) and `.aws-sam/` (SAM build output).
-- The Docker fetcher sees `~/.aws` only when `AWS_CONFIG_DIR` is set, and only **read-only**.
-- **Rotate** the key every 90 days: create a new key, run `aws configure --profile weather-dev`, then deactivate
-  and delete the old one. If a key ever leaks, deactivate it first, then check CloudTrail **Event history**.
+- The Docker fetcher gets only `~/.aws-runtime`, read-only, and only when `AWS_CONFIG_DIR` is set. `scripts/aws.js`
+  removes the runtime variables before calling SAM, so deploys always use `weather-dev` from `~/.aws`.
+- **Rotate** both keys every 90 days: create a new key, run `aws configure` for that profile, then deactivate and
+  delete the old key. If a key ever leaks, deactivate it first, then check CloudTrail **Event history**.
 
 ## 8. Done? Tell Claude Code
 
@@ -141,13 +150,13 @@ Claude Code will then:
 1. run `npm run aws:validate` (template lint, no AWS changes);
 2. run `npm run aws:deploy`, which creates the `weather-pipeline` stack (Part 1: the SNS topic and your email subscription);
 3. ask you to **confirm the subscription** from the email AWS sends ("AWS Notification - Subscription Confirmation");
-4. set `NOTIFIER=sns` and `SNS_TOPIC_ARN=<stack output>` in `.env`, and send a test alert.
+4. set `NOTIFIER=sns` and `SNS_TOPIC_ARN=<stack output>` in `.env`, and send a test alert (as `weather-runtime`).
 
 ## Remove everything: `npm run aws:teardown`
 
 Runs `sam delete` for the `weather-pipeline` stack (it asks for confirmation). This deletes every resource the
 stack created, plus the code SAM uploaded. All resources carry the tag `Project=us-weather-pipeline`, so leftovers
-are easy to find in **Resource Groups & Tag Editor**. The IAM user, policy and access key are manual (steps 2–4):
+are easy to find in **Resource Groups & Tag Editor**. The IAM users, policies and access keys are manual (steps 2–4):
 delete them by hand if you're done with AWS.
 
 ## Cost guard (also in CLAUDE.md)
