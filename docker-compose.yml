@@ -71,6 +71,9 @@ services:
       # The runtime AWS profile is mounted at /home/node/.aws (see volumes); host paths from .env don't apply here.
       AWS_SHARED_CREDENTIALS_FILE: /home/node/.aws/credentials
       AWS_CONFIG_FILE: /home/node/.aws/config
+      # NWS alerts come from the AWS Lambda (Stage 6a part 3) and reach this store via sync-atlas;
+      # running them here too would email each new heat alert twice.
+      ALERTS_CRON: "off"
     depends_on:
       mongo:
         condition: service_healthy

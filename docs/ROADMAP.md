@@ -34,7 +34,7 @@ Approved free stack:
 | GitHub Actions | Free on public repos (private: 2,000 min / month) | Jobs stop running | No | — | — |
 | MongoDB, ClickHouse, Redis (Docker) | Self-hosted; limited only by disk | Disk full | No | ~32 MB / day on disk (≈ 12 GB / year), mostly forecast snapshots | local disk only |
 | AWS SNS (Stage 6a part 1, deployed 2026-10-01, us-east-2) | Always free: 1 M publishes, 1,000 email deliveries / month | Free plan: covered by sign-up credits, never billed; credits used up → account closes | No (Free plan) | warn/error only: a few emails / day (< 150 / month) | SNS_MIN_LEVEL=warn; one email per alerts run |
-| AWS Lambda NWS collector (Stage 6a part 3, code ready, not deployed) | Always free: 1 M requests + 400,000 GB-s / month | Free plan: credits; used up → account closes | No (Free plan) | 24 alerts + 8 forecast runs / day ≈ 1,000 invocations, < 10,000 GB-s / month (256 MB; 2.5%) | 5 min timeout, no VPC (no NAT), handler never throws (no retries) |
+| AWS Lambda NWS collector (Stage 6a part 3, deployed 2026-10-02, us-east-2) | Always free: 1 M requests + 400,000 GB-s / month | Free plan: credits; used up → account closes | No (Free plan) | 24 alerts + 8 forecast runs / day ≈ 1,000 invocations, ~8,000 GB-s / month (256 MB; measured 8 s alerts, 88 s forecasts; 2%) | 5 min timeout, no VPC (no NAT), handler never throws (no retries) |
 | Amazon EventBridge rules (part 3) | Scheduled rules: no charge | — | No | 2 rules, 32 invocations / day | hourly at most |
 | CloudWatch Logs (part 3) | Always free: 5 GB ingest + 5 GB storage / month | Free plan: credits | No | < 50 MB / month | 7-day retention |
 | SSM Parameter Store (part 3) | Standard parameters free; SecureString with the AWS-managed key `aws/ssm` (KMS: 20,000 free requests / month) | Standard throughput: throttled, not billed | No | 1 parameter, ≤ ~1,000 reads / month (cold starts) | no customer KMS key |
@@ -135,7 +135,8 @@ Cost follow-ups:
 Accepted for now (personal project: good enough beats perfect). Revisit only if they break something visible.
 - NWS Lambda: a run that hits the 5 min timeout sends no SNS email (only the Lambda error in its logs). It doesn't seed
   locations (Atlas already has them; a new city needs one manual `seed:locations` against Atlas). Heat-alert emails can
-  arrive twice while the local fetcher also runs alerts (Atlas and the local store each see the alert as new).
+  arrive twice if alerts are run locally by hand (`npm run fetch` / `fetch:watch` outside Docker), because Atlas and the
+  local store each see the alert as new. The Docker fetcher has alerts off.
 - S3 raw archive: NWS alerts are kept at most once per hour (they are fetched every 15 min); `om-backfill` is not
   archived; a run's responses for one source stop being archived past 32 MB (only a big history catch-up); skipped
   or failed uploads are logged, not retried.
@@ -325,10 +326,11 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       Atlas URI from an SSM SecureString (aws/ssm key) at cold start; failures → SNS, never thrown (no retries);
       role with the boundary and only ssm:GetParameter / s3:PutObject / sns:Publish / its logs; log group 7 days;
       tests with mocked SSM/store/notifier
-- [ ] Part 3 deploy: dev policy update + SSM parameter by hand (docs/SETUP_AWS.md step 10), `npm run aws:deploy`,
-      test invoke for both modes
-- [ ] Part 3 switch-over: after a day of good scheduled Lambda runs, GitHub NWS workflows → `workflow_dispatch` only;
-      local `RAW_ARCHIVE_MAX_PUTS_PER_DAY=20`
+- [x] Part 3 deploy (2026-10-02): dev policy + SSM parameter by hand (docs/SETUP_AWS.md step 10), `npm run aws:deploy`;
+      test invokes: alerts 157 rows in 8 s, forecast 9,010 rows in 88 s (168 MB peak), both in Atlas `pipeline_runs`
+      and archived to S3
+- [x] Part 3 switch-over: GitHub NWS workflows → `workflow_dispatch` only (manual fallback); local fetcher runs no
+      alerts (`ALERTS_CRON: "off"` in docker-compose; they arrive via sync-atlas); local `RAW_ARCHIVE_MAX_PUTS_PER_DAY=20`
 
 ## Cross-cutting
 

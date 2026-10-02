@@ -1,10 +1,9 @@
-# NWS active alerts → MongoDB Atlas (M0, free) every hour.
+# NWS active alerts → MongoDB Atlas (M0, free), on demand. Normally collected hourly by the AWS Lambda (docs/SETUP_AWS.md step 10).
 # Local Mongo gets the data with `npm run sync:atlas`. Setup: docs/SETUP_CLOUD_COLLECTION.md
 name: NWS alerts
 
 on:
-  schedule:
-    - cron: "23 * * * *"       # off the hour: fewer scheduling delays
+  # Manual fallback only: the schedule moved to AWS Lambda + EventBridge (Stage 6a part 3; GitHub skipped scheduled runs).
   workflow_dispatch: {}
 
 permissions:

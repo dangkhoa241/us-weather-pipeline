@@ -40,7 +40,7 @@ Options:
                            forecast "${config.stage1.forecastCron}", alerts "${config.stage1.alertsCron}",
                            om-forecast "${config.stage1.openMeteoForecastCron}",
                            history "${config.stage1.historyCron}", om-backfill "${config.stage1.omBackfillCron}",
-                           om-baseline "${config.stage1.omBaselineCron}",
+                           om-baseline "${config.stage1.omBaselineCron}"; a cron set to "off" skips that mode,
                            pipeline (sync-atlas + history → Stage 2 → Stage 3) "${config.pipelineCron}"
   -h, --help             show this help
 
@@ -127,7 +127,8 @@ async function watch(opts) {
   const jobOpts = { ...opts, range: {} };
   // sync-atlas and history run inside the pipeline (Stage 1 → 2 → 3) when the default modes are watched.
   const usePipeline = PIPELINE_MODES.every((m) => opts.modes.includes(m));
-  const ownSchedule = opts.modes.filter((m) => !(usePipeline && PIPELINE_MODES.includes(m)));
+  // A cron of "off" turns a mode off in the watcher (e.g. ALERTS_CRON=off: the NWS Lambda collects alerts).
+  const ownSchedule = opts.modes.filter((m) => !(usePipeline && PIPELINE_MODES.includes(m)) && crons[m] !== "off");
 
   await store.connect();
   await ensureCollections(store);

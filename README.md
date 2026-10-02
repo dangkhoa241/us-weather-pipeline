@@ -63,7 +63,7 @@ flowchart LR
     OM["Open-Meteo<br/>history + 5 models"]
   end
   subgraph Cloud["Cloud collection (free tiers)"]
-    GHA["GitHub Actions<br/>every 3 h / hourly"] --> ATLAS[("MongoDB Atlas M0<br/>7-day buffer")]
+    GHA["AWS Lambda + EventBridge<br/>every 3 h / hourly"] --> ATLAS[("MongoDB Atlas M0<br/>7-day buffer")]
   end
   subgraph Local["Docker Compose (self-hosted)"]
     F["Stage 1<br/>fetchWeather.js"] --> M[("MongoDB<br/>raw")]
@@ -89,9 +89,9 @@ flowchart LR
 ## AWS deployment (🚧 in progress, target: mid-October 2026)
 
 > **Status: in progress.** The local Docker stack and the Vercel demo above are what runs today. Deployed on AWS so far
-> (Free plan, us-east-2, one SAM stack in `infra/template.yaml`): SNS email alerts and a 30-day S3 raw archive.
-> Ready to deploy: a Lambda that collects NWS alerts (hourly) and forecasts (every 3 h) on EventBridge schedules into
-> MongoDB Atlas + the archive, replacing the GitHub Actions schedules (GitHub skips scheduled runs). The Atlas URI is an
+> (Free plan, us-east-2, one SAM stack in `infra/template.yaml`): SNS email alerts, a 30-day S3 raw archive, and a
+> Lambda that collects NWS alerts (hourly) and forecasts (every 3 h) on EventBridge schedules into
+> MongoDB Atlas + the archive, replacing the GitHub Actions schedules (GitHub skipped scheduled runs; the workflows stay as a manual fallback). The Atlas URI is an
 > SSM SecureString read at cold start; the role is capped by a permissions boundary. Setup: [docs/SETUP_AWS.md](docs/SETUP_AWS.md).
 
 ```mermaid
@@ -163,7 +163,7 @@ For each key feature, Claude Code built **3 implementations** on separate branch
 
 | Layer | Tools |
 |---|---|
-| Collection | Node.js 18+ (ESM), NWS API, Open-Meteo, node-cron, GitHub Actions |
+| Collection | Node.js 18+ (ESM), NWS API, Open-Meteo, node-cron, AWS Lambda + EventBridge |
 | Storage | MongoDB (raw), ClickHouse (warehouse), Redis (cache), MongoDB Atlas M0 (cloud buffer) |
 | API | Hono, @hono/zod-openapi, Zod, Swagger UI |
 | Dashboard | React 19, TypeScript, Vite, d3-geo / d3-scale / d3-shape, ECharts (sparklines), TanStack Query + Table, Zustand, Tailwind CSS, shadcn/ui |
@@ -201,7 +201,7 @@ More: [cloud collection setup](docs/SETUP_CLOUD_COLLECTION.md), [Vercel demo](do
 | NWS API | No published quota | ~106 requests / 3 h |
 | MongoDB Atlas M0 | 512 MB | ~370 MB with a 7-day retention |
 | Vercel Hobby | 100 GB transfer / month | ~0.5 MB per visit (static snapshot) |
-| GitHub Actions | Free on public repos | Collection + CI |
+| GitHub Actions | Free on public repos | CI (+ manual collection fallback) |
 | MongoDB, ClickHouse, Redis | Self-hosted in Docker | Local disk only |
 
 None of these needs a credit card. Every external service has its limits and overflow behavior documented in the [roadmap](docs/ROADMAP.md).

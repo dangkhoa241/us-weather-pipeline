@@ -1,11 +1,10 @@
-# NWS forecasts → MongoDB Atlas (M0, free) every 3 hours, so collection doesn't need a laptop running.
+# NWS forecasts → MongoDB Atlas (M0, free), on demand. Normally collected every 3 h by the AWS Lambda (docs/SETUP_AWS.md step 10).
 # Local Mongo gets the data with `npm run sync:atlas`. Setup: docs/SETUP_CLOUD_COLLECTION.md
 name: NWS forecasts
 
 on:
-  schedule:
-    - cron: "7 */3 * * *"      # minute 7: GitHub delays jobs scheduled exactly on the hour the most
-  workflow_dispatch: {}        # "Run workflow" button for testing
+  # Manual fallback only: the schedule moved to AWS Lambda + EventBridge (Stage 6a part 3; GitHub skipped scheduled runs).
+  workflow_dispatch: {}
 
 permissions:
   contents: read               # least privilege: the job only needs to read the code
