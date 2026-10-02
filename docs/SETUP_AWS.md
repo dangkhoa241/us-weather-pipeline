@@ -100,6 +100,23 @@ aws --version     # aws-cli/2.x
 sam --version     # SAM CLI, version 1.x
 ```
 
+### Windows / Git Bash
+
+Two things break AWS CLI commands in Git Bash (PowerShell is not affected):
+- **Path rewriting.** Git Bash turns arguments that start with `/` into Windows paths, so `/aws/lambda/...` reaches
+  AWS as `C:/Program Files/Git/aws/lambda/...`. The command then fails with a misleading `AccessDenied` on that wrong
+  resource. Set `MSYS_NO_PATHCONV=1` for commands that take `/aws/...` (or other `/...`) arguments.
+- **Output encoding.** The CLI prints with the Windows code page and crashes on characters like "→" in log lines
+  (`'charmap' codec can't encode character`). Force UTF-8 with `PYTHONIOENCODING=utf-8`.
+
+```bash
+MSYS_NO_PATHCONV=1 PYTHONIOENCODING=utf-8 aws logs tail /aws/lambda/weather-pipeline-nws-collector --since 1h \
+  --profile weather-dev --region us-east-2
+```
+
+`scripts/aws.js` needs neither: it runs `aws`/`sam` without a shell, so nothing rewrites its arguments, and it runs
+no `aws logs` commands.
+
 ## 6. `aws configure` (credentials stay outside the repo)
 
 **Deploy profile** (in the default `~/.aws`):
@@ -278,9 +295,10 @@ runtime policies don't change.
    also lists `cloudfront:CreateDistributionWithTags`, but the IAM console flags it as invalid, so it's left out
    (`CreateDistribution` + `TagResource` cover it).
 
-   The same file has a second statement, `ReadLambdaLogs`. It holds `logs:FilterLogEvents` and `logs:GetLogEvents` on
-   `/aws/lambda/weather-pipeline-*` (for `aws logs tail` in the tests). These two actions were dropped from the console
-   copy of `weather-dev-pipeline` to fit its size limit; the repo copy of that policy still lists them.
+   The same file has a second statement, `ReadLambdaLogs`: `logs:FilterLogEvents` and `logs:GetLogEvents` on
+   `/aws/lambda/weather-pipeline-*` (used by `aws logs tail`). It is redundant, because `weather-dev-pipeline`
+   already grants both actions, but harmless. It was added while chasing an AccessDenied that turned out to be Git
+   Bash rewriting the log group path (see "Windows / Git Bash" below).
 2. `npm run aws:deploy` (review the change set, then `y`). Creating a distribution takes ~5 min.
 3. Test (as `weather-dev`):
 
