@@ -331,6 +331,10 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       and archived to S3
 - [x] Part 3 switch-over: GitHub NWS workflows → `workflow_dispatch` only (manual fallback); local fetcher runs no
       alerts (`ALERTS_CRON: "off"` in docker-compose; they arrive via sync-atlas); local `RAW_ARCHIVE_MAX_PUTS_PER_DAY=20`
+- [x] Part 4 design: live dashboard without the laptop (`docs/analysis/live-dashboard.md`); chose B (S3 + CloudFront
+      static JSON, daily history Lambda, accuracy published locally)
+- [ ] Part 4 build: archive NWS alerts every 3 h (S3 PUTs ~45%), history-updater Lambda, S3 + CloudFront (OAC), backfill,
+      dashboard reads CloudFront with bundled-snapshot fallback, CSP `connect-src`
 
 ## Cross-cutting
 
