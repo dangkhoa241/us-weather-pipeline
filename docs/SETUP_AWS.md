@@ -51,6 +51,7 @@ for uploads). The policies cover Parts 1–3, so you only set them up once.
 |---|---|---|
 | **`weather-pipeline-boundary`** ([json](../infra/iam/weather-pipeline-boundary.json)) | every role the stack creates (permissions boundary) | the most a Lambda role can ever do: write its logs, publish to the alerts topic, read/write archive objects, read `/weather-pipeline/` parameters |
 | **`weather-dev-pipeline`** ([json](../infra/iam/weather-dev-policy.json)) | user `weather-dev` (deploys) | deploy/delete the stack with SAM; create roles **only with the boundary attached**; pass roles only to Lambda |
+| **`weather-dev-cloudfront`** ([json](../infra/iam/weather-dev-cloudfront-policy.json)) | user `weather-dev` (Part 4, step 11) | create/update/delete the dashboard's CloudFront distribution, origin access control and response headers policy (separate because `weather-dev-pipeline` is at IAM's 6,144-character limit) |
 | **`weather-runtime-pipeline`** ([json](../infra/iam/weather-runtime-policy.json)) | user `weather-runtime` (the app) | `sns:Publish` on the alerts topic; `s3:PutObject` to the archive (Part 2). Nothing else. |
 
 Why the boundary: without it, a leaked deploy key could create a `weather-pipeline-*` role with an admin inline policy
@@ -265,10 +266,17 @@ The function's role (with the boundary) may only call `ssm:GetParameter` on the 
 `dashboard/*` (no read, list or delete), `sns:Publish` on the alerts topic, and write its own logs. The boundary and
 runtime policies don't change.
 
-1. **Update `weather-dev-pipeline`** (IAM → Policies → Edit → JSON, `<ACCOUNT_ID>` replaced as in step 2). Add the new
-   statement `Part4CloudFrontDashboard` from [weather-dev-policy.json](../infra/iam/weather-dev-policy.json). It covers
-   create/read/update/delete/tag for CloudFront distributions, origin access controls and response headers policies
-   in this account: exactly the permissions CloudFormation's handlers for these three resource types use.
+1. **Create a fourth policy, `weather-dev-cloudfront`, and attach it to `weather-dev`.** `weather-dev-pipeline` is
+   at IAM's 6,144-character limit for a managed policy, so the CloudFront permissions live in their own file,
+   [weather-dev-cloudfront-policy.json](../infra/iam/weather-dev-cloudfront-policy.json).
+   - IAM → Policies → Create policy → JSON, with `<ACCOUNT_ID>` replaced as in step 2.
+   - Name it `weather-dev-cloudfront`.
+   - IAM → Users → weather-dev → Add permissions → Attach policies directly.
+
+   It covers create/read/update/delete/tag for CloudFront distributions, origin access controls and response headers
+   policies in this account: the permissions CloudFormation's handlers use for these three resource types. The schema
+   also lists `cloudfront:CreateDistributionWithTags`, but the IAM console flags it as invalid, so it's left out
+   (`CreateDistribution` + `TagResource` cover it).
 2. `npm run aws:deploy` (review the change set, then `y`). Creating a distribution takes ~5 min.
 3. Test (as `weather-dev`):
 
