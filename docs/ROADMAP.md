@@ -34,7 +34,7 @@ Approved free stack:
 | GitHub Actions | Free on public repos (private: 2,000 min / month) | Jobs stop running | No | — | — |
 | MongoDB, ClickHouse, Redis (Docker) | Self-hosted; limited only by disk | Disk full | No | ~32 MB / day on disk (≈ 12 GB / year), mostly forecast snapshots | local disk only |
 | AWS SNS (Stage 6a part 1, deployed 2026-10-01, us-east-2) | Always free: 1 M publishes, 1,000 email deliveries / month | Free plan: covered by sign-up credits, never billed; credits used up → account closes | No (Free plan) | warn/error only: a few emails / day (< 150 / month) | SNS_MIN_LEVEL=warn; one email per alerts run |
-| AWS S3 raw archive (Stage 6a part 2, not deployed yet) | 12-month free tier: 5 GB storage, 2,000 PUT + 20,000 GET / month (Free plan: over that is paid from the credits, never billed) | Free plan: credits; used up → account closes | No (Free plan) | ~38 PUTs / day ≈ 1,140 / month (57%); ~175 MB / month gzipped, held at ~175 MB by the 30-day rule (3.5%); GET only by hand | one object per source and run; ≤ 1 per source per hour; hard cap RAW_ARCHIVE_MAX_PUTS_PER_DAY=50 (≤ 1,500 / month); 32 MB per source and run |
+| AWS S3 raw archive (Stage 6a part 2, deployed 2026-10-02, us-east-2) | 12-month free tier: 5 GB storage, 2,000 PUT + 20,000 GET / month (Free plan: over that is paid from the credits, never billed) | Free plan: credits; used up → account closes | No (Free plan) | ~38 PUTs / day ≈ 1,140 / month (57%); ~175 MB / month gzipped, held at ~175 MB by the 30-day rule (3.5%); GET only by hand | one object per source and run; ≤ 1 per source per hour; hard cap RAW_ARCHIVE_MAX_PUTS_PER_DAY=50 (≤ 1,500 / month); 32 MB per source and run |
 
 AWS (Stage 6a, docs/SETUP_AWS.md; cost guard in CLAUDE.md): **Free plan** account (new sign-up experience, until 2027-04-02).
 No charges are possible: usage above the always-free allowances is paid from the sign-up credits ($100 + up to $100), and
@@ -311,7 +311,8 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       Stage 1 run, PUT caps in `api_usage`, upload failures only logged; bucket in `infra/template.yaml` (private,
       Block Public Access, SSE-S3, HTTPS only, versioning off, 30-day expiry); runtime `s3:PutObject` on that bucket
       only; teardown empties the bucket; tests with a mocked S3 client
-- [ ] Part 2 deploy (policies updated by hand: docs/SETUP_AWS.md step 9), then RAW_ARCHIVE=s3 + RAW_ARCHIVE_BUCKET in `.env`
+- [x] Part 2 deploy (policies updated by hand: docs/SETUP_AWS.md step 9), RAW_ARCHIVE=s3 + RAW_ARCHIVE_BUCKET in `.env`;
+      first object verified 2026-10-02 (nws-forecast run: 106 responses, 235 KB)
 - [ ] Part 3: NWS alerts fetcher as an hourly Lambda (EventBridge) → Atlas + S3, logs 7 days; function roles must set
       `PermissionsBoundary: weather-pipeline-boundary` (the deploy policy refuses roles without it)
 
