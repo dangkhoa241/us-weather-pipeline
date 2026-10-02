@@ -1,0 +1,18 @@
+# AWS SAM settings for the weather-pipeline stack (no secrets here; the alert email is passed at deploy time).
+version = 0.1
+
+[default.global.parameters]
+stack_name = "weather-pipeline"
+region = "us-east-2"
+profile = "weather-dev"
+
+[default.validate.parameters]
+lint = true
+
+[default.deploy.parameters]
+resolve_s3 = true
+s3_prefix = "weather-pipeline"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true            # SAM shows the change set and waits for "y" before changing anything
+fail_on_empty_changeset = false
+tags = "Project=\"us-weather-pipeline\""

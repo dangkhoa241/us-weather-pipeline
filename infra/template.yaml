@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >-
+  us-weather-pipeline on AWS (Free plan, us-east-2). Part 1: SNS topic for pipeline failures and heat alerts,
+  with an email subscription. Every resource gets the stack tag Project=us-weather-pipeline (samconfig.toml).
+  Remove everything with `npm run aws:teardown`.
+
+Parameters:
+  AlertEmail:
+    Type: String
+    NoEcho: true
+    AllowedPattern: "^[A-Za-z0-9._+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"
+    ConstraintDescription: must be an email address
+    Description: Receives the alerts (AWS sends a confirmation email first). Passed by `npm run aws:deploy` from ALERT_EMAIL in .env.
+
+Resources:
+  # Free tier: 1,000 email deliveries and 1 M publishes / month. Expected: a few emails / day (warn + error only).
+  # Not encrypted with KMS: messages are public NWS alerts and pipeline error summaries, and the cost guard rules
+  # out customer-managed keys; transport is HTTPS-only (policy below).
+  AlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: weather-pipeline-alerts
+      DisplayName: Weather pipeline
+
+  AlertsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics: [!Ref AlertsTopic]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: OwnAccountOnly
+            Effect: Allow
+            Principal: { AWS: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:root" }
+            Action: [sns:Publish, sns:Subscribe, sns:GetTopicAttributes, sns:ListSubscriptionsByTopic]
+            Resource: !Ref AlertsTopic
+          - Sid: HttpsOnly
+            Effect: Deny
+            Principal: "*"
+            Action: sns:Publish
+            Resource: !Ref AlertsTopic
+            Condition: { Bool: { "aws:SecureTransport": "false" } }
+
+  AlertsEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref AlertsTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+
+Outputs:
+  AlertsTopicArn:
+    Description: Put this in .env as SNS_TOPIC_ARN (with NOTIFIER=sns)
+    Value: !Ref AlertsTopic

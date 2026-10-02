@@ -28,7 +28,7 @@ export const JOBS = {
   "om-forecast": (store, locations, run) => fetchOpenMeteoForecasts(store, locations, run),
   "om-backfill": (store, locations, run, opts) => backfillOpenMeteoRuns(store, locations, run, { days: opts.days }),
   "om-baseline": (store, locations, run, opts) => backfillBestMatchBaseline(store, locations, run, { days: opts.days }),
-  alerts: (store, locations, run) => fetchAlerts(store, locations, run),
+  alerts: (store, locations, run, opts) => fetchAlerts(store, locations, run, opts.notifier),
   "sync-atlas": (store, locations, run) => syncFromAtlas(store, run),
 };
 
@@ -38,7 +38,7 @@ export async function runMode(mode, store, notifier, opts) {
   let summary;
   try {
     const locations = mode === "sync-atlas" ? [] : await loadLocations(store, opts.locationIds);
-    await JOBS[mode](store, locations, run, opts);
+    await JOBS[mode](store, locations, run, { ...opts, notifier });
     summary = await run.finish();
   } catch (err) {
     summary = await run.finish(err);

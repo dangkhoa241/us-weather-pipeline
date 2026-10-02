@@ -75,6 +75,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      # AWS credentials for NOTIFIER=sns, read-only and only when AWS_CONFIG_DIR is set in .env (else an empty folder).
+      - ${AWS_CONFIG_DIR:-./infra/no-aws}:/home/node/.aws:ro
     init: true                   # forwards SIGTERM so `docker compose stop` shuts the watcher down cleanly
     restart: unless-stopped
     logging:

@@ -1,4 +1,4 @@
-// Notifier interface: sends pipeline events and weather alerts (console now; Discord / SNS later).
+// Notifier interface: sends pipeline events and weather alerts (console, or Amazon SNS email with NOTIFIER=sns).
 
 export class Notifier {
   /**

@@ -97,4 +97,15 @@ export const config = Object.freeze({
   discord: {
     webhookUrl: env.DISCORD_WEBHOOK_URL || null,
   },
+
+  // AWS (Stage 6, docs/SETUP_AWS.md). Credentials are never configured here: the AWS SDK reads them from ~/.aws
+  // for AWS_PROFILE (the SDK reads AWS_PROFILE / AWS_REGION from the environment itself; listed for clarity).
+  aws: {
+    profile: env.AWS_PROFILE || null,
+    region: env.AWS_REGION || "us-east-2",
+    snsTopicArn: env.SNS_TOPIC_ARN || null,       // output of the weather-pipeline stack (NOTIFIER=sns)
+    snsMinLevel: env.SNS_MIN_LEVEL || "warn",      // info | warn | error: lowest level that is emailed
+    alertEmail: env.ALERT_EMAIL || null,           // SNS email subscription, passed at deploy time only
+    stackName: env.AWS_STACK_NAME || "weather-pipeline",
+  },
 });

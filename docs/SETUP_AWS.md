@@ -30,6 +30,7 @@ When you're done, tell Claude Code and it will deploy Part 1 with `npm run aws:d
 | Amazon CloudWatch Logs | Part 3: Lambda logs (7-day retention) | ✅ listed | (CloudWatch: no cross-account / cross-Region dashboards) |
 | AWS CloudFormation | AWS SAM deploys through it | ✅ listed | no StackSets |
 | AWS IAM, AWS STS | the `weather-dev` user, `aws sts get-caller-identity` | ✅ listed | — |
+| AWS Systems Manager (Parameter Store) | Part 3: config/secrets (standard parameters) | ✅ listed | (multi-account multi-Region data syncs) |
 
 Not on the new experience: IAM Identity Center, IAM Access Analyzer and AWS Organizations. That's why this guide
 uses a plain IAM user with an access key for the CLI. Joining AWS Organizations would also switch the account to
@@ -53,6 +54,7 @@ The policy allows exactly what this project uses, only in **us-east-2**, and onl
 | `Part1SnsAlertsTopic` | create the alerts topic and email subscription; **publish** alerts |
 | `Part2RawArchiveBucket` | create the private, encrypted archive bucket with a 30-day lifecycle; **write** raw responses |
 | `Part3Lambda*`, `Part3ScheduleRules`, `Part3LambdaLogs` | the scheduled Lambda, its role (can only get the AWS logging policy, can only be passed to Lambda), the hourly rule and its log group |
+| `Part3ConfigParameters` | SSM Parameter Store (standard, free) under `/weather-pipeline/` for the Lambda's config, e.g. the Atlas URI as a SecureString |
 
 Steps:
 1. Open [`infra/iam/weather-dev-policy.json`](../infra/iam/weather-dev-policy.json) and replace every `<ACCOUNT_ID>`
@@ -141,4 +143,18 @@ Claude Code will then:
 3. ask you to **confirm the subscription** from the email AWS sends ("AWS Notification - Subscription Confirmation");
 4. set `NOTIFIER=sns` and `SNS_TOPIC_ARN=<stack output>` in `.env`, and send a test alert.
 
-To remove everything later: `sam delete --stack-name weather-pipeline --profile weather-dev --region us-east-2`.
+## Remove everything: `npm run aws:teardown`
+
+Runs `sam delete` for the `weather-pipeline` stack (it asks for confirmation). This deletes every resource the
+stack created, plus the code SAM uploaded. All resources carry the tag `Project=us-weather-pipeline`, so leftovers
+are easy to find in **Resource Groups & Tag Editor**. The IAM user, policy and access key are manual (steps 2–4):
+delete them by hand if you're done with AWS.
+
+## Cost guard (also in CLAUDE.md)
+
+- Free plan only; anything that needs a paid plan → stop and ask.
+- Never: NAT Gateway, EC2, public IPv4 / Elastic IPs, load balancers, RDS, KMS customer-managed keys, Secrets Manager,
+  more than 10 CloudWatch custom metrics, or anything without a free tier.
+- Always: S3 with SSE-S3 + a lifecycle rule; SSM Parameter Store (standard); 7-day log retention; Lambda 128–256 MB
+  with short timeouts; EventBridge at most hourly; tag `Project=us-weather-pipeline`.
+- Before every `sam deploy`: a list of the resources, their free-tier limits and the expected monthly use, and your OK.

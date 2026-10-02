@@ -2,15 +2,19 @@
 
 import { config } from "../../config.js";
 import { ConsoleNotifier } from "./consoleNotifier.js";
+import { SnsNotifier } from "./snsNotifier.js";
 
 export function createNotifier(kind = config.adapters.notifier) {
   switch (kind) {
     case "console":
       return new ConsoleNotifier();
+    case "sns":
+      return new SnsNotifier({
+        topicArn: config.aws.snsTopicArn, region: config.aws.region, minLevel: config.aws.snsMinLevel, pipelineName: config.pipelineName,
+      });
     // case "discord": return new DiscordNotifier(config.discord);
-    // case "sns":     return new SnsNotifier(config.sns);   // optional AWS phase
     default:
-      throw new Error(`Unknown NOTIFIER "${kind}". Supported: console`);
+      throw new Error(`Unknown NOTIFIER "${kind}". Supported: console, sns`);
   }
 }
 

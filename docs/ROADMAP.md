@@ -33,11 +33,16 @@ Approved free stack:
 | Discord webhook | ~30 messages / min per webhook | 429 | No | a few / day | a few / day |
 | GitHub Actions | Free on public repos (private: 2,000 min / month) | Jobs stop running | No | — | — |
 | MongoDB, ClickHouse, Redis (Docker) | Self-hosted; limited only by disk | Disk full | No | ~32 MB / day on disk (≈ 12 GB / year), mostly forecast snapshots | local disk only |
+| AWS SNS (Stage 6a part 1, not deployed yet) | Always free: 1 M publishes, 1,000 email deliveries / month | Free plan: covered by sign-up credits, never billed; credits used up → account closes | No (Free plan) | warn/error only: a few emails / day (< 150 / month) | SNS_MIN_LEVEL=warn; one email per alerts run |
 
-AWS (in progress, target mid-October 2026; README "AWS deployment"): always-free allowances: Lambda 1 M requests + 400,000 GB-s / month,
-DynamoDB 25 GB, SNS 1 M publishes, CloudFront 1 TB transfer + 10 M requests / month, EventBridge Scheduler 14 M invocations / month.
-S3 is not always free (12-month tier or sign-up credits, depending on the account): keep it to a few hundred MB with a lifecycle rule.
-A credit card is required to open an AWS account; set a $1 budget alert before deploying anything, and re-check these limits at sign-up.
+AWS (Stage 6a, docs/SETUP_AWS.md; cost guard in CLAUDE.md): **Free plan** account (new sign-up experience, until 2027-04-02).
+No charges are possible: usage above the always-free allowances is paid from the sign-up credits ($100 + up to $100), and
+the account **closes automatically** when the credits run out or the plan ends (data kept 90 days), unless upgraded.
+So AWS only holds copies (alert emails, a 30-day raw archive, one Lambda); the local stack stays primary, and the
+infrastructure is code (`infra/template.yaml`) to redeploy elsewhere. All planned services are on the Free-plan list
+(SNS, S3, Lambda, EventBridge, CloudWatch Logs, CloudFormation, IAM, SSM; checked 2026-10-02). Planned allowances:
+Lambda 1 M requests + 400,000 GB-s / month, CloudWatch Logs 5 GB, EventBridge Scheduler 14 M invocations / month;
+S3: assume it draws on the credits (not verified as always free): keep it to a few hundred MB with the 30-day lifecycle rule.
 Deploy-target notes (not in use yet): Oracle Cloud Always Free requires a credit card to sign up.
 Atlas M0 holds only the last 7 days of NWS data (see the table); the full raw store stays local. The BigQuery sandbox (no card) expires tables after 60 days.
 
@@ -284,6 +289,18 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
 - [ ] Pipeline Ops page
 - [x] Dark mode (follows the system, toggle stored per browser), inline errors (no `alert()`), missing data shown as gaps
 - [ ] Freshness badge
+
+## Stage 6a – AWS, part 1 (Free plan; docs/SETUP_AWS.md, cost guard in CLAUDE.md)
+
+- [x] Setup guide: `weather-dev` IAM user (CLI only) with a least-privilege policy (`infra/iam/weather-dev-policy.json`),
+      AWS CLI + SAM CLI on Windows, `aws configure --profile weather-dev`; keys only in `~/.aws`;
+      `check:secrets` catches AWS key IDs, secret keys and session tokens
+- [x] Part 1 code: `SnsNotifier` (NOTIFIER=sns; warn/error emailed, failures never break the pipeline, credentials
+      redacted), heat alerts (new NWS heat alerts for tracked cities, one email per run), SAM template (SNS topic,
+      HTTPS-only topic policy, email subscription), `npm run aws:validate | aws:deploy | aws:teardown`; tests with a mocked SDK client
+- [ ] Part 1 deploy (after the setup steps are confirmed and the resource list is OK'd)
+- [ ] Part 2: raw API responses also archived to S3 (private, SSE-S3, 30-day lifecycle), RAW_ARCHIVE=s3
+- [ ] Part 3: NWS alerts fetcher as an hourly Lambda (EventBridge) → Atlas + S3, logs 7 days
 
 ## Cross-cutting
 

@@ -9,7 +9,8 @@
         "cloudformation:ValidateTemplate",
         "cloudformation:GetTemplateSummary",
         "cloudformation:ListStacks",
-        "logs:DescribeLogGroups"
+        "logs:DescribeLogGroups",
+        "ssm:DescribeParameters"
       ],
       "Resource": "*"
     },
@@ -154,10 +155,15 @@
     {
       "Sid": "Part3AttachOnlyLambdaLoggingPolicy",
       "Effect": "Allow",
-      "Action": ["iam:AttachRolePolicy", "iam:DetachRolePolicy"],
+      "Action": [
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy"
+      ],
       "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/weather-pipeline-*",
       "Condition": {
-        "ArnEquals": { "iam:PolicyARN": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" }
+        "ArnEquals": {
+          "iam:PolicyARN": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        }
       }
     },
     {
@@ -165,7 +171,11 @@
       "Effect": "Allow",
       "Action": "iam:PassRole",
       "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/weather-pipeline-*",
-      "Condition": { "StringEquals": { "iam:PassedToService": "lambda.amazonaws.com" } }
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "lambda.amazonaws.com"
+        }
+      }
     },
     {
       "Sid": "Part3ScheduleRules",
@@ -200,6 +210,20 @@
         "arn:aws:logs:us-east-2:<ACCOUNT_ID>:log-group:/aws/lambda/weather-pipeline-*",
         "arn:aws:logs:us-east-2:<ACCOUNT_ID>:log-group:/aws/lambda/weather-pipeline-*:*"
       ]
+    },
+    {
+      "Sid": "Part3ConfigParameters",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:PutParameter",
+        "ssm:DeleteParameter",
+        "ssm:AddTagsToResource",
+        "ssm:RemoveTagsFromResource",
+        "ssm:ListTagsForResource"
+      ],
+      "Resource": "arn:aws:ssm:us-east-2:<ACCOUNT_ID>:parameter/weather-pipeline/*"
     }
   ]
 }
