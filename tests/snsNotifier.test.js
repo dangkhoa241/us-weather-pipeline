@@ -49,9 +49,10 @@ describe("SNS message formatting", () => {
   });
 
   it("redacts credentials from connection strings in titles, messages and data", () => {
-    expect(redact("connect mongodb+srv://weather:s3cret@cluster0.example.net/db failed")).toBe("connect mongodb+srv://***:***@cluster0.example.net/db failed");
-    const body = messageOf("p", { level: "error", title: "t", message: "redis://u:p@host:6379 down", data: { uri: "mongodb://a:b@h" } }, new Date("2026-10-02T00:00:00Z"));
-    expect(body).not.toMatch(/u:p@|a:b@/);
+    // Placeholder passwords (<password>) so check:secrets doesn't flag the test itself.
+    expect(redact("connect mongodb+srv://weather:<password>@cluster0.example.net/db failed")).toBe("connect mongodb+srv://***:***@cluster0.example.net/db failed");
+    const body = messageOf("p", { level: "error", title: "t", message: "redis://user:<password>@host:6379 down", data: { uri: "mongodb://admin:<db_password>@h" } }, new Date("2026-10-02T00:00:00Z"));
+    expect(body).not.toMatch(/user:|admin:|<password>|<db_password>/);
     expect(body).toContain("-- p, error, 2026-10-02T00:00:00.000Z");
   });
 });

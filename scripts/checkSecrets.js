@@ -9,7 +9,9 @@ const NOREPLY = "64240183+dangkhoa241@users.noreply.github.com";
 
 // Placeholders and local development defaults that are fine to publish.
 // "hunter2" is the well-known fake password used in tests/api.test.js to prove secrets never reach API responses.
-const ALLOWED_PASSWORDS = new Set(["weather", "...", "password", "<db_password>", "<password>", "hunter2"]);
+// "***" is the redaction marker (src/adapters/notifier/snsNotifier.js). "s3cret", "p" and "b" are fake passwords from
+// the first version of tests/snsNotifier.test.js (commit 7d4f6b8, already pushed; main is never rewritten).
+const ALLOWED_PASSWORDS = new Set(["weather", "...", "password", "<db_password>", "<password>", "hunter2", "***", "s3cret", "p", "b"]);
 // Also references instead of values: ${VAR}, ${VAR:-default}, env.VAR, process.env.VAR, secrets.X.
 const isPlaceholder = (value) =>
   ALLOWED_PASSWORDS.has(value) || /^<.*>$/.test(value) || /^\$\{/.test(value) || /^(process\.)?env\.|^secrets\./.test(value);
