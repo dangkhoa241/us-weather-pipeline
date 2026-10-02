@@ -139,7 +139,11 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
 - AWS Free plan ends 2027-04-02: the account then closes unless upgraded (needs my OK), and AWS deletes the data
   after 90 days. The Vercel dashboard doesn't depend on AWS (static snapshot); once Part 4 is built, it falls back to
   the bundled snapshot when CloudFront is unavailable. NWS collection would fall back to the manual GitHub workflows.
-- The dashboard is not live yet (Part 4 not built): it shows the last exported snapshot.
+- The dashboard is not live yet (Part 4 built but not deployed: CloudFront needs account verification): it shows the
+  last exported snapshot.
+- Part 4, once live: the bundled snapshot must be re-exported at least every ~55 days (`recent.json` covers 60 days);
+  forecast accuracy stays as of the bundled snapshot, and the year-to-date preset finds no bundled accuracy after the
+  live data moves on; an NWS alert text containing a `FORBIDDEN` word (e.g. "atlas") blocks that run's `alerts.json`.
 - NWS Lambda: a run that hits the 5 min timeout sends no SNS email (only the Lambda error in its logs). It doesn't seed
   locations (Atlas already has them; a new city needs one manual `seed:locations` against Atlas). Heat-alert emails can
   arrive twice if alerts are run locally by hand (`npm run fetch` / `fetch:watch` outside Docker), because Atlas and the
@@ -343,8 +347,15 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       static JSON, daily history Lambda, accuracy published locally)
 - [x] Archive NWS alerts once per 3-hour UTC slot; Lambda cap 16 / day (deployed 2026-10-02); local fetcher NWS
       forecast off (`FORECAST_CRON: "off"`, Lambda + sync-atlas), local cap 10 / day → S3 PUTs ~33% (≤ 40% by caps)
-- [ ] Part 4 build: history-updater Lambda, S3 + CloudFront (OAC), backfill,
-      dashboard reads CloudFront with bundled-snapshot fallback, CSP `connect-src`
+- [x] Part 4 code (2026-10-02): Lambda `weather-pipeline-dashboard-publisher` (recent.json daily, forecasts.json +
+      alerts.json every 3 h → `dashboard/` in the raw bucket, PUT cap 17 / day), CloudFront + OAC (bucket policy:
+      this distribution, `dashboard/*` only), CORS response headers policy (Vercel + localhost), dashboard live-first
+      with per-file bundled fallback and a Live / Snapshot badge; deploy permissions in `weather-dev-cloudfront`;
+      S3 PUTs ~59% expected, ≤ 67% at all caps. Simplified from the design: no monthly city files and no backfill
+      (`recent.json` covers 60 days over the bundled snapshot)
+- [ ] Part 4 deploy: **blocked** — the first deploy (2026-10-02) was refused by CloudFront ("Your account must be
+      verified before you can add new CloudFront resources"); the stack rolled back cleanly. Needs a (free) AWS Support
+      case to verify the account. Then: deploy, invoke, set `LIVE_DATA_URL` + CSP `connect-src`, confirm "Live"
 
 ## Cross-cutting
 
