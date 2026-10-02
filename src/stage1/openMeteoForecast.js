@@ -160,6 +160,7 @@ export async function fetchOpenMeteoForecasts(store, locations, run) {
       }
       const fetchedAt = new Date();
       const data = await openMeteoGet(`${FORECAST_URL}?${params}`, { cost: requestWeight(models.length) });
+      store.addRawResponse("open-meteo-forecast", `${FORECAST_URL}?${params}`, data);
       const meta = { etl_batch_id: run.etlBatchId, source_timestamp: fetchedAt, fetched_at: fetchedAt };
       const counts = [];
       for (const model of models) {

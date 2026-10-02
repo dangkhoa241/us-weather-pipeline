@@ -101,6 +101,7 @@ export async function backfillBestMatchBaseline(store, locations, run, { days = 
       });
       const fetchedAt = new Date();
       const data = await openMeteoGet(`${PREVIOUS_RUNS_URL}?${params}`, { cost: requestWeight(chunkDays) });
+      store.addRawResponse("open-meteo-baseline", `${PREVIOUS_RUNS_URL}?${params}`, data);
       const meta = { etl_batch_id: run.etlBatchId, source_timestamp: fetchedAt, fetched_at: fetchedAt };
       const docs = toSnapshots(location, data.hourly ?? { time: [] }, meta);
       const result = docs.length ? await store.upsertMany(SNAPSHOTS.name, docs, SNAPSHOTS.uniqueKey) : {};

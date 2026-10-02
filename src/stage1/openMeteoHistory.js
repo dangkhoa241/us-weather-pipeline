@@ -50,7 +50,7 @@ function* chunks(fromDay, toDay_) {
   }
 }
 
-async function fetchChunk(location, from, to, days, budget) {
+async function fetchChunk(store, location, from, to, days, budget) {
   await budget.reserve(requestWeight(days));
   const params = new URLSearchParams({
     latitude: location.lat,
@@ -62,6 +62,7 @@ async function fetchChunk(location, from, to, days, budget) {
     wind_speed_unit: "ms",
   });
   const data = await openMeteoGet(`${ARCHIVE_URL}?${params}`, { cost: requestWeight(days) });
+  store.addRawResponse("open-meteo-history", `${ARCHIVE_URL}?${params}`, data);
   return data.hourly ?? { time: [] };
 }
 
@@ -118,7 +119,7 @@ export async function fetchHistory(store, locations, run, { from, to } = {}) {
 
       for (const [chunkFrom, chunkTo, days] of chunks(start, end)) {
         const fetchedAt = new Date();
-        const hourly = await fetchChunk(location, chunkFrom, chunkTo, days, budget);
+        const hourly = await fetchChunk(store, location, chunkFrom, chunkTo, days, budget);
         const meta = { etl_batch_id: run.etlBatchId, source_timestamp: fetchedAt, fetched_at: fetchedAt };
         const { rows, trimmed } = toRows(location, hourly, meta);
         const result = rows.length ? await store.upsertMany(OBS.name, rows, OBS.uniqueKey) : {};

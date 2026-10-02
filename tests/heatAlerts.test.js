@@ -24,12 +24,14 @@ describe("heat alerts → Notifier", () => {
     const store = {
       findOne: vi.fn(async (_c, { id }) => (id === "a2" ? { id } : null)),
       upsertMany: vi.fn(async (_c, docs) => ({ inserted: docs.length, updated: 0, unchanged: 0 })),
+      addRawResponse: vi.fn(),
     };
     const run = { etlBatchId: "b-1", add: vi.fn(), error: vi.fn() };
     const notifier = { notify: vi.fn(async () => {}) };
     vi.spyOn(console, "log").mockImplementation(() => {});
     await fetchAlerts(store, locations, run, notifier);
     expect(run.error).not.toHaveBeenCalled();
+    expect(store.addRawResponse).toHaveBeenCalledWith("nws-alerts", expect.stringContaining("area=AZ%2CCA"), expect.any(Object));
     expect(notifier.notify).toHaveBeenCalledTimes(1);
     expect(notifier.notify).toHaveBeenCalledWith({
       level: "warn",

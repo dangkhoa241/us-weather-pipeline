@@ -71,7 +71,9 @@ export async function fetchAlerts(store, locations, run, notifier) {
 
   try {
     const fetchedAt = new Date();
-    const data = await nwsGet(`${ACTIVE_URL}?${new URLSearchParams({ area: states.join(",") })}`);
+    const url = `${ACTIVE_URL}?${new URLSearchParams({ area: states.join(",") })}`;
+    const data = await nwsGet(url);
+    store.addRawResponse("nws-alerts", url, data);
     const sourceTimestamp = toDate(data.updated) ?? fetchedAt;
     const meta = { etl_batch_id: run.etlBatchId, source_timestamp: sourceTimestamp, fetched_at: fetchedAt };
     const docs = (data.features ?? []).map((f) => toAlert(f, locationsByZone, meta));

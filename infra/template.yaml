@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >-
   us-weather-pipeline on AWS (Free plan, us-east-2). Part 1: SNS topic for pipeline failures and heat alerts,
-  with an email subscription. Every resource gets the stack tag Project=us-weather-pipeline (samconfig.toml).
+  with an email subscription. Part 2: private S3 bucket with a 30-day copy of the raw API responses. Every resource gets the stack tag Project=us-weather-pipeline (samconfig.toml).
   Remove everything with `npm run aws:teardown`.
 
 Parameters:
@@ -49,7 +49,57 @@ Resources:
       Protocol: email
       Endpoint: !Ref AlertEmail
 
+  # Part 2: raw API responses (RAW_ARCHIVE=s3), one gzipped object per source and Stage 1 run.
+  # Expected: ~38 PUTs / day (capped at RAW_ARCHIVE_MAX_PUTS_PER_DAY=50, S3 free tier 2,000 / month) and
+  # ~175 MB stored (30-day lifecycle; free tier 5 GB). Versioning stays off, so a deleted object is gone.
+  # `npm run aws:teardown` empties the bucket before deleting the stack.
+  RawArchiveBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub "weather-pipeline-raw-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced   # ACLs disabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }   # SSE-S3 (no KMS)
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteAfter30Days
+            Status: Enabled
+            Prefix: ""
+            ExpirationInDays: 30
+            AbortIncompleteMultipartUpload: { DaysAfterInitiation: 1 }
+      Tags:
+        - { Key: Project, Value: us-weather-pipeline }
+
+  RawArchiveBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref RawArchiveBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: HttpsOnly
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt RawArchiveBucket.Arn
+              - !Sub "${RawArchiveBucket.Arn}/*"
+            Condition: { Bool: { "aws:SecureTransport": "false" } }
+
 Outputs:
   AlertsTopicArn:
     Description: Put this in .env as SNS_TOPIC_ARN (with NOTIFIER=sns)
     Value: !Ref AlertsTopic
+  RawArchiveBucketName:
+    Description: Put this in .env as RAW_ARCHIVE_BUCKET (with RAW_ARCHIVE=s3)
+    Value: !Ref RawArchiveBucket

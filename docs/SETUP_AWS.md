@@ -152,9 +152,28 @@ Claude Code will then:
 3. ask you to **confirm the subscription** from the email AWS sends ("AWS Notification - Subscription Confirmation");
 4. set `NOTIFIER=sns` and `SNS_TOPIC_ARN=<stack output>` in `.env`, and send a test alert (as `weather-runtime`).
 
+## 9. Part 2: S3 raw archive
+
+The stack adds a private bucket `weather-pipeline-raw-<ACCOUNT_ID>`: Block Public Access on, ACLs disabled, SSE-S3,
+HTTPS only, versioning off, objects deleted after 30 days. Stage 1 uploads one gzipped NDJSON file per source and run
+(`<source>/<yyyy>/<mm>/<dd>/<HHMMSS>Z-<batch>.json.gz`, one `{ url, fetched_at, body }` per line). The bulk
+`om-backfill` catch-up is not archived.
+
+1. **Update two policies by hand** (IAM → Policies → the policy → **Edit** → JSON; replace `<ACCOUNT_ID>` as in step 2):
+   - `weather-dev-pipeline`: the Part 2 statement now also allows `s3:DeleteObject`, so `npm run aws:teardown` can
+     empty the bucket before deleting it.
+   - `weather-runtime-pipeline`: `s3:PutObject` is narrowed from `weather-pipeline-raw-*/*` to your bucket
+     `weather-pipeline-raw-<ACCOUNT_ID>/*`.
+2. `npm run aws:deploy` (review the change set, then `y`).
+3. In `.env`: `RAW_ARCHIVE=s3` and `RAW_ARCHIVE_BUCKET=<RawArchiveBucketName output>`; restart the fetcher
+   (`docker compose up -d fetcher`).
+4. After the next forecast run, the log shows `[archive:s3] nws-forecast/... : 106 response(s), ... KB`. A failed
+   upload only logs a warning; the pipeline goes on.
+
 ## Remove everything: `npm run aws:teardown`
 
-Runs `sam delete` for the `weather-pipeline` stack (it asks for confirmation). This deletes every resource the
+Empties the raw archive bucket (`aws s3 rm --recursive`; CloudFormation can't delete a non-empty bucket), then runs
+`sam delete` for the `weather-pipeline` stack (it asks for confirmation). This deletes every resource the
 stack created, plus the code SAM uploaded. All resources carry the tag `Project=us-weather-pipeline`, so leftovers
 are easy to find in **Resource Groups & Tag Editor**. The IAM users, policies and access keys are manual (steps 2–4):
 delete them by hand if you're done with AWS.

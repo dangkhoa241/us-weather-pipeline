@@ -34,6 +34,7 @@ Approved free stack:
 | GitHub Actions | Free on public repos (private: 2,000 min / month) | Jobs stop running | No | — | — |
 | MongoDB, ClickHouse, Redis (Docker) | Self-hosted; limited only by disk | Disk full | No | ~32 MB / day on disk (≈ 12 GB / year), mostly forecast snapshots | local disk only |
 | AWS SNS (Stage 6a part 1, deployed 2026-10-01, us-east-2) | Always free: 1 M publishes, 1,000 email deliveries / month | Free plan: covered by sign-up credits, never billed; credits used up → account closes | No (Free plan) | warn/error only: a few emails / day (< 150 / month) | SNS_MIN_LEVEL=warn; one email per alerts run |
+| AWS S3 raw archive (Stage 6a part 2, not deployed yet) | 12-month free tier: 5 GB storage, 2,000 PUT + 20,000 GET / month (Free plan: over that is paid from the credits, never billed) | Free plan: credits; used up → account closes | No (Free plan) | ~38 PUTs / day ≈ 1,140 / month (57%); ~175 MB / month gzipped, held at ~175 MB by the 30-day rule (3.5%); GET only by hand | one object per source and run; ≤ 1 per source per hour; hard cap RAW_ARCHIVE_MAX_PUTS_PER_DAY=50 (≤ 1,500 / month); 32 MB per source and run |
 
 AWS (Stage 6a, docs/SETUP_AWS.md; cost guard in CLAUDE.md): **Free plan** account (new sign-up experience, until 2027-04-02).
 No charges are possible: usage above the always-free allowances is paid from the sign-up credits ($100 + up to $100), and
@@ -43,6 +44,9 @@ infrastructure is code (`infra/template.yaml`) to redeploy elsewhere. All planne
 (SNS, S3, Lambda, EventBridge, CloudWatch Logs, CloudFormation, IAM, SSM; checked 2026-10-02). Planned allowances:
 Lambda 1 M requests + 400,000 GB-s / month, CloudWatch Logs 5 GB, EventBridge Scheduler 14 M invocations / month;
 S3: assume it draws on the credits (not verified as always free): keep it to a few hundred MB with the 30-day lifecycle rule.
+S3 archive estimate (measured 2026-10-01, gzipped): NWS forecast ~5.7 KB / city (hourly + 12 h) × 53 cities × 8 runs / day
+≈ 72 MB / month; Open-Meteo forecast ~10 KB / city × 53 × 4 / day ≈ 64 MB; NWS alerts ~40 KB × 24 / day ≈ 29 MB;
+history + baseline ~10 MB. PUTs: forecast 8 + om-forecast 4 + alerts 24 + history 1 + baseline 1 ≈ 38 / day.
 Deploy-target notes (not in use yet): Oracle Cloud Always Free requires a credit card to sign up.
 Atlas M0 holds only the last 7 days of NWS data (see the table); the full raw store stays local. The BigQuery sandbox (no card) expires tables after 60 days.
 
@@ -125,6 +129,9 @@ Cost follow-ups:
 ## Known limitations
 
 Accepted for now (personal project: good enough beats perfect). Revisit only if they break something visible.
+- S3 raw archive: NWS alerts are kept at most once per hour (they are fetched every 15 min); `om-backfill` is not
+  archived; a run's responses for one source stop being archived past 32 MB (only a big history catch-up); skipped
+  or failed uploads are logged, not retried.
 - `best_match` baseline: `issued_at` is approximate (target − N days) and `lead_hours` is null; compare it by lead day only.
 - HRRR is backfilled for 00/06/12/18Z runs only (Single Runs doesn't keep the hourly runs in between).
 - `precipitation_probability` is missing from backfilled model forecasts (ensemble-only in Single Runs).
@@ -300,7 +307,11 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       HTTPS-only topic policy, email subscription), `npm run aws:validate | aws:deploy | aws:teardown`; tests with a mocked SDK client
 - [x] Part 1 deploy: stack `weather-pipeline` in us-east-2, email subscription confirmed; `.env` NOTIFIER=sns +
       SNS_TOPIC_ARN, test alert sent (2026-10-01)
-- [ ] Part 2: raw API responses also archived to S3 (private, SSE-S3, 30-day lifecycle), RAW_ARCHIVE=s3
+- [x] Part 2 code: `S3RawArchive` behind the RawStore (RAW_ARCHIVE=s3): one gzipped NDJSON object per source and
+      Stage 1 run, PUT caps in `api_usage`, upload failures only logged; bucket in `infra/template.yaml` (private,
+      Block Public Access, SSE-S3, HTTPS only, versioning off, 30-day expiry); runtime `s3:PutObject` on that bucket
+      only; teardown empties the bucket; tests with a mocked S3 client
+- [ ] Part 2 deploy (policies updated by hand: docs/SETUP_AWS.md step 9), then RAW_ARCHIVE=s3 + RAW_ARCHIVE_BUCKET in `.env`
 - [ ] Part 3: NWS alerts fetcher as an hourly Lambda (EventBridge) → Atlas + S3, logs 7 days; function roles must set
       `PermissionsBoundary: weather-pipeline-boundary` (the deploy policy refuses roles without it)
 
@@ -323,7 +334,7 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
 
 - [ ] BigQueryWarehouse (deploy target, free tier): one new file in `src/adapters/warehouse/` with its own SQL;
       sandbox tables expire after 60 days
-- [ ] RawStore → S3
+- [ ] RawStore → S3 (a 30-day raw *archive* copy exists since Stage 6a part 2; MongoDB stays the raw store)
 - [ ] CacheStore → DynamoDB
 - [ ] Scheduler → EventBridge
 - [x] Notifier → SNS (Stage 6a part 1)

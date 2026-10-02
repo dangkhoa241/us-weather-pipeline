@@ -2,6 +2,15 @@
 // Pipeline code only calls these methods; it never imports a database driver.
 
 export class RawStore {
+  /** Optional extra copy of raw API responses (RAW_ARCHIVE=s3: S3RawArchive); set by the factory. */
+  archive = null;
+
+  /** Keep a raw API response for the archive (no-op without RAW_ARCHIVE). Uploaded by flushRawResponses(). */
+  addRawResponse(source, url, body) { this.archive?.add(source, url, body); }
+
+  /** Upload the run's raw responses to the archive. Never throws: the archive must not break the pipeline. */
+  async flushRawResponses(batchId) { await this.archive?.flush(this, batchId); }
+
   /** Open connections. */
   async connect() { throw new Error("RawStore.connect not implemented"); }
 

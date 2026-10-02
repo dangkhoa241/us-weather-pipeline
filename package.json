@@ -32,6 +32,7 @@
     "export:snapshot": "node scripts/exportSnapshot.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1145.0",
     "@aws-sdk/client-sns": "^3.1145.0",
     "@clickhouse/client": "^1.14.0",
     "@hono/node-server": "^2.1.3",

@@ -23,6 +23,7 @@ export const config = Object.freeze({
     scheduler: env.SCHEDULER || "node-cron",
     notifier: env.NOTIFIER || "console",
     warehouse: env.WAREHOUSE || "clickhouse",
+    rawArchive: env.RAW_ARCHIVE || "none",     // none | s3: extra copy of raw API responses (Stage 6a part 2)
   },
 
   mongo: {
@@ -108,5 +109,7 @@ export const config = Object.freeze({
     snsMinLevel: env.SNS_MIN_LEVEL || "warn",      // info | warn | error: lowest level that is emailed
     alertEmail: env.ALERT_EMAIL || null,           // SNS email subscription, passed at deploy time only
     stackName: env.AWS_STACK_NAME || "weather-pipeline",
+    rawArchiveBucket: env.RAW_ARCHIVE_BUCKET || null,                       // RAW_ARCHIVE=s3: stack output RawArchiveBucketName
+    rawArchiveMaxPutsPerDay: int(env.RAW_ARCHIVE_MAX_PUTS_PER_DAY, 50),     // hard cap (S3 free tier: 2,000 PUTs / month)
   },
 });

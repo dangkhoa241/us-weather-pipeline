@@ -42,6 +42,8 @@ export async function runMode(mode, store, notifier, opts) {
     summary = await run.finish();
   } catch (err) {
     summary = await run.finish(err);
+  } finally {
+    await store.flushRawResponses(run.etlBatchId);   // RAW_ARCHIVE=s3; logs and continues on failure
   }
   const { status, etl_batch_id, rows_fetched, inserted, updated, unchanged, error_count, skipped_count, duration_ms } = summary;
   console.log(`[stage1:${mode}] ${status} in ${(duration_ms / 1000).toFixed(1)}s`,

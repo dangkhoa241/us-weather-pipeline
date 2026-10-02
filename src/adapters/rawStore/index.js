@@ -2,15 +2,35 @@
 
 import { config } from "../../config.js";
 import { MongoRawStore } from "./mongoRawStore.js";
+import { S3RawArchive } from "./s3RawArchive.js";
 
 /** @param {object} [overrides] connection settings, e.g. { uri, db } for a second store (Atlas sync) */
 export function createRawStore(kind = config.adapters.rawStore, overrides = {}) {
+  let store;
   switch (kind) {
     case "mongo":
-      return new MongoRawStore({ ...config.mongo, ...overrides });
-    // case "s3": return new S3RawStore(config.s3);   // optional AWS phase
+      store = new MongoRawStore({ ...config.mongo, ...overrides });
+      break;
+    // case "s3": store = new S3RawStore(config.s3); break;   // optional AWS phase
     default:
       throw new Error(`Unknown RAW_STORE "${kind}". Supported: mongo`);
+  }
+  // The raw archive belongs to the main store only (not to a second store such as the Atlas sync source).
+  if (!Object.keys(overrides).length) store.archive = createRawArchive();
+  return store;
+}
+
+/** RAW_ARCHIVE: none | s3 */
+export function createRawArchive(kind = config.adapters.rawArchive) {
+  switch (kind) {
+    case "none":
+      return null;
+    case "s3":
+      return new S3RawArchive({
+        bucket: config.aws.rawArchiveBucket, region: config.aws.region, maxPutsPerDay: config.aws.rawArchiveMaxPutsPerDay,
+      });
+    default:
+      throw new Error(`Unknown RAW_ARCHIVE "${kind}". Supported: none, s3`);
   }
 }
 

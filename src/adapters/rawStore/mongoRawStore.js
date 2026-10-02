@@ -22,6 +22,7 @@ export class MongoRawStore extends RawStore {
   }
 
   async close() {
+    this.archive?.close();
     await this.client.close();
     this.db = null;
   }

@@ -11,7 +11,7 @@
       "Sid": "Part2WriteRawArchive",
       "Effect": "Allow",
       "Action": "s3:PutObject",
-      "Resource": "arn:aws:s3:::weather-pipeline-raw-*/*"
+      "Resource": "arn:aws:s3:::weather-pipeline-raw-<ACCOUNT_ID>/*"
     }
   ]
 }

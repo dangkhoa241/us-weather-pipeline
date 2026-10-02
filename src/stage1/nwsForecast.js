@@ -72,7 +72,9 @@ export async function fetchForecasts(store, locations, run) {
         const url = location[urlField];
         if (!url) throw new Error(`no ${urlField}; run npm run seed:locations`);
         const fetchedAt = new Date();
-        const { properties: p } = await nwsGet(`${url}?units=si`);
+        const data = await nwsGet(`${url}?units=si`);
+        store.addRawResponse("nws-forecast", `${url}?units=si`, data);
+        const { properties: p } = data;
         const issuedAt = new Date(p.updateTime ?? p.generatedAt);
         const generatedAt = p.generatedAt ? new Date(p.generatedAt) : null;
         const meta = { etl_batch_id: run.etlBatchId, source_timestamp: generatedAt ?? issuedAt, fetched_at: fetchedAt };
