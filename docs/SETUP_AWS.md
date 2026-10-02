@@ -25,8 +25,8 @@ When you're done, tell Claude Code and it will deploy Part 1 with `npm run aws:d
 |---|---|---|---|
 | Amazon SNS | Part 1: email alerts | ✅ listed | — |
 | Amazon S3 | Part 2: raw archive, SAM artifacts | ✅ listed | no Cross-Region Replication, Multi-Region Access Points or Access Grants |
-| AWS Lambda | Part 3: alerts fetcher | ✅ listed | no Lambda@Edge |
-| Amazon EventBridge | Part 3: hourly schedule | ✅ listed | — |
+| AWS Lambda | Part 3: NWS alerts + forecasts collector | ✅ listed | no Lambda@Edge |
+| Amazon EventBridge | Part 3: hourly + every-3-hours schedules | ✅ listed | — |
 | Amazon CloudWatch Logs | Part 3: Lambda logs (7-day retention) | ✅ listed | (CloudWatch: no cross-account / cross-Region dashboards) |
 | AWS CloudFormation | AWS SAM deploys through it | ✅ listed | no StackSets |
 | AWS IAM, AWS STS | the `weather-dev` user, `aws sts get-caller-identity` | ✅ listed | — |

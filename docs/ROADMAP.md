@@ -34,11 +34,11 @@ Approved free stack:
 | GitHub Actions | Free on public repos (private: 2,000 min / month) | Jobs stop running | No | — | — |
 | MongoDB, ClickHouse, Redis (Docker) | Self-hosted; limited only by disk | Disk full | No | ~32 MB / day on disk (≈ 12 GB / year), mostly forecast snapshots | local disk only |
 | AWS SNS (Stage 6a part 1, deployed 2026-10-01, us-east-2) | Always free: 1 M publishes, 1,000 email deliveries / month | Free plan: covered by sign-up credits, never billed; credits used up → account closes | No (Free plan) | warn/error only: a few emails / day (< 150 / month) | SNS_MIN_LEVEL=warn; one email per alerts run |
-| AWS Lambda NWS collector (Stage 6a part 3, deployed 2026-10-02, us-east-2) | Always free: 1 M requests + 400,000 GB-s / month | Free plan: credits; used up → account closes | No (Free plan) | 24 alerts + 8 forecast runs / day ≈ 1,000 invocations, ~8,000 GB-s / month (256 MB; measured 8 s alerts, 88 s forecasts; 2%) | 5 min timeout, no VPC (no NAT), handler never throws (no retries) |
+| AWS Lambda NWS collector (Stage 6a part 3, deployed 2026-10-02, us-east-2) | Always free: 1 M requests + 400,000 GB-s / month | Free plan: credits; used up → account closes | No (Free plan) | 24 alerts + 8 forecast runs / day ≈ 960 invocations, ~6,800 GB-s / month (256 MB; measured 2026-10-02: alerts ~8 s / 158 MB, forecasts ~88 s / 168 MB; 2%) | 5 min timeout, no VPC (no NAT), handler never throws (no retries) |
 | Amazon EventBridge rules (part 3) | Scheduled rules: no charge | — | No | 2 rules, 32 invocations / day | hourly at most |
 | CloudWatch Logs (part 3) | Always free: 5 GB ingest + 5 GB storage / month | Free plan: credits | No | < 50 MB / month | 7-day retention |
 | SSM Parameter Store (part 3) | Standard parameters free; SecureString with the AWS-managed key `aws/ssm` (KMS: 20,000 free requests / month) | Standard throughput: throttled, not billed | No | 1 parameter, ≤ ~1,000 reads / month (cold starts) | no customer KMS key |
-| AWS S3 raw archive (Stage 6a part 2, deployed 2026-10-02, us-east-2) | 12-month free tier: 5 GB storage, 2,000 PUT + 20,000 GET / month (Free plan: over that is paid from the credits, never billed) | Free plan: credits; used up → account closes | No (Free plan) | ~38 PUTs / day ≈ 1,140 / month (57%); ~175 MB / month gzipped, held at ~175 MB by the 30-day rule (3.5%); GET only by hand | one object per source and run; ≤ 1 per source per hour; hard cap RAW_ARCHIVE_MAX_PUTS_PER_DAY=50 (≤ 1,500 / month); 32 MB per source and run |
+| AWS S3 raw archive (Stage 6a part 2, deployed 2026-10-02, us-east-2) | 12-month free tier: 5 GB storage, 2,000 PUT + 20,000 GET / month (Free plan: over that is paid from the credits, never billed) | Free plan: credits; used up → account closes | No (Free plan) | caps: Lambda 32 + local 20 PUTs / day ≤ ~1,560 / month (78%); first day: 6 objects, 3.2 MB; ~175 MB held by the 30-day rule (3.5%); GET only by hand | one object per source and run; ≤ 1 per source per hour; hard cap RAW_ARCHIVE_MAX_PUTS_PER_DAY=50 (≤ 1,500 / month); 32 MB per source and run |
 
 AWS (Stage 6a, docs/SETUP_AWS.md; cost guard in CLAUDE.md): **Free plan** account (new sign-up experience, until 2027-04-02).
 No charges are possible: usage above the always-free allowances is paid from the sign-up credits ($100 + up to $100), and
@@ -128,11 +128,18 @@ Cost follow-ups:
   the browser), forecasts, NWS periods/alerts and accuracy details; 17/17 demo checks, 0 CSP violations under a strict policy.
 - Forecast accuracy (90 days, 20 cities, lead day 1): ECMWF 2.1°F average error, ICON 2.3°F, HRRR 2.9°F, GFS 3.1°F;
   the best-match baseline 2.6°F. Error grows ~0.25°F per extra lead day.
+- AWS (Free plan, $0): NWS collection on Lambda + EventBridge (~960 runs / month, ~2% of the free GB-s; forecast run
+  106 requests → ~9,000 rows in ~88 s at 168 MB), SNS alerts, 30-day S3 archive (≤ 78% of free PUTs by hard caps);
+  one SAM stack, permissions boundary on every role, removed by `npm run aws:teardown`.
 - Tests: 107 Vitest tests (33 backend + 74 dashboard), no Docker needed, run in GitHub Actions CI; 18 automated checks on the static demo build.
 
 ## Known limitations
 
 Accepted for now (personal project: good enough beats perfect). Revisit only if they break something visible.
+- AWS Free plan ends 2027-04-02: the account then closes unless upgraded (needs my OK), and AWS deletes the data
+  after 90 days. The Vercel dashboard doesn't depend on AWS (static snapshot); once Part 4 is built, it falls back to
+  the bundled snapshot when CloudFront is unavailable. NWS collection would fall back to the manual GitHub workflows.
+- The dashboard is not live yet (Part 4 not built): it shows the last exported snapshot.
 - NWS Lambda: a run that hits the 5 min timeout sends no SNS email (only the Lambda error in its logs). It doesn't seed
   locations (Atlas already has them; a new city needs one manual `seed:locations` against Atlas). Heat-alert emails can
   arrive twice if alerts are run locally by hand (`npm run fetch` / `fetch:watch` outside Docker), because Atlas and the

@@ -9,6 +9,9 @@
 
 ### ▶ [Live demo: us-weather-pipeline.vercel.app](https://us-weather-pipeline.vercel.app)
 
+The demo is a static data snapshot (badge "Demo data as of …"). Data collection already runs on AWS. Automatic
+updates for the dashboard (S3 + CloudFront) are in progress.
+
 ![Demo: All US overview → click a city → drill into a month → Accuracy page → dark mode](docs/images/demo.gif)
 
 ## Key finding
@@ -86,37 +89,50 @@ flowchart LR
 - **Stage 4** serves the API: one Zod definition per route drives validation, the OpenAPI docs and the dashboard's TypeScript types.
 - **Stage 5** is the dashboard: React + TypeScript, with hand-rolled d3 for the map and charts.
 
-## AWS deployment (🚧 in progress, target: mid-October 2026)
+## AWS deployment
 
-> **Status: in progress.** The local Docker stack and the Vercel demo above are what runs today. Deployed on AWS so far
-> (Free plan, us-east-2, one SAM stack in `infra/template.yaml`): SNS email alerts, a 30-day S3 raw archive, and a
-> Lambda that collects NWS alerts (hourly) and forecasts (every 3 h) on EventBridge schedules into
-> MongoDB Atlas + the archive, replacing the GitHub Actions schedules (GitHub skipped scheduled runs; the workflows stay as a manual fallback). The Atlas URI is an
-> SSM SecureString read at cold start; the role is capped by a permissions boundary. Setup: [docs/SETUP_AWS.md](docs/SETUP_AWS.md).
+Deployed on AWS: one SAM stack (`infra/template.yaml`) in us-east-2 on the AWS **Free plan**. It collects NWS data
+in the cloud, so the laptop can be off. The local Docker stack stays the primary system: AWS holds only the
+collector, alert emails and a 30-day raw archive. Setup and policies: [docs/SETUP_AWS.md](docs/SETUP_AWS.md).
 
 ```mermaid
 flowchart LR
-  EB["EventBridge Scheduler<br/>cron rules"] --> L["Lambda<br/>fetcher (Stage 1)"]
+  EB["EventBridge<br/>hourly + every 3 h"] --> L["Lambda<br/>NWS collector"]
   NWS["NWS API"] --> L
-  OM["Open-Meteo"] --> L
-  L --> S3[("S3<br/>raw store")]
-  S3 --> ETL["Lambda<br/>ETL + aggregates"]
-  ETL --> DDB[("DynamoDB<br/>cache")]
-  DDB --> API["Lambda<br/>Hono API"]
-  L -->|failures, heat waves| SNS["SNS<br/>alerts"]
-  CF["CloudFront<br/>dashboard (S3 origin)"] --> API
+  SSM["SSM Parameter Store<br/>SecureString: Atlas URI"] -.->|cold start| L
+  L --> ATLAS[("MongoDB Atlas M0<br/>7-day buffer")]
+  L --> S3[("S3<br/>raw archive, 30 days")]
+  L -->|failed runs, heat alerts| SNS["SNS<br/>email"]
+  ATLAS -->|sync-atlas| LOCAL["Local Docker stack<br/>ClickHouse + API"]
+  LOCAL -->|export:snapshot| VERCEL["Vercel dashboard<br/>(static snapshot)"]
+  BOUND["IAM permissions boundary"] -.->|caps the Lambda role| L
+  subgraph P4["Part 4, in progress (not deployed)"]
+    D["Lambda<br/>daily history + publish"] --> S3D[("S3<br/>dashboard JSON")] --> CF["CloudFront<br/>(OAC)"]
+  end
+  CF -.-> VERCEL
 ```
 
-| Adapter interface | Current implementation | AWS version (in progress) |
+| Service | Job | Free-tier allowance | Our use (measured / expected per month) |
+|---|---|---|---|
+| Lambda `weather-pipeline-nws-collector` | NWS alerts (hourly) and forecasts (every 3 h) → Atlas + S3 | 1 M requests, 400,000 GB-s | ~960 runs, ~6,800 GB-s (2%); 256 MB; alerts ~8 s, forecasts ~88 s, 168 MB peak |
+| EventBridge | 2 schedule rules | scheduled rules free | 32 invocations / day |
+| S3 raw archive | gzipped raw responses, deleted after 30 days | 5 GB, 2,000 PUT, 20,000 GET (12 months) | ≤ ~1,560 PUTs (78%, hard caps: Lambda 32 / day, local 20 / day); ~175 MB held by the 30-day rule |
+| SNS | email on failed runs and new heat alerts | 1 M publishes, 1,000 emails | < 150 emails |
+| SSM Parameter Store | Atlas URI as a SecureString (AWS-managed key) | standard parameters free | 1 parameter, read at cold start |
+| CloudWatch Logs | Lambda logs, 7-day retention | 5 GB | < 50 MB |
+| CloudFormation / SAM, IAM | infrastructure as code, users, roles, boundary | free | 1 stack |
+
+**Why S3 + CloudFront instead of an API (Part 4, in progress).** The dashboard already reads static JSON files. A
+scheduled Lambda will rewrite those files in S3 and CloudFront will serve them, so no code runs per request: there is
+no public API to rate-limit or secure, and no cold start. The comparison with a DynamoDB + Lambda Function URL API
+is in [docs/analysis/live-dashboard.md](docs/analysis/live-dashboard.md).
+
+| Adapter interface | Local implementation | AWS |
 |---|---|---|
-| `RawStore` | MongoDB | S3 |
-| `CacheStore` | Redis | DynamoDB |
-| `Scheduler` | node-cron | EventBridge |
-| `Notifier` | console | SNS |
-
-The adapter design already allows the switch through `.env` (e.g. `RAW_STORE=s3`, `CACHE_STORE=dynamodb`); the AWS adapters are being built.
-
-**All on the free tier:** Lambda (1 M requests / month), DynamoDB (25 GB), SNS (1 M publishes), CloudFront (1 TB transfer / month) and EventBridge Scheduler (14 M invocations / month) have always-free allowances; S3 stays at a few hundred MB with a retention rule. A **$1 AWS budget alert** is set before anything is deployed, and the limits are checked again at sign-up and recorded in the [roadmap](docs/ROADMAP.md).
+| `Notifier` | console | **SNS** (deployed) |
+| `RawStore` | MongoDB | MongoDB + **S3 archive copy** (deployed) |
+| `Scheduler` | node-cron | **EventBridge** for NWS collection (deployed) |
+| `CacheStore` | Redis | not planned (Part 4 serves static files instead) |
 
 ## By the numbers
 
@@ -128,6 +144,9 @@ The adapter design already allows the switch through `.env` (e.g. `RAW_STORE=s3`
 | API | ~1,600 req/s, p95 12.7 ms, 0 errors; 22/22 security probe checks |
 | Tests | **107** Vitest tests (33 backend + 74 dashboard) and 18 checks on the demo build |
 | Demo snapshot | 2.9 MB (418 KB gzipped) for 53 cities × 3+ years |
+| AWS Lambda | 256 MB; alerts run ~8 s, forecast run ~88 s (106 NWS requests, ~9,000 rows, 168 MB peak); ~960 runs / month ≈ 2% of the free GB-s |
+| AWS S3 | ≤ ~1,560 PUTs / month (78% of 2,000, hard caps); ~175 MB stored with 30-day expiry (3.5% of 5 GB) |
+| AWS bill | **$0** (Free plan) |
 | Budget | **$0** |
 
 ## Built with Claude Code: compare & review
@@ -157,6 +176,12 @@ For each key feature, Claude Code built **3 implementations** on separate branch
   - that no untracked files are left over.
 - **Least privilege:** databases and the API listen on `127.0.0.1`. Workflows have `contents: read`, secrets are set only on the steps that need them, and `npm ci --ignore-scripts` runs in CI.
 - **Rate limiting and CORS** on the API, plus a 22-check black-box security probe (`npm run probe:api`).
+- **AWS:**
+  - two least-privilege IAM users: `weather-dev` deploys (CLI only, no console) and `weather-runtime` can only publish to SNS and write archive objects;
+  - every role the stack creates must carry a **permissions boundary**, so a leaked deploy key can't create an admin role;
+  - the Atlas URI is an **SSM SecureString** (AWS-managed key), never in code or environment variables;
+  - the S3 bucket is private: account-wide **Block Public Access**, ACLs disabled, SSE-S3, a bucket policy that denies non-HTTPS requests (Part 4's CloudFront will read it only through **Origin Access Control**);
+  - keys live only in `~/.aws`, rotated every 90 days; `check:secrets` fails on AWS key IDs, secret keys and session tokens.
 - **A `/security-review` at the end of every stage**, with low findings logged in the [roadmap](docs/ROADMAP.md#known-limitations).
 
 ## Tech stack
@@ -168,6 +193,7 @@ For each key feature, Claude Code built **3 implementations** on separate branch
 | API | Hono, @hono/zod-openapi, Zod, Swagger UI |
 | Dashboard | React 19, TypeScript, Vite, d3-geo / d3-scale / d3-shape, ECharts (sparklines), TanStack Query + Table, Zustand, Tailwind CSS, shadcn/ui |
 | Quality | Vitest, React Testing Library, Playwright (demo checks, GIF), Docker Compose |
+| Cloud (AWS) | Lambda, EventBridge, S3, SNS, SSM Parameter Store, IAM, CloudWatch Logs, CloudFormation / SAM (CloudFront in progress) |
 | Hosting | Vercel (static demo), GitHub Actions CI |
 
 Each storage layer sits behind an adapter (`RawStore`, `CacheStore`, `Warehouse`, `Scheduler`, `Notifier`). A cloud service such as BigQuery or DynamoDB can be added as one new file.
@@ -203,6 +229,13 @@ More: [cloud collection setup](docs/SETUP_CLOUD_COLLECTION.md), [Vercel demo](do
 | Vercel Hobby | 100 GB transfer / month | ~0.5 MB per visit (static snapshot) |
 | GitHub Actions | Free on public repos | CI (+ manual collection fallback) |
 | MongoDB, ClickHouse, Redis | Self-hosted in Docker | Local disk only |
+
+| AWS (Lambda, S3, SNS, SSM, EventBridge, CloudWatch Logs) | Free plan + always-free allowances | ≤ 2% of Lambda, ≤ 78% of S3 PUTs (table above) |
+
+**Cost so far: $0.** The AWS account is on the **Free plan** (until 2027-04-02): usage above the always-free
+allowances is paid from sign-up credits, never billed to a card. A **zero-spend budget alert** emails on any charge,
+a cost guard in [CLAUDE.md](CLAUDE.md) bans paid services (NAT Gateway, EC2, RDS, …), and `npm run aws:teardown`
+deletes the whole stack.
 
 None of these needs a credit card. Every external service has its limits and overflow behavior documented in the [roadmap](docs/ROADMAP.md).
 
