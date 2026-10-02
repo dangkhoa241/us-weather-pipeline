@@ -211,8 +211,10 @@ and write its own logs.
 7. **After a day of good scheduled runs**, turn off the GitHub schedules: remove the `schedule:` block from
    `.github/workflows/nws-alerts.yml` and `nws-forecasts.yml` (keep `workflow_dispatch` as a manual fallback).
 8. **S3 PUTs:** the Lambda archives up to 16 objects / day (alerts once per 3-hour UTC slot + 8 forecast runs; its own
-   cap, ledger in Atlas). Keep the local cap in `.env` at `RAW_ARCHIVE_MAX_PUTS_PER_DAY=20` (~14 / day expected):
-   ~900 PUTs / month expected (45%), ≤ 1,116 even at both caps (56% of the free 2,000).
+   cap, ledger in Atlas). The local fetcher no longer runs NWS alerts or forecasts (`ALERTS_CRON` and `FORECAST_CRON`
+   are `"off"` in docker-compose; both arrive via sync-atlas), so set its cap in `.env` to
+   `RAW_ARCHIVE_MAX_PUTS_PER_DAY=10` (~6 / day expected: Open-Meteo forecast 4, history 1, baseline 1):
+   ~660 PUTs / month expected (33%), ≤ 806 even at both caps (40% of the free 2,000).
 
 ## Remove everything: `npm run aws:teardown`
 

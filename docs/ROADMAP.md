@@ -38,7 +38,7 @@ Approved free stack:
 | Amazon EventBridge rules (part 3) | Scheduled rules: no charge | — | No | 2 rules, 32 invocations / day | hourly at most |
 | CloudWatch Logs (part 3) | Always free: 5 GB ingest + 5 GB storage / month | Free plan: credits | No | < 50 MB / month | 7-day retention |
 | SSM Parameter Store (part 3) | Standard parameters free; SecureString with the AWS-managed key `aws/ssm` (KMS: 20,000 free requests / month) | Standard throughput: throttled, not billed | No | 1 parameter, ≤ ~1,000 reads / month (cold starts) | no customer KMS key |
-| AWS S3 raw archive (Stage 6a part 2, deployed 2026-10-02, us-east-2) | 12-month free tier: 5 GB storage, 2,000 PUT + 20,000 GET / month (Free plan: over that is paid from the credits, never billed) | Free plan: credits; used up → account closes | No (Free plan) | ~30 PUTs / day ≈ 900 / month (45%); caps Lambda 16 + local 20 / day ≤ 1,116 / month (56%); first day: 6 objects, 3.2 MB; ~175 MB held by the 30-day rule (3.5%); GET only by hand | one object per source and run; ≤ 1 per source per hour; hard cap RAW_ARCHIVE_MAX_PUTS_PER_DAY=50 (≤ 1,500 / month); 32 MB per source and run |
+| AWS S3 raw archive (Stage 6a part 2, deployed 2026-10-02, us-east-2) | 12-month free tier: 5 GB storage, 2,000 PUT + 20,000 GET / month (Free plan: over that is paid from the credits, never billed) | Free plan: credits; used up → account closes | No (Free plan) | ~22 PUTs / day ≈ 660 / month (33%: Lambda 16, local ~6); caps Lambda 16 + local 10 / day ≤ 806 / month (40%); first day: 6 objects, 3.2 MB; ~175 MB held by the 30-day rule (3.5%); GET only by hand | one object per source and run; ≤ 1 per source per hour; hard cap RAW_ARCHIVE_MAX_PUTS_PER_DAY=50 (≤ 1,500 / month); 32 MB per source and run |
 
 AWS (Stage 6a, docs/SETUP_AWS.md; cost guard in CLAUDE.md): **Free plan** account (new sign-up experience, until 2027-04-02).
 No charges are possible: usage above the always-free allowances is paid from the sign-up credits ($100 + up to $100), and
@@ -129,7 +129,7 @@ Cost follow-ups:
 - Forecast accuracy (90 days, 20 cities, lead day 1): ECMWF 2.1°F average error, ICON 2.3°F, HRRR 2.9°F, GFS 3.1°F;
   the best-match baseline 2.6°F. Error grows ~0.25°F per extra lead day.
 - AWS (Free plan, $0): NWS collection on Lambda + EventBridge (~960 runs / month, ~2% of the free GB-s; forecast run
-  106 requests → ~9,000 rows in ~88 s at 168 MB), SNS alerts, 30-day S3 archive (~45% of free PUTs, ≤ 56% by hard caps);
+  106 requests → ~9,000 rows in ~88 s at 168 MB), SNS alerts, 30-day S3 archive (~33% of free PUTs, ≤ 40% by hard caps);
   one SAM stack, permissions boundary on every role, removed by `npm run aws:teardown`.
 - Tests: 107 Vitest tests (33 backend + 74 dashboard), no Docker needed, run in GitHub Actions CI; 18 automated checks on the static demo build.
 
@@ -341,7 +341,9 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       alerts (`ALERTS_CRON: "off"` in docker-compose; they arrive via sync-atlas); local `RAW_ARCHIVE_MAX_PUTS_PER_DAY=20`
 - [x] Part 4 design: live dashboard without the laptop (`docs/analysis/live-dashboard.md`); chose B (S3 + CloudFront
       static JSON, daily history Lambda, accuracy published locally)
-- [ ] Part 4 build: archive NWS alerts every 3 h (S3 PUTs ~45%; code done, not deployed), history-updater Lambda, S3 + CloudFront (OAC), backfill,
+- [x] Archive NWS alerts once per 3-hour UTC slot; Lambda cap 16 / day (deployed 2026-10-02); local fetcher NWS
+      forecast off (`FORECAST_CRON: "off"`, Lambda + sync-atlas), local cap 10 / day → S3 PUTs ~33% (≤ 40% by caps)
+- [ ] Part 4 build: history-updater Lambda, S3 + CloudFront (OAC), backfill,
       dashboard reads CloudFront with bundled-snapshot fallback, CSP `connect-src`
 
 ## Cross-cutting

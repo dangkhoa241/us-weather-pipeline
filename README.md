@@ -116,7 +116,7 @@ flowchart LR
 |---|---|---|---|
 | Lambda `weather-pipeline-nws-collector` | NWS alerts (hourly) and forecasts (every 3 h) → Atlas + S3 | 1 M requests, 400,000 GB-s | ~960 runs, ~6,800 GB-s (2%); 256 MB; alerts ~8 s, forecasts ~88 s, 168 MB peak |
 | EventBridge | 2 schedule rules | scheduled rules free | 32 invocations / day |
-| S3 raw archive | gzipped raw responses, deleted after 30 days | 5 GB, 2,000 PUT, 20,000 GET (12 months) | ~900 PUTs (45%; ≤ 1,116 = 56% by hard caps: Lambda 16 / day, local 20 / day); ~175 MB held by the 30-day rule |
+| S3 raw archive | gzipped raw responses, deleted after 30 days | 5 GB, 2,000 PUT, 20,000 GET (12 months) | ~660 PUTs (33%; ≤ 806 = 40% by hard caps: Lambda 16 / day, local 10 / day); ~175 MB held by the 30-day rule |
 | SNS | email on failed runs and new heat alerts | 1 M publishes, 1,000 emails | < 150 emails |
 | SSM Parameter Store | Atlas URI as a SecureString (AWS-managed key) | standard parameters free | 1 parameter, read at cold start |
 | CloudWatch Logs | Lambda logs, 7-day retention | 5 GB | < 50 MB |
@@ -145,7 +145,7 @@ is in [docs/analysis/live-dashboard.md](docs/analysis/live-dashboard.md).
 | Tests | **107** Vitest tests (33 backend + 74 dashboard) and 18 checks on the demo build |
 | Demo snapshot | 2.9 MB (418 KB gzipped) for 53 cities × 3+ years |
 | AWS Lambda | 256 MB; alerts run ~8 s, forecast run ~88 s (106 NWS requests, ~9,000 rows, 168 MB peak); ~960 runs / month ≈ 2% of the free GB-s |
-| AWS S3 | ~900 PUTs / month (45% of 2,000; ≤ 56% by hard caps); ~175 MB stored with 30-day expiry (3.5% of 5 GB) |
+| AWS S3 | ~660 PUTs / month (33% of 2,000; ≤ 40% by hard caps); ~175 MB stored with 30-day expiry (3.5% of 5 GB) |
 | AWS bill | **$0** (Free plan) |
 | Budget | **$0** |
 
@@ -230,7 +230,7 @@ More: [cloud collection setup](docs/SETUP_CLOUD_COLLECTION.md), [Vercel demo](do
 | GitHub Actions | Free on public repos | CI (+ manual collection fallback) |
 | MongoDB, ClickHouse, Redis | Self-hosted in Docker | Local disk only |
 
-| AWS (Lambda, S3, SNS, SSM, EventBridge, CloudWatch Logs) | Free plan + always-free allowances | ≤ 2% of Lambda, ~45% of S3 PUTs (table above) |
+| AWS (Lambda, S3, SNS, SSM, EventBridge, CloudWatch Logs) | Free plan + always-free allowances | ≤ 2% of Lambda, ~33% of S3 PUTs (table above) |
 
 **Cost so far: $0.** The AWS account is on the **Free plan** (until 2027-04-02): usage above the always-free
 allowances is paid from sign-up credits, never billed to a card. A **zero-spend budget alert** emails on any charge,
