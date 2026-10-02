@@ -24,6 +24,18 @@ Approved free stack:
 
 Free-tier limits of the services in use, and cost follow-ups: `docs/ROADMAP.md`.
 
+## AWS cost guard (follow in every AWS task)
+
+The AWS account is on the **Free plan** (until 2027-04-02; setup: `docs/SETUP_AWS.md`).
+- Never suggest or require upgrading to a paid plan. If a service needs a paid plan, stop and ask me.
+- Never use: NAT Gateway, EC2, public IPv4/Elastic IPs, Load Balancers, RDS, KMS customer-managed keys,
+  Secrets Manager, CloudWatch custom metrics beyond the free 10, or anything without a free tier.
+- Use: S3 with SSE-S3 encryption + lifecycle rule; SSM Parameter Store (standard) for config;
+  CloudWatch log retention 7 days; Lambda memory 128–256 MB with short timeouts; EventBridge rules at most hourly.
+- Tag every resource `Project=us-weather-pipeline`. `npm run aws:teardown` (sam delete) removes everything.
+- Before every `sam deploy`, list the resources it will create with their free-tier limits and expected monthly
+  usage, and wait for my OK.
+
 ## Flow (keep these script names)
 
 ```
