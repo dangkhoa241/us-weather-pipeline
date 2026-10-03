@@ -119,3 +119,7 @@ Public repository: <https://github.com/dangkhoa241/us-weather-pipeline>. At the 
 5. `git push`.
 
 Never push `.env` (or any file with real credentials), and never force-push `main`.
+
+Before a commit or push, never pipe test, lint, build or secret-check output through `tail`, `grep`, `head` or any other
+filter: a filter's exit code hides the command's. Run each command plainly, one at a time, and check its exit code. If any
+exit code is non-zero, don't commit or push; stop and report the name of the failing test (or check).

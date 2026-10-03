@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeAll } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { UsMap } from "@/components/map/UsMap";
@@ -13,6 +13,13 @@ const locations: LocationRow[] = [
   { id: "stockton-ca", name: "Stockton", state: "CA", region: "West", lat: 37.96, lon: -121.29, timezone: "America/Los_Angeles" },
   { id: "houston-tx", name: "Houston", state: "TX", region: "South", lat: 29.76, lon: -95.37, timezone: "America/Chicago" },
 ];
+
+// The county borders (842 KB of JSON) are a lazy import(). A cold first import (Vite transforms and parses the file)
+// can take more than waitFor's 1 s on a busy machine, which made the lazy-load test flaky. Load it once here, under the
+// hook's own timeout, so the test measures the component (zoom → import from the module cache → convert → render).
+beforeAll(async () => {
+  await import("us-atlas/counties-10m.json");
+});
 
 const renderMap = (onSelectLocation = vi.fn()) =>
   render(<UsMap states={states} locations={locations} metric="temp_c" unit="F" selectedLocation="stockton-ca" onSelectLocation={onSelectLocation} />);
