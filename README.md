@@ -9,8 +9,8 @@
 
 ### ▶ [Live demo: us-weather-pipeline.vercel.app](https://us-weather-pipeline.vercel.app)
 
-The demo is a static data snapshot (badge "Demo data as of …"). Data collection already runs on AWS. Automatic
-updates for the dashboard (S3 + CloudFront) are in progress.
+The demo is a static data snapshot (badge "Snapshot · data as of …"). Data collection already runs on AWS. Automatic
+updates for the dashboard (S3 + CloudFront, Part 4) are built but not deployed yet.
 
 ![Demo: All US overview → click a city → drill into a month → Accuracy page → dark mode](docs/images/demo.gif)
 
@@ -46,8 +46,8 @@ I designed the product and its features. Claude Code implemented them under my d
 
 | | |
 |---|---|
-| ![Overview: All US KPIs, map with 53 city dots and linked state table](docs/images/readme-overview.png) | ![City drill-down in dark mode: twin temperature and rain charts with synced crosshair](docs/images/readme-city-dark.png) |
-| **Overview:** All US KPIs with comparison to the previous period, a map with 53 city dots and a linked, sortable state table. | **City history (dark mode):** years → months → days, twin charts with a synced crosshair, and PNG/CSV download. |
+| ![Overview: US map with 53 city dots and the linked, sortable state table](docs/images/readme-overview.png) | ![City drill-down in dark mode: twin temperature and rain charts with synced crosshair](docs/images/readme-city-dark.png) |
+| **Overview:** a map with 53 city dots and a linked, sortable state table, below All US KPIs compared with the previous period. | **City history (dark mode):** years → months → days, twin charts with a synced crosshair, and PNG/CSV download. |
 | ![Forecast accuracy leaderboard and charts](docs/images/readme-accuracy.png) | ![Forecast page in dark mode: 7-day cards, 48-hour charts, model spread](docs/images/readme-forecast-dark.png) |
 | **Accuracy:** the leaderboard by lead day, error vs lead time, bias by month, the best model per state and the biggest misses. | **Forecast:** 7-day NWS cards, the next 48 hours, a "Models disagree?" spread chart and active NWS alerts. |
 
@@ -65,16 +65,15 @@ flowchart LR
     NWS["NWS API<br/>forecasts + alerts"]
     OM["Open-Meteo<br/>history + 5 models"]
   end
-  subgraph Cloud["Cloud collection (free tiers)"]
-    GHA["AWS Lambda + EventBridge<br/>every 3 h / hourly"] --> ATLAS[("MongoDB Atlas M0<br/>7-day buffer")]
+  subgraph Cloud["Cloud collection (AWS Free plan + Atlas M0)"]
+    LAMBDA["AWS Lambda + EventBridge<br/>NWS alerts hourly, forecasts every 3 h"] --> ATLAS[("MongoDB Atlas M0<br/>7-day buffer")]
   end
   subgraph Local["Docker Compose (self-hosted)"]
-    F["Stage 1<br/>fetchWeather.js"] --> M[("MongoDB<br/>raw")]
+    F["Stage 1<br/>fetchWeather.js<br/>(Open-Meteo)"] --> M[("MongoDB<br/>raw")]
     M -->|"Stage 2<br/>incremental ETL"| CH[("ClickHouse<br/>warehouse + rollups")]
     CH -->|"Stage 3<br/>versioned cache"| R[("Redis")]
   end
-  NWS --> GHA
-  NWS --> F
+  NWS --> LAMBDA
   OM --> F
   ATLAS -->|sync-atlas| M
   R --> API["Stage 4<br/>Hono API + OpenAPI"]
@@ -83,7 +82,7 @@ flowchart LR
   API -->|export:snapshot| SNAP["Static JSON snapshot"] --> VERCEL["Vercel demo"]
 ```
 
-- **Stage 1** collects raw data with retries, rate limits and a weighted Open-Meteo call budget. NWS forecasts are also collected in the cloud, so the laptop can be off.
+- **Stage 1** collects raw data with retries, rate limits and a weighted Open-Meteo call budget. NWS forecasts and alerts are collected in the cloud (Lambda → Atlas) and copied home by `sync-atlas`, so the laptop can be off.
 - **Stage 2** loads only new rows (watermark) into `ReplacingMergeTree` tables. Daily and monthly rollups use each city's local time.
 - **Stage 3** puts a versioned cache in front of the warehouse. The landing page's queries are pre-warmed after each load.
 - **Stage 4** serves the API: one Zod definition per route drives validation, the OpenAPI docs and the dashboard's TypeScript types.
@@ -103,13 +102,19 @@ flowchart LR
   L --> ATLAS[("MongoDB Atlas M0<br/>7-day buffer")]
   L --> S3[("S3<br/>raw archive, 30 days")]
   L -->|failed runs, heat alerts| SNS["SNS<br/>email"]
-  ATLAS -->|sync-atlas| LOCAL["Local Docker stack<br/>ClickHouse + API"]
+  ATLAS -->|sync-atlas| LOCAL["Local Docker stack<br/>Stage 1–4"]
+  LOCAL -->|Open-Meteo raw copy| S3
+  LOCAL -->|pipeline failures| SNS
   LOCAL -->|export:snapshot| VERCEL["Vercel dashboard<br/>(static snapshot)"]
-  BOUND["IAM permissions boundary"] -.->|caps the Lambda role| L
-  subgraph P4["Part 4, in progress (not deployed)"]
-    D["Lambda<br/>daily history + publish"] --> S3D[("S3<br/>dashboard JSON")] --> CF["CloudFront<br/>(OAC)"]
+  BOUND["IAM permissions boundary"] -.->|caps the Lambda roles| L
+  subgraph P4["Part 4: built, not deployed yet"]
+    EB2["EventBridge<br/>every 3 h + daily"] --> P["Lambda<br/>dashboard publisher"]
+    P -->|recent / forecasts / alerts JSON| S3D[("S3 raw bucket<br/>dashboard/ prefix")]
+    S3D -->|"Origin Access Control"| CF["CloudFront"]
   end
-  CF -.-> VERCEL
+  ATLAS -.->|NWS forecasts + alerts| P
+  OM["Open-Meteo"] -.->|history + 4 models| P
+  CF -.->|"live JSON, falls back to the snapshot"| VERCEL
 ```
 
 | Service | Job | Free-tier allowance | Our use (measured / expected per month) |
@@ -122,9 +127,10 @@ flowchart LR
 | CloudWatch Logs | Lambda logs, 7-day retention | 5 GB | < 50 MB |
 | CloudFormation / SAM, IAM | infrastructure as code, users, roles, boundary | free | 1 stack |
 
-**Why S3 + CloudFront instead of an API (Part 4, in progress).** The dashboard already reads static JSON files. A
-scheduled Lambda will rewrite those files in S3 and CloudFront will serve them, so no code runs per request: there is
-no public API to rate-limit or secure, and no cold start. The comparison with a DynamoDB + Lambda Function URL API
+**Why S3 + CloudFront instead of an API (Part 4, built, not deployed yet).** The dashboard already reads static JSON
+files. A scheduled Lambda will rewrite those files in S3 and CloudFront will serve them, so no code runs per request:
+there is no public API to rate-limit or secure, and no cold start. The first deploy is waiting for AWS to verify the
+account for CloudFront. The comparison with a DynamoDB + Lambda Function URL API
 is in [docs/analysis/live-dashboard.md](docs/analysis/live-dashboard.md).
 
 | Adapter interface | Local implementation | AWS |
@@ -193,7 +199,7 @@ For each key feature, Claude Code built **3 implementations** on separate branch
 | API | Hono, @hono/zod-openapi, Zod, Swagger UI |
 | Dashboard | React 19, TypeScript, Vite, d3-geo / d3-scale / d3-shape, ECharts (sparklines), TanStack Query + Table, Zustand, Tailwind CSS, shadcn/ui |
 | Quality | Vitest, React Testing Library, Playwright (demo checks, GIF), Docker Compose |
-| Cloud (AWS) | Lambda, EventBridge, S3, SNS, SSM Parameter Store, IAM, CloudWatch Logs, CloudFormation / SAM (CloudFront in progress) |
+| Cloud (AWS) | Lambda, EventBridge, S3, SNS, SSM Parameter Store, IAM, CloudWatch Logs, CloudFormation / SAM (CloudFront: built, not deployed yet) |
 | Hosting | Vercel (static demo), GitHub Actions CI |
 
 Each storage layer sits behind an adapter (`RawStore`, `CacheStore`, `Warehouse`, `Scheduler`, `Notifier`). A cloud service such as BigQuery or DynamoDB can be added as one new file.
