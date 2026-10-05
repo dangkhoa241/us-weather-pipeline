@@ -39,7 +39,7 @@ const addDays = (date, n) => new Date(date.getTime() + n * DAY_MS);
 const requestWeight = (days) => Math.max(1, Object.keys(VARIABLES).length / 10) * Math.max(1, days / 14);
 
 /** Last day the archive can be trusted (it lags ~5 days; newer hours come back null). */
-export const archiveEndDay = () => toDay(addDays(new Date(), -config.stage1.archiveLagDays));
+export const archiveEndDay = (now = new Date()) => toDay(addDays(now, -config.stage1.archiveLagDays));
 
 /** Split [from, to] (inclusive, YYYY-MM-DD) into chunks of at most CHUNK_DAYS days. */
 function* chunks(fromDay, toDay_) {

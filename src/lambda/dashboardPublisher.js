@@ -235,7 +235,7 @@ export function createHandler({
       if (!locations.length) throw new Error("no locations in the store");
       const budget = new ApiBudget(store, "open-meteo-lambda", OPEN_METEO_LIMITS);
       const builders = {
-        history: () => buildRecent(locations, { getJson, budget, days: config.aws.dashboardRecentDays, endDay: archiveEndDay(), now }),
+        history: () => buildRecent(locations, { getJson, budget, days: config.aws.dashboardRecentDays, endDay: archiveEndDay(now), now }),
         forecasts: () => buildForecasts(store, locations, { getJson, budget, now, getRunTimes }),
         alerts: () => buildAlerts(store, { now }),
       };

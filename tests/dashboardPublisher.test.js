@@ -48,15 +48,21 @@ function fakeStore({ alerts = [], snapshots = [] } = {}) {
   };
 }
 
-/** Open-Meteo stand-in: archive → 3 local days of hourly values; forecast → 2 hours for every requested model. */
+/**
+ * Open-Meteo stand-in: archive → hourly values for exactly the requested start_date..end_date (the last day has no
+ * temperature yet, like the real archive), so no test depends on today's date; forecast → 2 hours for every model.
+ */
 function fakeOpenMeteo({ failFor = [] } = {}) {
   return vi.fn(async (url) => {
     const u = new URL(url);
     if (failFor.some((lat) => u.searchParams.get("latitude") === String(lat))) throw new Error("HTTP 429 for open-meteo");
     if (u.hostname.startsWith("archive")) {
+      const [start, end] = [u.searchParams.get("start_date"), u.searchParams.get("end_date")];
       const time = [];
-      for (const day of ["2026-09-25", "2026-09-26", "2026-09-27"]) for (let h = 0; h < 24; h += 1) time.push(`${day}T${String(h).padStart(2, "0")}:00`);
-      const temp = time.map((t, i) => (t.startsWith("2026-09-27") ? null : 10 + (i % 24)));   // last day: no data yet
+      for (let d = Date.parse(`${start}T00:00:00Z`); d <= Date.parse(`${end}T00:00:00Z`); d += 86_400_000) {
+        for (let h = 0; h < 24; h += 1) time.push(`${new Date(d).toISOString().slice(0, 10)}T${String(h).padStart(2, "0")}:00`);
+      }
+      const temp = time.map((t, i) => (t.startsWith(end) ? null : 10 + (i % 24)));   // last day: no data yet
       return { hourly: { time, temperature_2m: temp, precipitation: time.map(() => 0.5) } };
     }
     const hourly = { time: ["2026-10-02T11:00", "2026-10-02T12:00", "2026-10-02T13:00"] };
@@ -78,12 +84,12 @@ const nwsSnapshots = (id) => [
     values: { temp_c: 21, precip_prob_pct: 20, wind_speed_ms: 3.1, short_forecast: "Sunny" } },
 ];
 
-function setup({ store = fakeStore(), getJson = fakeOpenMeteo(), getParameter = vi.fn(async () => URI) } = {}) {
+function setup({ store = fakeStore(), getJson = fakeOpenMeteo(), getParameter = vi.fn(async () => URI), clock = () => NOW } = {}) {
   const notifier = { notify: vi.fn(async () => {}) };
   const send = vi.fn(async () => ({}));
   const handler = createHandler({
     getParameter, makeStore: vi.fn(() => store), makeNotifier: () => notifier, makeS3: () => ({ send, destroy: vi.fn() }),
-    getJson, getRunTimes: async () => new Map([["ecmwf_ifs025", at("2026-10-02T00:00:00Z")]]), clock: () => NOW,
+    getJson, getRunTimes: async () => new Map([["ecmwf_ifs025", at("2026-10-02T00:00:00Z")]]), clock,
   });
   const body = (name) => JSON.parse(send.mock.calls.map(([c]) => c.input).find((i) => i.Key === `dashboard/${name}`).Body);
   return { handler, store, notifier, send, getJson, getParameter, body };
@@ -161,6 +167,18 @@ describe("dashboard publisher handler", () => {
     // Periods: only those not ended, with the local wall-clock time (Chicago is UTC-5 in October)
     expect(periods["chicago-il"]).toEqual([{ issued_at: "2026-10-02 09:00:00", target_time: "2026-10-02 11:00:00", target_end_time: "2026-10-02 23:00:00",
       local_target_time: "2026-10-02 06:00:00", temp_c: 21, precip_prob_pct: 20, wind_speed_ms: 3.1, short_forecast: "Sunny" }]);
+  });
+
+  it("takes the history window from the injected clock, never the real date", async () => {
+    // A clock years away from today: if the code read the real date, the window (and these dates) would differ.
+    const { handler, getJson, body } = setup({ clock: () => new Date("2031-03-15T06:35:00Z") });
+    const out = await handler({ parts: ["history"] });
+    expect(out.uploaded).toEqual(["recent.json"]);
+    // archive lag 5 days → ends 2031-03-10; DASHBOARD_RECENT_DAYS=3 → starts 2031-03-08
+    const archive = getJson.mock.calls.map(([url]) => new URL(url)).filter((u) => u.hostname.startsWith("archive"));
+    expect(archive.map((u) => [u.searchParams.get("start_date"), u.searchParams.get("end_date")]))
+      .toEqual([["2031-03-08", "2031-03-10"], ["2031-03-08", "2031-03-10"]]);
+    expect(body("recent.json")).toMatchObject({ from: "2031-03-08", days: 3, data_as_of: "2031-03-09", generated_at: "2031-03-15T06:35:00.000Z" });
   });
 
   it("publishes recent.json only when asked", async () => {
