@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DrillDownPanel } from "@/components/DrillDownPanel";
 import { DEFAULTS, useFilters } from "@/store/filters";
 import type { StatsRow } from "@/lib/api";
+import { NOW, openMeteoFetch } from "@/test/replayFixtures";
 
 const row = (period_start: string, avg: number, metric: string): StatsRow => metric === "precip_mm"
   ? { location_id: "stockton-ca", period_start, min: null, max: null, avg: null, sum: avg / 10, n_values: 24, n_hours: 24 }
@@ -72,5 +73,25 @@ describe("DrillDownPanel", () => {
     await user.hover(within(chart(/^Temperature/)).getByRole("button", { name: /^Aug:/ }));
     expect(container.querySelectorAll("[data-crosshair]")).toHaveLength(2);
     expect(within(chart(/^Rain in/)).getByText("Aug", { selector: "[data-tooltip] div" })).toBeInTheDocument();
+  });
+
+  it("opens the forecast replay only on request at the days level, and returns focus when it closes", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);   // fixed clock: replayable days end 2026-09-28
+    const f = openMeteoFetch();
+    vi.stubGlobal("fetch", f);
+    const user = userEvent.setup();
+    useFilters.setState({ ...DEFAULTS, city: "stockton-ca", year: "2025", month: "07" });
+    renderPanel();
+    const open = await screen.findByRole("button", { name: "Replay forecasts" });
+    expect(f).not.toHaveBeenCalled();
+    await user.click(open);
+    expect(screen.getByRole("heading", { name: "Forecast replay" })).toHaveFocus();
+    expect(await screen.findByText(/^ECMWF was off by/)).toBeInTheDocument();
+    expect(f).toHaveBeenCalledTimes(2);
+    await user.click(screen.getByRole("button", { name: "Close forecast replay" }));
+    expect(screen.queryByRole("heading", { name: "Forecast replay" })).not.toBeInTheDocument();
+    expect(open).toHaveFocus();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 });

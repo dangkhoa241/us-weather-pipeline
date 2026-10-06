@@ -32,6 +32,9 @@
       "@shared/*": [
         "../src/api/*"
       ],
+      "@cities": [
+        "../src/locations/cities.js"
+      ],
       "zod": [
         "./node_modules/zod"
       ]
@@ -41,6 +44,7 @@
     "src",
     "../src/api/schemas.js",
     "../src/api/params.js",
-    "../src/adapters/warehouse/Warehouse.js"
+    "../src/adapters/warehouse/Warehouse.js",
+    "../src/locations/cities.js"
   ]
 }

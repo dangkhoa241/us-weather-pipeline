@@ -7,6 +7,7 @@ import { createServer } from "node:http";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { chromium } from "playwright";
+import { insideDir } from "./insideDir.mjs";
 
 const DIST = new URL("../dist/", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1");
 const vercel = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
@@ -17,7 +18,7 @@ const server = createServer((req, res) => {
   const path = decodeURIComponent(new URL(req.url, "http://x").pathname);
   for (const rule of vercel.headers) if (toRegex(rule.source).test(path)) for (const h of rule.headers) res.setHeader(h.key, h.value);
   let file = normalize(join(DIST, path));
-  if (!file.startsWith(normalize(DIST))) { res.writeHead(400); return res.end(); }
+  if (!insideDir(DIST, file)) { res.writeHead(400); return res.end(); }
   if (!existsSync(file) || statSync(file).isDirectory()) {
     const rewrite = vercel.rewrites.find((r) => toRegex(r.source).test(path));
     if (!rewrite && path !== "/") { res.writeHead(404); return res.end("not found"); }
