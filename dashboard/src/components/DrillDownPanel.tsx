@@ -1,6 +1,6 @@
 // City drill-down below the map: years → 12 months of a year → days of a month, with a breadcrumb.
 // The level lives in the URL (filters year/month), so links and back/forward keep it.
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type StatsRow } from "@/lib/api";
 import { allYearsRange, dayPoints, drillLevel, monthName, monthPoints, rangeFor, yearPoints, yearsWithData } from "@/lib/drill";
@@ -9,6 +9,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TwinCharts, type TwinData } from "@/components/chart/TwinCharts";
 import { maWindowFor } from "@/lib/movingAverage";
+import { ForecastReplayPanel } from "@/components/replay/ForecastReplayPanel";
 
 /** Hidden until a city is chosen (map click or shared link); then fades in and scrolls into view. */
 export function DrillDownPanel() {
@@ -69,6 +70,11 @@ function DrillDownCard({ city: cityId }: { city: string }) {
     : level === "months" ? (key: string) => { if (withData.has(key)) f.setFilters({ year, month: key }); }
     : undefined;
   const scope = level === "years" ? "per year" : level === "months" ? `per month, ${year}` : `per day, ${monthName(f.month)} ${year}`;
+  // Forecast replay: only on request, at the days level. The clock is read once, when it opens (null = closed).
+  const [replayNow, setReplayNow] = useState<number | null>(null);
+  const replay = replayNow != null;
+  const replayButton = useRef<HTMLButtonElement>(null);
+  const closeReplay = () => { setReplayNow(null); replayButton.current?.focus(); };
 
   return (
     <div className="flex flex-col gap-4">
@@ -87,6 +93,12 @@ function DrillDownCard({ city: cityId }: { city: string }) {
             </nav>
           </CardDescription>
           <CardAction className="flex items-center gap-2">
+            {level === "days" && (
+              <button ref={replayButton} type="button" aria-expanded={replay} aria-controls="forecast-replay" onClick={() => setReplayNow(replay ? null : Date.now())}
+                className="rounded-md border px-2 py-1 text-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
+                Replay forecasts
+              </button>
+            )}
             {level !== "years" && yearList.length > 0 && (
               <Select value={year} onValueChange={(y) => f.setFilters({ year: y, month: "" })}>
                 <SelectTrigger className="w-28" aria-label="Year"><SelectValue /></SelectTrigger>
@@ -99,6 +111,12 @@ function DrillDownCard({ city: cityId }: { city: string }) {
         </CardHeader>
         {onSelect && <CardContent className="-mt-2 text-xs text-muted-foreground">Select a {level === "years" ? "year" : "month"} on either chart to drill down.</CardContent>}
       </Card>
+      {replayNow != null && level === "days" && (
+        <div id="forecast-replay">
+          <ForecastReplayPanel city={cityId} cityName={cityName} year={year} month={f.month} unit={f.unit} now={replayNow}
+            onClose={closeReplay} onJump={(y, m) => f.setFilters({ year: y, month: m })} />
+        </div>
+      )}
       <TwinCharts temp={temp} rain={rain} unit={f.unit} subject={cityName} scope={scope} maWindow={maWindowFor(level === "days")}
         onSelect={onSelect} emptyHint={`${cityName} has no data ${scope}.`} readyMark="drill-chart-ready" />
     </div>

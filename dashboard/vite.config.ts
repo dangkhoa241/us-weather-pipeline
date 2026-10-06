@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -9,6 +10,13 @@ const API = "http://127.0.0.1:3000";
 // Live data for the static demo (Stage 6a part 4): CloudFront in front of the dashboard publisher's files (stack output
 // DashboardDataUrl). Not a secret. Must match connect-src in vercel.json. Empty = bundled snapshot only.
 const LIVE_DATA_URL = "";
+
+// Content-Security-Policy: vercel.json is the one source. `vite preview` serves the built app under the same policy;
+// the dev server gets only its connect-src (the full policy would block Vite's inline HMR/React Refresh scripts), so
+// a call to a host missing from vercel.json fails in development too. connect-src lists exact hosts, no wildcards.
+const CSP: string = JSON.parse(readFileSync(path.resolve(import.meta.dirname, "vercel.json"), "utf8")).headers
+  .flatMap((r: { headers: { key: string; value: string }[] }) => r.headers).find((h: { key: string }) => h.key === "Content-Security-Policy").value;
+const CONNECT_SRC = CSP.split(";").map((d) => d.trim()).find((d) => d.startsWith("connect-src "));
 
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss()],
@@ -22,15 +30,18 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(import.meta.dirname, "src"),
       // API schemas shared with the backend (src/api/schemas.js): one definition for validation and types.
       "@shared": path.resolve(import.meta.dirname, "../src/api"),
+      // The 53 tracked cities (id, lat, lon, IANA zone): the forecast replay validates against them.
+      "@cities": path.resolve(import.meta.dirname, "../src/locations/cities.js"),
     },
     dedupe: ["zod"],
   },
   server: {
     proxy: { "/api": API },
+    headers: { "Content-Security-Policy": CONNECT_SRC! },
     // The dev server may read this app plus only the shared API schema files outside it.
-    fs: { allow: [import.meta.dirname, path.resolve(import.meta.dirname, "../src/api"), path.resolve(import.meta.dirname, "../src/adapters/warehouse")] },
+    fs: { allow: [import.meta.dirname, path.resolve(import.meta.dirname, "../src/api"), path.resolve(import.meta.dirname, "../src/adapters/warehouse"), path.resolve(import.meta.dirname, "../src/locations")] },
   },
-  preview: { proxy: { "/api": API } },
+  preview: { proxy: { "/api": API }, headers: { "Content-Security-Policy": CSP } },
   // globals: lets React Testing Library clean up the DOM after each test automatically
   test: { globals: true, environment: "jsdom", setupFiles: ["./src/test/setup.ts"], include: ["src/**/*.test.{ts,tsx}"] },
 }));
