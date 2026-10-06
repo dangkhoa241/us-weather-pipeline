@@ -95,7 +95,7 @@ function DrillDownCard({ city: cityId }: { city: string }) {
           <CardAction className="flex items-center gap-2">
             {level === "days" && (
               <button ref={replayButton} type="button" aria-expanded={replay} aria-controls="forecast-replay" onClick={() => setReplayNow(replay ? null : Date.now())}
-                className="rounded-md border px-2 py-1 text-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
+                className="rounded-md bg-cta px-2.5 py-1 text-sm font-medium text-cta-foreground shadow-sm transition-colors hover:bg-cta-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cta aria-expanded:bg-cta-hover">
                 Replay forecasts
               </button>
             )}
@@ -109,7 +109,12 @@ function DrillDownCard({ city: cityId }: { city: string }) {
               onClick={() => f.setFilters({ city: "", year: "", month: "", location: ALL_US })}>×</button>
           </CardAction>
         </CardHeader>
-        {onSelect && <CardContent className="-mt-2 text-xs text-muted-foreground">Select a {level === "years" ? "year" : "month"} on either chart to drill down.</CardContent>}
+        {onSelect && (
+          <CardContent data-drill-hint className="-mt-2 text-xs text-muted-foreground">
+            Select a {level === "years" ? "year" : "month"} on either chart to drill down.
+            {level === "months" && <> Open a month, then use <strong className="font-semibold text-cta">Replay forecasts</strong> to see how each model's forecast changed.</>}
+          </CardContent>
+        )}
       </Card>
       {replayNow != null && level === "days" && (
         <div id="forecast-replay">

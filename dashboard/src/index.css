@@ -33,6 +33,9 @@
     --color-secondary: var(--secondary);
     --color-primary-foreground: var(--primary-foreground);
     --color-primary: var(--primary);
+    --color-cta: var(--cta);
+    --color-cta-hover: var(--cta-hover);
+    --color-cta-foreground: var(--cta-foreground);
     --color-popover-foreground: var(--popover-foreground);
     --color-popover: var(--popover);
     --color-card-foreground: var(--card-foreground);
@@ -86,6 +89,10 @@
     --c-rain: #2f80ed;
     --c-ma: #7c3aed;
     --c-avg: #b45309;
+    /* Call to action ("Replay forecasts"): text on --cta 5.66:1, --cta as text on the card 5.66:1, hover 7.14:1 */
+    --cta: #1d64c8;
+    --cta-hover: #1a56a8;
+    --cta-foreground: #ffffff;
     --map-line: #ffffff;
     --map-outline: #6b7280;
     --map-nodata: #eceef1;
@@ -138,6 +145,10 @@
     --c-rain: #5aa9ff;
     --c-ma: #b794f6;
     --c-avg: #fbbf24;
+    /* text on --cta 7.30:1, --cta as text on the card 7.30:1, hover 9.77:1 */
+    --cta: #5aa9ff;
+    --cta-hover: #8cc4ff;
+    --cta-foreground: oklch(0.205 0 0);
     --map-line: #1c1c1f;
     --map-outline: #9ca3af;
     --map-nodata: #26282d;

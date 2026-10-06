@@ -75,6 +75,28 @@ describe("DrillDownPanel", () => {
     expect(within(chart(/^Rain in/)).getByText("Aug", { selector: "[data-tooltip] div" })).toBeInTheDocument();
   });
 
+  it("points to the forecast replay in the year view only (not in the all-years or month view)", async () => {
+    const hint = () => document.querySelector("[data-drill-hint]");
+    const { unmount } = renderPanel();   // year view: 12 months of 2025
+    await screen.findAllByRole("button", { name: /^Jul:/ });
+    expect(hint()).toHaveTextContent("Select a month on either chart to drill down. Open a month, then use Replay forecasts to see how each model's forecast changed.");
+    expect(within(hint() as HTMLElement).getByText("Replay forecasts")).toHaveClass("text-cta");
+    expect(screen.queryByRole("button", { name: "Replay forecasts" })).not.toBeInTheDocument();
+    unmount();
+
+    useFilters.setState({ ...DEFAULTS, city: "stockton-ca", year: "all", month: "" });
+    const years = renderPanel();          // all years: only the year hint
+    await screen.findAllByRole("button", { name: /^2024:/ });
+    expect(hint()).toHaveTextContent(/^Select a year on either chart to drill down\.$/);
+    years.unmount();
+
+    useFilters.setState({ ...DEFAULTS, city: "stockton-ca", year: "2025", month: "07" });
+    renderPanel();                        // month view: the button instead of the hint
+    expect(await screen.findByRole("button", { name: "Replay forecasts" })).toBeInTheDocument();
+    expect(hint()).toBeNull();
+    expect(screen.queryByText(/Open a month, then use/)).not.toBeInTheDocument();
+  });
+
   it("opens the forecast replay only on request at the days level, and returns focus when it closes", async () => {
     vi.spyOn(Date, "now").mockReturnValue(NOW);   // fixed clock: replayable days end 2026-09-28
     const f = openMeteoFetch();
@@ -83,6 +105,9 @@ describe("DrillDownPanel", () => {
     useFilters.setState({ ...DEFAULTS, city: "stockton-ca", year: "2025", month: "07" });
     renderPanel();
     const open = await screen.findByRole("button", { name: "Replay forecasts" });
+    expect(open).toHaveClass("bg-cta", "text-cta-foreground");   // primary look, same accessible name
+    expect(open).toHaveAttribute("aria-expanded", "false");
+    expect(document.querySelector("[data-drill-hint]")).toBeNull();
     expect(f).not.toHaveBeenCalled();
     await user.click(open);
     expect(screen.getByRole("heading", { name: "Forecast replay" })).toHaveFocus();
