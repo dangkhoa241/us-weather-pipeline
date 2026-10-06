@@ -1,7 +1,8 @@
 // Record the README demo GIF (and, with --screenshots, the readme-*.png screenshots) from the static demo build, served
 // by `vite preview` under the vercel.json CSP. Free tools only: Playwright + ffmpeg-static.
-// Story: US map → click a state → open a city → September → "Replay forecasts" → wait for the Live chart → 2 s pause.
-// The replay is live from Open-Meteo (2 requests). Fails on any CSP violation or if the last frame has no real data.
+// Story: US map → click a state → open a city → September → "Replay forecasts" → wait for the Live chart → 2 s pause
+// → hover "ECMWF" so its glossary tooltip shows for ~2 s. The replay is live from Open-Meteo (2 requests).
+// Fails on any CSP violation, or if the last frame has no live data or no open ECMWF tooltip.
 // Usage: npm run build:snapshot && node scripts/recordDemo.mjs [--screenshots]   (writes docs/images/demo.gif)
 
 import { spawn, spawnSync } from "node:child_process";
@@ -82,11 +83,21 @@ try {
     models: await page.locator("[data-replay-chart]").getAttribute("data-series"),
   };
   await wait(2000);                                                   // the 2 s pause on the Live chart
+
+  const ecmwf = page.locator('[data-replay-model="ecmwf_ifs025"] abbr[data-term="ECMWF"]');
+  await moveTo(page, ecmwf, 20);                                      // hover "ECMWF": its glossary tooltip opens
+  await page.waitForSelector('[role="tooltip"][data-term-tooltip="ECMWF"]:not([hidden])', { timeout: 5_000 });
+  await wait(2000);                                                   // the tooltip stays ~2 s, to the last frame
+  final.tooltip = await page.locator('[role="tooltip"][data-term-tooltip="ECMWF"]:not([hidden])').textContent();
+  final.replayButton = await page.getByRole("button", { name: "Replay forecasts" }).evaluate((b) =>
+    ({ visible: b.getBoundingClientRect().bottom > 0, bg: getComputedStyle(b).backgroundColor }));
+
   const csp = await page.evaluate(() => window.__csp ?? []);
   console.log(`[demo] ${((Date.now() - started) / 1000).toFixed(1)} s recorded; CSP violations: ${csp.length}; Open-Meteo requests: ${openMeteo.length} (${[...new Set(openMeteo)].join(" ")})`);
   console.log(`[demo] final frame: ${JSON.stringify(final)}`);
   if (csp.length) throw new Error(`CSP violations: ${csp.join("; ")}`);
   if (!/^Live/.test(final.source ?? "") || !/was off by \d/.test(final.insight ?? "") || !(Number(final.models) > 0)) throw new Error("final frame has no live data");
+  if (!/European Centre for Medium-Range Weather Forecasts/.test(final.tooltip ?? "")) throw new Error("final frame has no ECMWF tooltip");
 
   const video = page.video();
   await context.close();
