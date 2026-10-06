@@ -12,7 +12,7 @@
 The demo is a static data snapshot (badge "Snapshot · data as of …"). Data collection already runs on AWS. Automatic
 updates for the dashboard (S3 + CloudFront, Part 4) are built but not deployed yet.
 
-![Demo: All US overview → click a city → drill into a month → Accuracy page → dark mode](docs/images/demo.gif)
+![Demo: US map → click a state → open a city → September → Replay forecasts (live from Open-Meteo)](docs/images/demo.gif)
 
 ## Key finding
 
