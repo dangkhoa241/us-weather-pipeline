@@ -9,6 +9,7 @@ import type { GeometryCollection, Topology } from "topojson-specification";
 import us from "us-atlas/states-10m.json";
 import { colorFor, extent, PALETTES } from "@/lib/colors";
 import { STATE_BY_FIPS } from "@/lib/states";
+import { Term } from "@/components/Term";
 import { fmt } from "@/lib/units";
 import { metricLabel, stateValue, type MapProps } from "./types";
 
@@ -170,12 +171,12 @@ export function UsMap({ states: rows, locations, metric, unit, selectedLocation,
 
 function Legend({ range, palette, label }: { range: [number, number]; palette: readonly string[]; label: string }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground" aria-hidden>
-      <span>{fmt(range[0])}</span>
-      <div className="h-2 w-48 rounded" style={{ background: `linear-gradient(to right, ${palette.join(",")})` }} />
-      <span>{fmt(range[1])}</span>
-      <span>{label}</span>
-      <span className="ml-auto flex items-center gap-3">
+    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+      <span aria-hidden>{fmt(range[0])}</span>
+      <div className="h-2 w-48 rounded" style={{ background: `linear-gradient(to right, ${palette.join(",")})` }} aria-hidden />
+      <span aria-hidden>{fmt(range[1])}</span>
+      <span>{label.endsWith("(mm)") ? <>{label.slice(0, -4)}(<Term k="mm" />)</> : label}</span>
+      <span className="ml-auto flex items-center gap-3" aria-hidden>
         <span className="flex items-center gap-1"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="none" strokeWidth="1.4" style={{ stroke: "var(--muted-foreground)" }} /></svg>data loading</span>
         <span className="flex items-center gap-1"><svg width="12" height="12"><rect width="12" height="12" rx="2" style={{ fill: "var(--map-hatch)" }} /></svg>no data</span>
       </span>

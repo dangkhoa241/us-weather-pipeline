@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { PRESETS, type Preset } from "@/lib/dates";
 import { ALL_US, COMPARES, METRICS, PERIODS, selectedRange, useFilters, type Metric, type Period } from "@/store/filters";
 import type { Compare } from "@/lib/dates";
+import { Term } from "@/components/Term";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
@@ -11,7 +12,7 @@ function useCities() {
   return useQuery({ queryKey: ["locations"], queryFn: api.locations, staleTime: Infinity }).data?.data ?? [];
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
       {label}
@@ -111,7 +112,7 @@ export function FilterBar({ fields = ALL }: { fields?: FilterField[] }) {
         </Select>
       </Field>}
 
-      {show("lead") && <Field label="Lead day">
+      {show("lead") && <Field label={<Term k="Lead day" />}>
         <ToggleGroup type="single" variant="outline" size="sm" value={f.lead} aria-label="Lead day"
           onValueChange={(v) => v && f.setFilters({ lead: v })}>
           {["1", "2", "3", "4", "5", "6", "7"].map((d) => <ToggleGroupItem key={d} value={d} aria-label={`${d} day${d === "1" ? "" : "s"} ahead`}>{d}</ToggleGroupItem>)}

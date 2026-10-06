@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ForecastReplayPanel } from "@/components/replay/ForecastReplayPanel";
@@ -22,13 +22,40 @@ describe("ForecastReplayPanel", () => {
     render(panel(client()));
     expect(screen.getByRole("heading", { name: "Forecast replay" })).toHaveFocus();
     expect(await screen.findByText(/^ECMWF was off by 6\.1°F seven days ahead and by 0\.7°F one day ahead\./)).toBeInTheDocument();
-    expect(screen.getByText("Live · Open-Meteo previous runs")).toBeInTheDocument();
+    expect(document.querySelector("[data-replay-source]")).toHaveTextContent("Live · Open-Meteo previous runs");
     expect(screen.getByRole("group", { name: /^Forecasts of the high for Stockton on Mon, Sep 28, 2026/ })).toHaveAttribute("data-series", "5");
     expect(screen.getByRole("link", { name: "Open-Meteo.com" })).toHaveAttribute("href", "https://open-meteo.com/");
-    expect(screen.getByRole("link", { name: "CC BY 4.0" })).toHaveAttribute("rel", "noopener noreferrer");
+    expect(screen.getByRole("link", { name: "licence" })).toHaveAttribute("href", "https://creativecommons.org/licenses/by/4.0/");
+    expect(screen.getByRole("link", { name: "licence" })).toHaveAttribute("rel", "noopener noreferrer");
     expect(screen.getByText(/^ICON: 83\.8°F six days ahead/)).toBeInTheDocument();   // text, not only colors
     const days = f.mock.calls.map(([u]) => new URL(String(u)).searchParams.get("start_date"));
     expect(days).toEqual(["2026-09-27", "2026-09-27"]);
+  });
+
+  it("explains every model in the panel headers with a glossary tooltip (hover, focus, Escape)", async () => {
+    vi.stubGlobal("fetch", openMeteoFetch());
+    const user = userEvent.setup();
+    render(panel(client()));
+    await screen.findByText(/^ECMWF was off/);
+    const full: Record<string, string> = {
+      ecmwf_ifs025: "European Centre for Medium-Range Weather Forecasts", gfs_global: "Global Forecast System",
+      icon_global: "Icosahedral Nonhydrostatic model", gfs_hrrr: "High-Resolution Rapid Refresh", best_match: "Open-Meteo best match",
+    };
+    for (const [id, name] of Object.entries(full)) {
+      const header = document.querySelector(`[data-replay-model="${id}"] figcaption`) as HTMLElement;
+      const term = header.querySelector("abbr[data-term]") as HTMLElement;
+      expect(term, id).toHaveAccessibleDescription(expect.stringContaining(name));
+      expect(within(header).getByText("1d").closest("abbr")).toHaveAttribute("data-term", "Lead day");
+    }
+    const ecmwf = document.querySelector('[data-replay-model="ecmwf_ifs025"] abbr') as HTMLElement;
+    await user.hover(ecmwf);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("European Centre for Medium-Range Weather Forecasts");
+    await user.unhover(ecmwf);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    act(() => ecmwf.focus());
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("European Centre for Medium-Range Weather Forecasts");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
   it("never sends a second request for the same city and day (closing and reopening uses the cache)", async () => {

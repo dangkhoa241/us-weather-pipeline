@@ -9,6 +9,7 @@ import { ReplayChart } from "@/components/replay/ReplayChart";
 import { dayLabel, daysAhead, pickSample, replayCity, replayDaysInMonth, replayInsight, replayRange, replaySeries, ReplayError, type ReplayResult } from "@/lib/replay";
 import { useReplay, useReplaySample } from "@/lib/useReplay";
 import { modelName } from "@/lib/models";
+import { Term } from "@/components/Term";
 import { monthName } from "@/lib/drill";
 import { fmt, toUnit, type TempUnit } from "@/lib/units";
 
@@ -72,10 +73,10 @@ export function ForecastReplayPanel({ city, cityName, year, month, unit, now, on
           <h3 id="replay-heading" ref={heading} tabIndex={-1} className="outline-none focus-visible:underline">Forecast replay</h3>
           <span data-replay-source className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-normal text-muted-foreground">
             <span className={`size-2 rounded-full ${isSample ? "bg-amber-500" : "bg-emerald-500"}`} aria-hidden />
-            {isSample ? "Sample · bundled, not live" : "Live · Open-Meteo previous runs"}
+            {isSample ? "Sample · bundled, not live" : <>Live · Open-Meteo <Term k="Previous runs">previous runs</Term></>}
           </span>
         </CardTitle>
-        <CardDescription>What each model predicted for the day's high 1 to 7 days before, against the observed high.</CardDescription>
+        <CardDescription>What each model predicted for the day's high <Term k="Lead day">1 to 7 days before</Term>, against the <Term k="Observed">observed</Term> high.</CardDescription>
         <CardAction className="flex items-center gap-2">
           {days.length > 0 && (
             <Select value={day} onValueChange={setPicked}>
@@ -92,8 +93,8 @@ export function ForecastReplayPanel({ city, cityName, year, month, unit, now, on
         <p className="text-xs text-muted-foreground">
           Data: <a className="underline underline-offset-2" href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo.com</a>{" "}
           (Previous Runs and Historical Weather APIs), licensed{" "}
-          <a className="underline underline-offset-2" href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>.
-          Lead day N = the forecast made N days before; observed = Open-Meteo's historical reanalysis, not a station reading.
+          <Term k="CC BY 4.0" /> (<a className="underline underline-offset-2" href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">licence</a>).{" "}
+          <Term k="Lead day">Lead day</Term> N = the forecast made N days before; <Term k="Observed">observed</Term> = Open-Meteo's historical <Term k="Reanalysis">reanalysis</Term>, not a station reading.
         </p>
       </CardContent>
     </Card>
@@ -106,7 +107,7 @@ function ReplayBody({ result, cityName, unit }: { result: ReplayResult; cityName
   return (
     <div className="flex flex-col gap-3">
       <p data-replay-insight className="text-base font-medium">{replayInsight(result, unit)}</p>
-      <p className="text-sm text-muted-foreground">Observed high in {cityName} on {dayLabel(result.day)}: <strong className="text-foreground">{fmt(observed)}°{unit}</strong></p>
+      <p className="text-sm text-muted-foreground"><Term k="Observed">Observed</Term> high in {cityName} on {dayLabel(result.day)}: <strong className="text-foreground">{fmt(observed)}°{unit}</strong></p>
       <ReplayChart series={series} observed={observed} unit={unit} title={`Forecasts of the high for ${cityName} on ${dayLabel(result.day)}, by days ahead`} />
       <ul className="sr-only" aria-label="Forecasts by model">
         {series.map((s) => (

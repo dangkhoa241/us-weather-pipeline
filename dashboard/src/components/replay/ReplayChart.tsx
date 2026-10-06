@@ -1,12 +1,14 @@
 // Forecast replay chart, design B: small multiples. One panel per model on a shared y-scale, each with the dashed
 // observed high, so every model's path is seen alone without overlap. The panel title names the model (identity
-// never by color alone) and its one-day-ahead miss. Each panel is focusable and states its values in words; points
-// have native tooltips. Hand-rolled SVG with d3-scale/d3-shape; colors follow the theme.
+// never by color alone, with a glossary tooltip) and its one-day-ahead miss. Each panel states its values in words
+// (aria-label); the model name and lead day are focusable glossary terms; SVG points and axis labels have <title>s. Hand-rolled SVG with d3-scale/d3-shape; colors follow the theme.
 import { useRef } from "react";
 import { scaleLinear, scalePoint } from "d3-scale";
 import { line } from "d3-shape";
 import type { ReplayChartProps } from "@/components/replay/types";
 import { useWidth } from "@/components/chart/useWidth";
+import { Term } from "@/components/Term";
+import { isGlossaryKey } from "@/lib/glossary";
 import { daysAhead } from "@/lib/replay";
 import { fmt } from "@/lib/units";
 
@@ -33,13 +35,13 @@ export function ReplayChart({ series, observed, unit, title }: ReplayChartProps)
       {series.map((s) => {
         const last = s.points.at(-1)!;
         return (
-          <figure key={s.id} tabIndex={0} className="m-0 rounded-md p-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          <figure key={s.id} data-replay-model={s.id} className="m-0 rounded-md p-1"
             aria-label={`${s.name}: ${s.points.map((p) => `${fmt(p.v)}°${unit} ${daysAhead(p.lead)}`).join(", ")}; observed ${fmt(observed)}°${unit}`}>
-            <figcaption className="flex items-baseline justify-between gap-2 text-xs" aria-hidden>
+            <figcaption className="flex items-baseline justify-between gap-2 text-xs">
               <span className="flex items-center gap-1.5 font-medium text-foreground">
-                <span className="inline-block h-0.5 w-3 rounded" style={{ background: s.color }} />{s.name}
+                <span className="inline-block h-0.5 w-3 rounded" style={{ background: s.color }} aria-hidden />{isGlossaryKey(s.name) ? <Term k={s.name} /> : s.name}
               </span>
-              <span className="tabular-nums text-muted-foreground">{last.lead}d: {signed(last.v - observed)}{unit}</span>
+              <span className="tabular-nums text-muted-foreground"><Term k="Lead day">{last.lead}d</Term>: {signed(last.v - observed)}{unit}</span>
             </figcaption>
             <svg width="100%" height={PH} viewBox={`0 0 ${PW} ${PH}`} className="block" aria-hidden>
               {y.ticks(4).map((t) => (
@@ -49,9 +51,11 @@ export function ReplayChart({ series, observed, unit, title }: ReplayChartProps)
                 </g>
               ))}
               {LEADS.map((l) => (
-                <text key={l} x={x(l)} y={PH - 6} textAnchor="middle" fontSize={10} style={{ fill: "var(--muted-foreground)" }}>{l}d</text>
+                <text key={l} x={x(l)} y={PH - 6} textAnchor="middle" fontSize={10} style={{ fill: "var(--muted-foreground)" }}><title>{daysAhead(l)}</title>{l}d</text>
               ))}
-              <line x1={M.left} x2={PW - M.right} y1={y(observed)} y2={y(observed)} strokeDasharray="5 3" strokeWidth={1.5} style={{ stroke: "var(--foreground)" }} />
+              <line x1={M.left} x2={PW - M.right} y1={y(observed)} y2={y(observed)} strokeDasharray="5 3" strokeWidth={1.5} style={{ stroke: "var(--foreground)" }}>
+                <title>{`Observed high ${fmt(observed)}°${unit}`}</title>
+              </line>
               <path d={path(s.points) ?? ""} fill="none" strokeWidth={2} style={{ stroke: s.color }} />
               {s.points.map((p) => (
                 <circle key={p.lead} cx={x(p.lead)} cy={y(p.v)} r={4} strokeWidth={1.5} style={{ fill: s.color, stroke: "var(--card)" }}>
@@ -62,8 +66,8 @@ export function ReplayChart({ series, observed, unit, title }: ReplayChartProps)
           </figure>
         );
       })}
-      <p className="text-xs text-muted-foreground" style={{ gridColumn: "1 / -1" }} aria-hidden>
-        Dashed line: observed high {fmt(observed)}°{unit}. x-axis: days before the day; same scale in every panel.
+      <p className="text-xs text-muted-foreground" style={{ gridColumn: "1 / -1" }}>
+        Dashed line: <Term k="Observed">observed</Term> high {fmt(observed)}°{unit}. x-axis: <Term k="Lead day">days before the day</Term>; same scale in every panel.
       </p>
     </div>
   );

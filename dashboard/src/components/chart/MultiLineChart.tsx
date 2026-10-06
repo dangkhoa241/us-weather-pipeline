@@ -4,6 +4,8 @@
 import { useRef, useState } from "react";
 import { scalePoint, scaleLinear } from "d3-scale";
 import { area, curveMonotoneX, line } from "d3-shape";
+import { Term } from "@/components/Term";
+import { isGlossaryKey } from "@/lib/glossary";
 import { fmt } from "@/lib/units";
 import { useWidth } from "./useWidth";
 
@@ -56,10 +58,10 @@ export function MultiLineChart({ labels, series, title, unitLabel, spread, zeroL
         {series.map((s) => (
           <li key={s.id} className="flex items-center gap-1.5">
             <svg width="16" height="8" aria-hidden><line x1="0" x2="16" y1="4" y2="4" strokeWidth="2.5" strokeDasharray={s.dashed ? "4 3" : undefined} style={{ stroke: s.color }} /></svg>
-            {s.name}
+            {isGlossaryKey(s.name) ? <Term k={s.name} /> : s.name}
           </li>
         ))}
-        {spread && <li className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-4 rounded-sm" style={{ background: "var(--c-spread)" }} aria-hidden />spread between models</li>}
+        {spread && <li className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-4 rounded-sm" style={{ background: "var(--c-spread)" }} aria-hidden /><Term k="Spread">spread</Term> between models</li>}
       </ul>
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="block max-w-full" onMouseLeave={() => setHover(null)}>
         <g aria-hidden="true">

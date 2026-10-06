@@ -8,6 +8,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { scaleBand, scaleLinear } from "d3-scale";
 import { area, curveMonotoneX, line } from "d3-shape";
 import { fmt } from "@/lib/units";
+import { Term } from "@/components/Term";
 import { movingAverage } from "@/lib/movingAverage";
 import { downloadCsv, downloadPng, csvOf } from "./exportChart";
 import { valueOf, type StatsChartProps } from "./types";
@@ -140,10 +141,13 @@ export function StatsChart({ points, metric, unit, title, onSelect, readyMark, m
           </g>
 
           {mean != null && (
-            <g data-mean>
-              <line x1={M.left} x2={W - M.right} y1={y(mean)} y2={y(mean)} strokeDasharray="6 4" strokeWidth={1.2} style={{ stroke: "var(--c-avg)" }} />
-              <text x={W - M.right - 2} y={y(mean) - 4} textAnchor="end" fontSize={11} fontWeight={600} paintOrder="stroke" strokeWidth={3}
-                style={{ fill: "var(--c-avg)", stroke: "var(--card)" }}>avg {fmt(mean)}{rain ? ` ${rainUnit}` : unitLabel}</text>
+            <g>
+              <title>Average: the mean of all values in the chart</title>
+              <g data-mean>
+                <line x1={M.left} x2={W - M.right} y1={y(mean)} y2={y(mean)} strokeDasharray="6 4" strokeWidth={1.2} style={{ stroke: "var(--c-avg)" }} />
+                <text x={W - M.right - 2} y={y(mean) - 4} textAnchor="end" fontSize={11} fontWeight={600} paintOrder="stroke" strokeWidth={3}
+                  style={{ fill: "var(--c-avg)", stroke: "var(--card)" }}>avg {fmt(mean)}{rain ? ` ${rainUnit}` : unitLabel}</text>
+              </g>
             </g>
           )}
 
@@ -189,6 +193,11 @@ export function StatsChart({ points, metric, unit, title, onSelect, readyMark, m
           {ma[hIdx] != null && <div className="text-muted-foreground">trend {fmt(ma[hIdx])}{rain ? ` ${rainUnit}` : unitLabel}</div>}
         </div>
       )}
+      <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground" data-chart-legend>
+        {mean != null && <span className="flex items-center gap-1"><svg width="16" height="6" aria-hidden><line x1="0" x2="16" y1="3" y2="3" strokeDasharray="6 4" strokeWidth="1.5" style={{ stroke: "var(--c-avg)" }} /></svg><Term k="avg" /></span>}
+        <span className="flex items-center gap-1"><svg width="16" height="6" aria-hidden><line x1="1" x2="16" y1="3" y2="3" strokeDasharray="1 5" strokeLinecap="round" strokeWidth="2" style={{ stroke: "var(--c-ma)" }} /></svg><Term k="Moving average">moving average</Term> ({maWindow} points)</span>
+        {rain && rainUnit === "mm" && <span><Term k="mm" /> of rain</span>}
+      </p>
     </div>
   );
 }

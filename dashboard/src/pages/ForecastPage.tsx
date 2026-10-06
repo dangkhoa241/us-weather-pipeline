@@ -14,6 +14,8 @@ import { FilterBar } from "@/components/FilterBar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Term } from "@/components/Term";
+import { isGlossaryKey } from "@/lib/glossary";
 import { TwinCharts } from "@/components/chart/TwinCharts";
 import { MultiLineChart } from "@/components/chart/MultiLineChart";
 
@@ -62,7 +64,7 @@ function CityForecast({ id, name, state, tz, unit }: { id: string; name: string;
         <CardHeader>
           <CardTitle className="text-lg">{name}</CardTitle>
           <CardDescription data-forecast-issued>
-            {nwsIssued ? (isSnapshot && !liveTime("forecasts") ? `Forecast as of ${nwsIssued.slice(0, 10)}` : `NWS forecast issued ${fmtLocal(nwsIssued, tz)} (local time)`) : "Loading forecast…"}
+            {nwsIssued ? (isSnapshot && !liveTime("forecasts") ? `Forecast as of ${nwsIssued.slice(0, 10)}` : <><Term k="NWS" /> forecast issued {fmtLocal(nwsIssued, tz)} (local time)</>) : "Loading forecast…"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -78,7 +80,7 @@ function CityForecast({ id, name, state, tz, unit }: { id: string; name: string;
                     <span className="text-xs font-medium text-muted-foreground">{c.weekday} {Number(c.date.slice(8))}</span>
                     <Icon className="size-8" style={{ color: cond === "rain" || cond === "storm" ? "var(--c-rain)" : cond === "clear" || cond === "partly" ? "var(--c-avg)" : "var(--muted-foreground)" }} aria-hidden />
                     <span className="text-sm tabular-nums"><b>{c.high == null ? "—" : `${fmt(t(c.high), 0)}°`}</b> <span className="text-muted-foreground">{c.low == null ? "" : `/ ${fmt(t(c.low), 0)}°`}</span></span>
-                    <span className="text-xs tabular-nums" style={{ color: "var(--c-rain)" }}>{c.rainChance == null ? "" : `💧 ${c.rainChance}%`}</span>
+                    <span className="text-xs tabular-nums" style={{ color: "var(--c-rain)" }}>{c.rainChance == null ? "" : <Term k="Rain chance">💧 {c.rainChance}%</Term>}</span>
                     <span className="line-clamp-2 text-xs text-muted-foreground" title={c.text}>{c.text || "—"}</span>
                   </li>
                 );
@@ -89,7 +91,7 @@ function CityForecast({ id, name, state, tz, unit }: { id: string; name: string;
       </Card>
 
       <section aria-label="Next 48 hours" className="flex flex-col gap-2">
-        <h2 className="px-1 text-sm font-semibold">Next 48 hours (NWS)</h2>
+        <h2 className="px-1 text-sm font-semibold">Next 48 hours (<Term k="NWS" />)</h2>
         <TwinCharts unit={unit} subject={name} scope="next 48 hours" maWindow={3} rainTitle="Rain chance" rainUnit="%"
           temp={{ points: h48.temp, pending: hourly.isPending, error: hourly.error }}
           rain={{ points: h48.rain, pending: hourly.isPending, error: hourly.error }} emptyHint="No hourly NWS forecast for this city right now." />
@@ -98,8 +100,8 @@ function CityForecast({ id, name, state, tz, unit }: { id: string; name: string;
       <Card>
         <CardHeader>
           <CardTitle>Models disagree?</CardTitle>
-          <CardDescription>Daily high for the next 7 days from each model; the shaded spread shows how uncertain the forecast is.
-            Days a model doesn't fully cover (e.g. HRRR beyond ~18 h) are left empty.</CardDescription>
+          <CardDescription>Daily high for the next 7 days from each model; the shaded <Term k="Spread">spread</Term> shows how uncertain the forecast is.
+            Days a model doesn't fully cover (e.g. <Term k="HRRR" /> beyond ~18 h) are left empty.</CardDescription>
         </CardHeader>
         <CardContent>
           {hourly.error ? <Problem what="the model forecasts" error={hourly.error} /> : hourly.isPending ? <Skeleton className="h-72" /> : series.length < 2 ? (
@@ -113,8 +115,8 @@ function CityForecast({ id, name, state, tz, unit }: { id: string; name: string;
 
       <Card>
         <CardHeader>
-          <CardTitle>Active NWS alerts · {state}</CardTitle>
-          <CardDescription>{!isSnapshot ? "Alerts that have not expired, for the whole state." : liveTime("alerts") ? `Alerts that had not expired at ${liveTime("alerts")!.slice(0, 16).replace("T", " ")} UTC, for the whole state.` : "Alerts active when the demo snapshot was taken."}</CardDescription>
+          <CardTitle>Active <Term k="NWS" /> alerts · {state}</CardTitle>
+          <CardDescription>{!isSnapshot ? "Alerts that have not expired, for the whole state." : liveTime("alerts") ? <>Alerts that had not expired at {liveTime("alerts")!.slice(0, 16).replace("T", " ")} <Term k="UTC" />, for the whole state.</> : "Alerts active when the demo snapshot was taken."}</CardDescription>
         </CardHeader>
         <CardContent>
           {alerts.error ? <Problem what="alerts" error={alerts.error} /> : alerts.isPending ? <Skeleton className="h-20" /> : (
@@ -150,7 +152,7 @@ function AlertItem({ a, tz }: { a: AlertRow; tz: string }) {
   return (
     <li data-alert data-severity={a.severity ?? "Unknown"} className="rounded-lg border-l-4 bg-muted/40 p-3 text-sm" style={{ borderLeftColor: color }}>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded px-1.5 py-0.5 text-xs font-semibold text-white" style={{ background: color }}>{a.severity ?? "Unknown"}</span>
+        <span className="rounded px-1.5 py-0.5 text-xs font-semibold text-white" style={{ background: color }}>{a.severity && isGlossaryKey(a.severity) ? <Term k={a.severity} /> : a.severity ?? "Unknown"}</span>
         <span className="font-medium">{a.event}</span>
       </div>
       {a.area_desc && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{a.area_desc}</p>}

@@ -10,6 +10,7 @@ import { useSubject } from "@/lib/subject";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Term } from "@/components/Term";
 import { Sparkline } from "@/components/Sparkline";
 
 function useKpiData() {
@@ -42,7 +43,7 @@ function DeltaLine({ d, unit, compareLabel }: { d: Delta | null; unit: string; c
   );
 }
 
-type CardSpec = { key: keyof Kpis; title: string; value: (k: Kpis) => number | null; unit: string;
+type CardSpec = { key: keyof Kpis; title: string; heading?: React.ReactNode; value: (k: Kpis) => number | null; unit: string;
   deltaOf: (cur: Kpis, prev: Kpis) => Delta | null; series?: (number | null)[]; digits?: number; color?: string };
 
 export function KpiCards() {
@@ -54,7 +55,7 @@ export function KpiCards() {
   if (error) {
     return (
       <Alert variant="destructive">
-        <AlertTitle>Could not load the KPIs</AlertTitle>
+        <AlertTitle>Could not load the <Term k="KPI">KPIs</Term></AlertTitle>
         <AlertDescription>{error.message}</AlertDescription>
       </Alert>
     );
@@ -90,8 +91,8 @@ export function KpiCards() {
     { key: "tempMin", title: "Min temperature", value: (k) => toUnit(k.tempMin, f.unit), unit: deg, deltaOf: t("tempMin"),
       series: tempRows.map((r) => toUnit(r.min, f.unit)), color: "--c-cool" },
     { key: "rainTotal", title: "Total rain", value: (k) => k.rainTotal, unit: " mm", deltaOf: plain("rainTotal"), series: rainSeries, color: "--c-rain" },
-    { key: "rainyDays", title: "Rainy days (≥ 1 mm)", value: (k) => k.rainyDays, unit: "", deltaOf: plain("rainyDays"), digits: 0 },
-    { key: "forecastMae", title: "Forecast error (day 1)", value: (k) => deltaToUnit(k.forecastMae, f.unit), unit: deg,
+    { key: "rainyDays", title: "Rainy days (≥ 1 mm)", heading: <>Rainy days (≥ 1 <Term k="mm" />)</>, value: (k) => k.rainyDays, unit: "", deltaOf: plain("rainyDays"), digits: 0 },
+    { key: "forecastMae", title: "Forecast error (day 1)", heading: <>Forecast error (<Term k="Lead day">day 1</Term>)</>, value: (k) => deltaToUnit(k.forecastMae, f.unit), unit: deg,
       deltaOf: t("forecastMae") },
   ];
 
@@ -101,7 +102,7 @@ export function KpiCards() {
     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
       {cards.map((c) => (
         <Card key={c.key} size="sm" className="gap-1">
-          <CardHeader><CardTitle className="text-xs font-medium text-muted-foreground">{c.title}</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-xs font-medium text-muted-foreground">{c.heading ?? c.title}</CardTitle></CardHeader>
           <CardContent className="flex flex-col gap-1">
             <p className="text-2xl font-semibold tabular-nums">{fmt(c.value(cur), c.digits ?? 1)}{c.value(cur) == null ? "" : c.unit}</p>
             {prev && <DeltaLine d={c.deltaOf(cur, prev)} unit={c.unit} compareLabel={COMPARES[f.compare]} />}

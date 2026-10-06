@@ -56,6 +56,7 @@ Also included:
 - Keyboard-accessible map and charts.
 - Light and dark themes that follow the system.
 - Missing data always shows as a gap, never as 0.
+- Every abbreviation and weather term (ECMWF, MAE, lead day, spread, …) has a tooltip with its full name and a one-line explanation, from one glossary file.
 
 ### Forecast replay
 

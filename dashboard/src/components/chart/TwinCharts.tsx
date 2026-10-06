@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { TempUnit } from "@/lib/units";
+import { Term } from "@/components/Term";
+import { isGlossaryKey } from "@/lib/glossary";
 import { StatsChart } from "./StatsChart";
 import type { ChartPoint } from "./types";
 
@@ -45,7 +47,7 @@ export function TwinCharts({ temp, rain, unit, scope, subject, maWindow, onSelec
         </CardContent>
       </Card>
       <Card>
-        <CardHeader><CardTitle>{rainTitle}</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{isGlossaryKey(rainTitle) ? <Term k={rainTitle} /> : rainTitle}</CardTitle></CardHeader>
         <CardContent>
           <Body data={rain} empty={emptyHint}>
             <StatsChart {...shared} points={rain.points} metric="precip_mm" rainUnit={rainUnit} title={`${rainTitle} in ${subject} ${scope}`} fileName={`rain-${scope}`.replace(/\W+/g, "-")} />

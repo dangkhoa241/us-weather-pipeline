@@ -18,6 +18,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MultiLineChart } from "@/components/chart/MultiLineChart";
+import { Term } from "@/components/Term";
+import { isGlossaryKey, type GlossaryKey } from "@/lib/glossary";
 import { UsMap } from "@/components/map/UsMap";
 
 const ERROR_PALETTE = ["#1a9850", "#91cf60", "#d9ef8b", "#fee08b", "#fc8d59", "#d73027"] as const;
@@ -54,7 +56,7 @@ export function AccuracyPage() {
             {summary.isPending ? <Skeleton className="h-8 w-2/3" /> : hero ?? "Not enough forecast/observation pairs for this selection yet."}
           </CardTitle>
           {hero && baseline?.mae[lead - 1] != null && (
-            <CardDescription>For comparison, the Open-Meteo best-match blend (baseline) misses by {fmt(baseline.mae[lead - 1], 1)}{deg} on average.</CardDescription>
+            <CardDescription>For comparison, the Open-Meteo <Term k="Best match">best-match</Term> blend (<Term k="Baseline">baseline</Term>) misses by {fmt(baseline.mae[lead - 1], 1)}{deg} on average.</CardDescription>
           )}
         </CardHeader>
         {demoLimited && (
@@ -72,7 +74,7 @@ export function AccuracyPage() {
       <Card>
         <CardHeader>
           <CardTitle>Leaderboard</CardTitle>
-          <CardDescription>Average error (MAE, {deg}) by lead day; bias and sample size at lead day {lead}. Click a column to sort.</CardDescription>
+          <CardDescription>Average error (<Term k="MAE" />, {deg}) by <Term k="Lead day">lead day</Term>; <Term k="Bias">bias</Term> and <Term k="Samples">sample size</Term> at lead day {lead}. Click a column to sort.</CardDescription>
         </CardHeader>
         <CardContent>
           {summary.error ? <Problem what="the leaderboard" error={summary.error} /> : summary.isPending ? <Skeleton className="h-48" /> : !board.length ? (
@@ -84,8 +86,8 @@ export function AccuracyPage() {
       <div className="grid gap-5 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Error grows with lead time</CardTitle>
-            <CardDescription>Average error ({deg}) vs how many days ahead the forecast was made. Dashed: baseline.</CardDescription>
+            <CardTitle>Error grows with <Term k="Lead day">lead time</Term></CardTitle>
+            <CardDescription>Average error ({deg}) vs how many days ahead the forecast was made. Dashed: <Term k="Baseline">baseline</Term>.</CardDescription>
           </CardHeader>
           <CardContent>
             {summary.isPending ? <Skeleton className="h-72" /> : !board.length ? <Empty /> : (
@@ -98,7 +100,7 @@ export function AccuracyPage() {
         <Card>
           <CardHeader>
             <CardTitle>Too hot or too cold?</CardTitle>
-            <CardDescription>Bias by month at lead day {lead} ({deg}): above 0 = forecasts ran too warm, below 0 = too cold.</CardDescription>
+            <CardDescription><Term k="Bias" /> by month at <Term k="Lead day">lead day</Term> {lead} ({deg}): above 0 = forecasts ran too warm, below 0 = too cold.</CardDescription>
           </CardHeader>
           <CardContent>
             {months.error ? <Problem what="the bias chart" error={months.error} /> : months.isPending ? <Skeleton className="h-72" /> : (
@@ -114,7 +116,7 @@ export function AccuracyPage() {
       <Card>
         <CardHeader>
           <CardTitle>Biggest misses</CardTitle>
-          <CardDescription>Largest hourly errors at lead day {lead} ({areaName}); at most one per city and day; models with an exact run time only (no best match). Times are city-local.</CardDescription>
+          <CardDescription>Largest hourly errors at <Term k="Lead day">lead day</Term> {lead} ({areaName}); at most one per city and day; models with an exact run time only (no <Term k="Best match">best match</Term>). Times are city-local.</CardDescription>
         </CardHeader>
         <CardContent>
           {misses.error ? <Problem what="the biggest misses" error={misses.error} /> : misses.isPending ? <Skeleton className="h-40" /> : !misses.data?.data.length ? <Empty /> : (
@@ -134,7 +136,7 @@ export function AccuracyPage() {
                       <tr key={`${m.location_id}-${m.target_time}-${m.model}`} className="border-b last:border-0">
                         <td className="px-2 py-1.5 tabular-nums">{when ? `${when.date} ${String(when.hour).padStart(2, "0")}:00` : m.target_time}</td>
                         <td className="px-2 py-1.5">{c ? `${c.name}, ${c.state}` : m.location_id}</td>
-                        <td className="px-2 py-1.5">{modelName(m.model)}</td>
+                        <td className="px-2 py-1.5"><ModelTerm name={modelName(m.model)} /></td>
                         <td className="px-2 py-1.5 text-right tabular-nums">{temp(m.forecast_c)}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums">{temp(m.observed_c)}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums" style={{ color: (err ?? 0) > 0 ? "var(--c-temp)" : "var(--c-cool)" }}>
@@ -153,10 +155,10 @@ export function AccuracyPage() {
       <Card>
         <CardHeader><CardTitle>How this is measured</CardTitle></CardHeader>
         <CardContent className="grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
-          <p><b className="text-foreground">Error (MAE)</b>: each hourly temperature forecast is compared with the temperature observed at that hour (Open-Meteo archive); the average size of the difference, ignoring its sign.</p>
-          <p><b className="text-foreground">Bias</b>: the average signed difference (forecast − observed). Positive means the model runs too warm, negative too cold. In °F, errors and biases are ×1.8 (no +32).</p>
-          <p><b className="text-foreground">Lead day</b>: how many days before the forecast hour the model run was issued (1 = the day before). Errors usually grow with lead time.</p>
-          <p><b className="text-foreground">Data</b>: past model runs (ECMWF, GFS, ICON, HRRR) and NWS forecasts collected by the pipeline. <i>Best match</i> is a lead-day-only baseline (approximate issue time): listed in the leaderboard but not ranked, and left out of the biggest misses; legacy snapshots are excluded; models with fewer than {MIN_SAMPLES} pairs aren't ranked. NWS appears once its forecasts can be matched with observations (~5-day lag).</p>
+          <p><b className="text-foreground">Error (<Term k="MAE" />)</b>: each hourly temperature forecast is compared with the temperature observed at that hour (Open-Meteo archive); the average size of the difference, ignoring its sign.</p>
+          <p><b className="text-foreground"><Term k="Bias" /></b>: the average signed difference (forecast − observed). Positive means the model runs too warm, negative too cold. In °F, errors and biases are ×1.8 (no +32).</p>
+          <p><b className="text-foreground"><Term k="Lead day" /></b>: how many days before the forecast hour the model run was issued (1 = the day before). Errors usually grow with lead time.</p>
+          <p><b className="text-foreground">Data</b>: past model runs (<Term k="ECMWF" />, <Term k="GFS" />, <Term k="ICON" />, <Term k="HRRR" />) and <Term k="NWS" /> forecasts collected by the pipeline. <i><Term k="Best match" /></i> is a lead-day-only <Term k="Baseline">baseline</Term> (approximate issue time): listed in the leaderboard but not ranked, and left out of the biggest misses; legacy snapshots are excluded; models with fewer than {MIN_SAMPLES} pairs aren't ranked. NWS appears once its forecasts can be matched with observations (~5-day lag).</p>
         </CardContent>
       </Card>
     </>
@@ -171,7 +173,7 @@ function Leaderboard({ rows, lead, deg }: { rows: LeaderRow[]; lead: number; deg
     column.accessor((r) => r.rank ?? 99, { id: "rank", header: "Rank", cell: (c) => c.row.original.rank ?? "–" }),
     column.accessor("name", { header: "Model", cell: (c) => (
       <span className="flex items-center gap-2"><span className="inline-block size-2.5 rounded-full" style={{ background: MODEL_BY_ID.get(c.row.original.model)?.color }} />
-        {c.getValue()}{c.row.original.baseline && <span className="text-xs text-muted-foreground">baseline</span>}</span>) }),
+        <ModelTerm name={c.getValue()} />{c.row.original.baseline && <span className="text-xs text-muted-foreground"><Term k="Baseline">baseline</Term></span>}</span>) }),
     ...LEAD_DAYS.map((d) => column.accessor((r) => r.mae[d - 1] ?? undefined, {
       id: `lead${d}`, header: `${d}d`, sortUndefined: "last",
       cell: (c) => <span className={d === lead ? "font-semibold" : ""}>{fmt(c.row.original.mae[d - 1], 1)}</span>,
@@ -194,9 +196,8 @@ function Leaderboard({ rows, lead, deg }: { rows: LeaderRow[]; lead: number; deg
               {g.headers.map((h) => (
                 <th key={h.id} scope="col" aria-sort={h.column.getIsSorted() === "asc" ? "ascending" : h.column.getIsSorted() === "desc" ? "descending" : "none"}
                   className={`px-2 py-2 font-medium ${numeric(h.column.id) ? "text-right" : "text-left"} ${h.column.id === `lead${lead}` ? "bg-muted/60" : ""}`}>
-                  <button type="button" onClick={h.column.getToggleSortingHandler()}>
-                    {flexRender(h.column.columnDef.header, h.getContext())}{{ asc: " ▲", desc: " ▼" }[h.column.getIsSorted() as string] ?? ""}
-                  </button>
+                  <SortHeader label={String(h.column.columnDef.header)} term={termOf(h.column.id)} sorted={h.column.getIsSorted()}
+                    onSort={h.column.getToggleSortingHandler()} />
                 </th>
               ))}
             </tr>
@@ -245,7 +246,7 @@ function AccuracyMap({ rows, pending, error, lead, unit, deg, locations, onState
     const used = models.filter((m) => [...best.values()].some((b) => b.model === m.id));
     legend = (
       <ul className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-        {used.map((m) => <li key={m.id} className="flex items-center gap-1.5"><span className="inline-block size-3 rounded-sm" style={{ background: m.color }} />{m.name}</li>)}
+        {used.map((m) => <li key={m.id} className="flex items-center gap-1.5"><span className="inline-block size-3 rounded-sm" style={{ background: m.color }} aria-hidden /><ModelTerm name={m.name} /></li>)}
         <li className="flex items-center gap-1.5"><span className="inline-block size-3 rounded-sm" style={{ background: "var(--map-hatch)" }} />not enough data</li>
       </ul>
     );
@@ -260,7 +261,7 @@ function AccuracyMap({ rows, pending, error, lead, unit, deg, locations, onState
     legend = (
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <span>{fmt(ext[0], 1)}</span><div className="h-2 w-40 rounded" style={{ background: `linear-gradient(to right, ${ERROR_PALETTE.join(",")})` }} /><span>{fmt(ext[1], 1)}</span>
-        <span>{modelName(mode)} average error ({deg}), lead day {lead}</span>
+        <span><ModelTerm name={modelName(mode)} /> average error ({deg}), <Term k="Lead day">lead day</Term> {lead}</span>
       </div>
     );
   }
@@ -268,7 +269,7 @@ function AccuracyMap({ rows, pending, error, lead, unit, deg, locations, onState
     <Card>
       <CardHeader>
         <CardTitle>Who forecasts each state best?</CardTitle>
-        <CardDescription>Lead day {lead}. Click a state to filter the page to it.</CardDescription>
+        <CardDescription><Term k="Lead day" /> {lead}. Click a state to filter the page to it.</CardDescription>
         <CardAction>
           <Select value={mode} onValueChange={setMode}>
             <SelectTrigger className="w-48" aria-label="Map shows"><SelectValue /></SelectTrigger>
@@ -289,6 +290,28 @@ function AccuracyMap({ rows, pending, error, lead, unit, deg, locations, onState
       </CardContent>
     </Card>
   );
+}
+
+/** Leaderboard columns whose header is a glossary term. */
+const termOf = (id: string): GlossaryKey | null => (id === "bias" ? "Bias" : id === "n" ? "Samples" : id.startsWith("lead") ? "Lead day" : null);
+
+/** A sortable column header. A glossary term can't sit inside the sort button (nested focusable elements), so such
+ *  headers show the term with its tooltip, followed by a small sort button of their own. */
+function SortHeader({ label, term, sorted, onSort }: { label: string; term: GlossaryKey | null; sorted: false | "asc" | "desc"; onSort?: (e: unknown) => void }) {
+  const arrow = sorted === "asc" ? "▲" : sorted === "desc" ? "▼" : "";
+  if (!term) return <button type="button" onClick={onSort}>{label}{arrow && ` ${arrow}`}</button>;
+  return (
+    <span className="inline-flex items-center gap-1">
+      <Term k={term}>{label}</Term>
+      <button type="button" onClick={onSort} aria-label={`Sort by ${term === "Lead day" ? `lead day ${label}` : label}`}
+        className="rounded px-0.5 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">{arrow || "↕"}</button>
+    </span>
+  );
+}
+
+/** A model name as a glossary term when the glossary knows it. */
+function ModelTerm({ name }: { name: string }) {
+  return isGlossaryKey(name) ? <Term k={name} /> : <>{name}</>;
 }
 
 function Empty() {
