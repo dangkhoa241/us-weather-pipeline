@@ -57,6 +57,19 @@ Also included:
 - Light and dark themes that follow the system.
 - Missing data always shows as a gap, never as 0.
 
+### Forecast replay
+
+![Forecast replay for Stockton, CA on Sep 20, 2026: one small chart per model converging on the observed high](docs/images/forecast-replay-light.png)
+
+In a city's day view, **Replay forecasts** shows what ECMWF, GFS, ICON, HRRR and best match predicted for that day's
+high 1 to 7 days before, against the observed high, with a plain-words summary line.
+- **Live from the browser:** it calls Open-Meteo's Previous Runs and archive APIs directly, with no backend, Docker
+  or AWS. Each day shown costs 2 requests, and each day is fetched once per page load.
+- **Fallback:** if Open-Meteo can't be reached, it says "Live data unavailable" and shows a bundled 3-city sample
+  (2.9 KB).
+- **Design:** small multiples, chosen over a single line chart and a min–max band in
+  [forecast-replay.md](docs/analysis/forecast-replay.md).
+
 ## Architecture
 
 ```mermaid
@@ -165,6 +178,7 @@ For each key feature, Claude Code built **3 implementations** on separate branch
 | Stage 4 API layer | Express + Zod · Fastify + JSON Schema · Hono + zod-openapi | **Hono** | Same throughput; lowest memory, fewest dependencies, one definition per route | NoSQL operator injection via `?stage[$ne]=x` (qs parser); unknown params ignored or silently dropped; no CSP by default; Swagger UI loaded from a CDN without a pinned version | [api-layer.md](docs/analysis/api-layer.md) |
 | Stage 5 US map | ECharts · react-simple-maps · d3-geo | **d3-geo** | Smallest (+47 KB), fastest, every state keyboard-accessible | ECharts tooltip built HTML strings from data (XSS risk); test hooks on `window` | [map-drilldown.md](docs/analysis/map-drilldown.md) |
 | Stage 5 drill-down chart | ECharts · Recharts · d3-scale/d3-shape | **d3** | +10 KB vs +108 KB (Recharts), 185 ms render, full keyboard drill-down | HTML tooltip formatters avoided; the `window` hook was not merged; Recharts' larger dependency tree | [drilldown-chart.md](docs/analysis/drilldown-chart.md) |
+| Stage 5 forecast replay chart | One line per model · small multiples · min–max band with lines | **Small multiples** | Every model readable (best match duplicates GFS, which hides a line in the others); +0.6 KB | Static-server path guard accepted a sibling folder (`dist-old`); bundled sample's model ids not checked against the known models | [forecast-replay.md](docs/analysis/forecast-replay.md) |
 
 ## Security
 
@@ -175,6 +189,11 @@ For each key feature, Claude Code built **3 implementations** on separate branch
   - The `/docs` page loads a pinned Swagger UI version.
   - The demo runs under a strict CSP with no `eval` (Zod runs "jitless").
   - React escapes all data, and nothing uses `dangerouslySetInnerHTML`.
+  - `connect-src` lists only the two exact Open-Meteo hosts the forecast replay calls (no wildcards). Those requests
+    send no cookies and no referrer.
+  - `style-src 'unsafe-inline'` is kept on purpose. The SVG charts and tooltips set theme colors (CSS variables) and
+    positions through inline `style` attributes. A nonce can't cover `style` attributes, and hashing computed values
+    doesn't work. Scripts stay `'self'`-only, so an inline style can't run code.
 - **Secret scanning:** `npm run check:secrets` must pass before every push. It checks:
   - the history and the working tree for secrets;
   - that `.env` is not tracked;
@@ -230,6 +249,7 @@ More: [cloud collection setup](docs/SETUP_CLOUD_COLLECTION.md), [Vercel demo](do
 | Service | Free limit | Our use |
 |---|---|---|
 | Open-Meteo | 10,000 weighted calls / day (non-commercial) | ~2,400 / day, capped at 6,000 by our own budget ledger |
+| Open-Meteo from the browser (forecast replay) | Same limit, counted per visitor's IP | ~5 weighted calls per day replayed, only when a visitor asks |
 | NWS API | No published quota | ~106 requests / 3 h |
 | MongoDB Atlas M0 | 512 MB | ~370 MB with a 7-day retention |
 | Vercel Hobby | 100 GB transfer / month | ~0.5 MB per visit (static snapshot) |

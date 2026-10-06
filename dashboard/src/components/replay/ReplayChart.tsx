@@ -39,7 +39,7 @@ export function ReplayChart({ series, observed, unit, title }: ReplayChartProps)
               <span className="flex items-center gap-1.5 font-medium text-foreground">
                 <span className="inline-block h-0.5 w-3 rounded" style={{ background: s.color }} />{s.name}
               </span>
-              <span className="tabular-nums text-muted-foreground">{last.lead}d: {signed(last.v - observed)}</span>
+              <span className="tabular-nums text-muted-foreground">{last.lead}d: {signed(last.v - observed)}{unit}</span>
             </figcaption>
             <svg width="100%" height={PH} viewBox={`0 0 ${PW} ${PH}`} className="block" aria-hidden>
               {y.ticks(4).map((t) => (

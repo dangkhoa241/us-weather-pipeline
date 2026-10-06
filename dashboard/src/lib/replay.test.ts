@@ -162,4 +162,14 @@ describe("bundled sample", () => {
     expect(await loadReplaySample(vi.fn(async () => json({ format: 2 })))).toEqual([]);
     expect(await loadReplaySample(vi.fn(async () => { throw new TypeError("offline"); }))).toEqual([]);
   });
+  it("refuses a sample whose model ids (also the missing list) aren't the known models", async () => {
+    const good = JSON.parse(file);
+    const withMissing = structuredClone(good);
+    withMissing.results[0].missing = ["<img src=x onerror=alert(1)>"];
+    expect(await loadReplaySample(vi.fn(async () => json(withMissing)))).toEqual([]);
+    const withModel = structuredClone(good);
+    withModel.results[1].models[0].id = "evil_model";
+    expect(await loadReplaySample(vi.fn(async () => json(withModel)))).toEqual([]);
+    expect(await loadReplaySample(vi.fn(async () => json(good)))).toHaveLength(3);
+  });
 });

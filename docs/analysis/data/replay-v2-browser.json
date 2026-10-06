@@ -1,0 +1,20 @@
+{
+  "light": {
+    "insight": "ECMWF was off by 8.6°F seven days ahead and by 0.4°F one day ahead. Closest one day ahead: ICON (0.2°F off).",
+    "source": "Live · Open-Meteo previous runs",
+    "openMeteoRequests": 4,
+    "hosts": "previous-runs-api.open-meteo.com archive-api.open-meteo.com",
+    "cspViolations": 0,
+    "pickToChartMs": 949,
+    "focusableChartElements": 5
+  },
+  "dark": {
+    "insight": "ECMWF was off by 8.6°F seven days ahead and by 0.4°F one day ahead. Closest one day ahead: ICON (0.2°F off).",
+    "source": "Live · Open-Meteo previous runs",
+    "openMeteoRequests": 4,
+    "hosts": "previous-runs-api.open-meteo.com archive-api.open-meteo.com",
+    "cspViolations": 0,
+    "pickToChartMs": 940,
+    "focusableChartElements": 5
+  }
+}

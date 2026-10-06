@@ -28,6 +28,7 @@ Approved free stack:
 |---|---|---|---|---|---|
 | NWS API | No published quota; needs a `User-Agent` with contact | Temporary block (403/429) | No | ~106 forecast req / 3 h (~40 s), 1 alerts req / h | fine |
 | Open-Meteo | Non-commercial only. 600 / min, 5,000 / hour, 10,000 / day *weighted* calls (a request counts extra per 10 variables and per 14 days) | 429 until the window resets | No | ~2,400 / day steady (24%: ~1,100 history/backfill/baseline + ~1,270 om-forecast every 6 h); our cap 2,000 / h and 6,000 / day, backfill ≤ 75% of it | catch-up below |
+| Open-Meteo from the browser (forecast replay, checked 2026-10-05) | Same limits, counted per visitor's IP (CORS `*`); non-commercial | 429 → the panel shows "Live data unavailable" + the bundled sample | No | 2 requests (~5 weighted calls) per city + day a visitor opens; cached for the page load, never retried | only on request |
 | Vercel Hobby (dashboard demo, static) | 100 GB Fast Data Transfer / month, 100 deployments / day, 45 min / build; non-commercial only | Project paused (Hobby is never billed) | No | ~0.5 MB gzipped per visit (≈ 200k visits / month) | static snapshot, size independent of traffic |
 | MongoDB Atlas M0 (NWS via GitHub Actions) | 512 MB storage | Writes fail | No | ~48 MB / day; 7-day TTL ≈ 335 MB data, ~370 MB with indexes (72%) | if > 430 MB: retention 5 days |
 | Discord webhook | ~30 messages / min per webhook | 429 | No | a few / day | a few / day |
@@ -169,6 +170,16 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
 - `cityForecast` still shows the first day's live `icon_seamless` and `best_match` snapshots as extra "models".
 - The popular (pre-warmed) and benchmark queries use fixed dates; they should become relative ("last 7 days") in Stage 4.
 - Cache hit/miss counters are cumulative (never reset); per-day counters can come with the Pipeline Ops page.
+- A run that is interrupted (e.g. `docker compose stop` mid-run) stays `status: "running"` in `pipeline_runs`
+  forever (3 such records as of 2026-10-06). The data is fine: resumption uses watermarks and upserts.
+- Forecast replay:
+  - covers 2024-03-01 … today − 7 days (ECMWF previous runs start mid-Feb 2024; the archive's last days are
+    model-filled);
+  - HRRR has 1-day forecasts only and none for Alaska/Hawaii; ICON stops at 6 days;
+  - in the US, best match equals HRRR (1 day) and GFS (2–7 days);
+  - "observed" is Open-Meteo's reanalysis, not a station;
+  - the model colors (shared with the other pages) fail the colorblind check for ECMWF vs GFS, so the replay names
+    each model in its own panel.
 
 Security (low; from the security review of Stages 1–2, compose and workflows):
 - Local MongoDB and Redis have no authentication, and ClickHouse uses the development password `weather` with access
@@ -297,6 +308,16 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       days of a month, breadcrumb City › Year › Month, state in the URL (`year`, `month`); follows the Metric filter
       (temperature avg line + min/max band, rain bars). Hand-rolled d3 SVG, chosen in `docs/analysis/drilldown-chart.md`
 - [x] Trend chart over the selected range grouped by the Period filter (week/month/quarter/half/year)
+- [x] **Forecast replay** (live, opens on request from the day drill-down): what ECMWF, GFS, ICON, HRRR and best
+      match predicted 1–7 days before a past day, against the observed high
+      - [x] Step 0 with real requests: CORS, models and lead days, history depth, Open-Meteo's fixed-offset time zones
+      - [x] Client straight to Open-Meteo Previous Runs + archive: validated input, `URLSearchParams`, 4 s timeout,
+            TanStack Query (2 requests per city + day, no retries); bundled 3-city fallback sample (2.9 KB)
+      - [x] 3 chart designs compared, small multiples chosen (`docs/analysis/forecast-replay.md`); insight line,
+            "Live" label, Open-Meteo CC BY 4.0 attribution, keyboard focus, light/dark
+      - [x] CSP `connect-src` with the two exact Open-Meteo hosts; security review fixes (path guard, sample model ids)
+
+      ![Forecast replay](images/forecast-replay-light.png)
 - [ ] Time drill-down: Year → Half → Quarter → Month → Week → Day → Hour, with breadcrumb
 - [ ] Place drill-down: US → Region → State → City
 - [ ] Charts: ~~temperature min/max band, rain bars~~ (done), calendar heatmap, wind rose, monthly box plot, anomaly vs normal, state ranking, temperature vs rain scatter

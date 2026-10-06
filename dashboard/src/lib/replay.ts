@@ -76,7 +76,7 @@ export function archiveUrl(city: ReplayCity, day: string) {
 
 const hourlySchema = z.object({
   hourly: z.object({ time: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)).max(24 * 4) })
-    .catchall(z.array(z.number().nullable())),
+    .catchall(z.array(z.number().nullable()).max(24 * 4)),   // 3 UTC days = 72 hours; anything bigger is refused
 });
 type Hourly = z.infer<typeof hourlySchema>["hourly"];
 
@@ -175,8 +175,9 @@ export async function fetchReplay(cityId: string, day: string, opts: FetchReplay
 export const SAMPLE_URL = "/data/replay-sample.json";
 const resultSchema = z.object({
   city: z.string(), day: z.string().regex(DAY_RE), observed: z.number(),
-  models: z.array(z.object({ id: z.string(), name: z.string(), leads: z.array(z.object({ lead: z.number().int().min(1).max(7), high: z.number() })) })),
-  missing: z.array(z.string()),
+  // Only the requested models: an unknown id anywhere (also in missing) makes the whole sample invalid.
+  models: z.array(z.object({ id: z.enum(REPLAY_MODEL_IDS), name: z.string(), leads: z.array(z.object({ lead: z.number().int().min(1).max(7), high: z.number() })) })),
+  missing: z.array(z.enum(REPLAY_MODEL_IDS)),
 });
 const sampleSchema = z.object({ format: z.literal(1), generated_at: z.string(), results: z.array(resultSchema).max(20) });
 
