@@ -3,7 +3,7 @@
 **Which weather model forecasts the US best? An end-to-end data pipeline and dashboard that collects forecasts from 5 models, scores them against what actually happened, and explains 3 years of weather for 53 US cities, on a $0 budget.**
 
 [![CI](https://github.com/dangkhoa241/us-weather-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/dangkhoa241/us-weather-pipeline/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-107%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-209%20passing-brightgreen)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Live demo](https://img.shields.io/badge/live%20demo-vercel-black?logo=vercel)](https://us-weather-pipeline.vercel.app)
 
@@ -17,17 +17,18 @@ and alerts to S3 behind CloudFront (Part 4). If CloudFront is unreachable, it fa
 
 ## Key finding
 
-> **ECMWF is the most accurate model: 2.1 °F average error one day ahead.**
+> **ECMWF is the most accurate model: 2.0 °F average error one day ahead.**
 
 | Model (lead day 1) | Average error | Bias |
 |---|---|---|
-| 🥇 ECMWF | **2.1 °F** | none |
-| 🥈 ICON | 2.3 °F | none |
-| 🥉 HRRR | 2.9 °F | 0.6 °F too cold |
-| GFS | 3.1 °F | 0.7 °F too warm |
-| *Best-match blend (baseline)* | *2.6 °F* | *0.6 °F too cold* |
+| 🥇 ECMWF | **2.0 °F** | none |
+| 🥈 ICON | 2.3 °F | 0.2 °F too warm |
+| 🥉 HRRR | 2.8 °F | 0.3 °F too cold |
+| GFS | 3.0 °F | 0.6 °F too warm |
+| *Best-match blend (baseline)* | *2.5 °F* | *none* |
+| NWS | not ranked yet | scored on 3 days so far |
 
-Error grows by about 0.25 °F for each extra day of lead time. The scores compare hourly forecasts with observed temperatures: about 65,000 pairs per model, from 20 cities, 2026-06-29 to 2026-09-26. Method: [How this is measured](#how-accuracy-is-measured).
+Error grows by about 0.27 °F for each extra day of lead time. The scores compare hourly forecasts with observed temperatures: about 81,000 pairs per model on 39–40 scored days, from 53 cities, 2026-07-05 to 2026-10-02. A model is ranked only after 30 days of scores. NWS has 3 so far: on the 362 city-hours both were scored on, ECMWF missed by 1.55 °F and NWS by 1.96 °F (a small sample). Method: [How this is measured](#how-accuracy-is-measured).
 
 ## Design decisions
 
@@ -161,11 +162,12 @@ is in [docs/analysis/live-dashboard.md](docs/analysis/live-dashboard.md).
 | | |
 |---|---|
 | Cities | **53** (the largest city in each state, plus DC and Stockton) |
-| Rows loaded | **1.04 M** hourly observations, **1.82 M** forecast snapshots |
+| Rows loaded | **1.74 M** hourly observations (53 cities, full history from 2023-01-01), **3.05 M** forecast snapshots |
 | Cache, warm p95 | **35.4 → 2.9 ms** (12× faster); cold p95 62.2 → 32.3 ms |
 | API | ~1,600 req/s, p95 12.7 ms, 0 errors; 22/22 security probe checks |
-| Tests | **107** Vitest tests (33 backend + 74 dashboard) and 18 checks on the demo build |
-| Demo snapshot | 2.9 MB (418 KB gzipped) for 53 cities × 3+ years |
+| Tests | **209** Vitest tests (77 backend + 132 dashboard) and 21 checks on the demo build |
+| Demo snapshot | 3.0 MB (557 KB gzipped) for 53 cities × 3.75 years (2023-01-01 to 2026-10-02) |
+| Compare & review | **5** features × 3 implementations (15 design branches on GitHub) |
 | AWS Lambda | 256 MB; alerts run ~8 s, forecast run ~88 s (106 NWS requests, ~9,000 rows, 168 MB peak); ~960 runs / month ≈ 2% of the free GB-s |
 | AWS S3 | ~660 PUTs / month (33% of 2,000; ≤ 40% by hard caps); ~175 MB stored with 30-day expiry (3.5% of 5 GB) |
 | AWS bill | **$0** (Free plan) |
@@ -275,12 +277,12 @@ None of these needs a credit card. Every external service has its limits and ove
 - **Lead day:** how many days before the forecast hour the model run was issued.
 - **Converting to °F:** errors and biases are ×1.8, with no +32.
 - **Baseline:** best-match is a lead-day-only baseline (its issue time is approximate). It is listed but not ranked, and left out of "biggest misses". Legacy snapshots are excluded.
+- **Minimum history:** a model is ranked only after 30 days of scores at the selected lead day (and 100 pairs). Until then it is shown as "not enough data yet", with a head-to-head comparison on the city-hours both models were scored on.
 
 ## Known limitations
 
-- Model accuracy covers ~Jul–Aug 2026 for the original 20 cities so far, because the backfill is still catching up. NWS joins the leaderboard once its forecasts can be matched with observations (~5-day lag).
-- The 14 newest cities are still loading their 3-year history (they show as hollow dots on the map).
-- The demo is a frozen snapshot. Some accuracy views exist only for all US over the last 90 days.
+- Model scores cover 39–40 days of the last 90 (the past-runs backfill is still catching up). NWS has been scored only since 2026-09-29 and joins the ranking after 30 days; the 33 cities added on 2026-10-01 don't have 30 days of model scores yet, so their states are hatched on the accuracy map.
+- Recent history, forecasts and alerts are live (CloudFront); forecast accuracy comes from the bundled snapshot and exists only for preset ranges, and some accuracy views only for all US over the last 90 days.
 - Collection of Open-Meteo forecasts needs the local Docker stack running. NWS is collected in the cloud.
 
 The full list is in the [roadmap](docs/ROADMAP.md#known-limitations).

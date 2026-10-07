@@ -37,7 +37,8 @@ The AWS account is on the **Free plan** (until 2027-04-02; setup: `docs/SETUP_AW
   usage, and wait for my OK.
 - Windows / Git Bash: prefix AWS CLI commands that take `/aws/...` paths with `MSYS_NO_PATHCONV=1` (otherwise Git Bash
   rewrites them to `C:/Program Files/Git/...` and AWS answers a misleading AccessDenied), and force UTF-8 output with
-  `PYTHONIOENCODING=utf-8` (log lines with "→" crash the CLI otherwise). Details: `docs/SETUP_AWS.md`.
+  `PYTHONUTF8=1` (log lines with "→" crash the CLI otherwise; `PYTHONIOENCODING=utf-8` alone does not fix
+  `aws logs tail`). Details: `docs/SETUP_AWS.md`.
 
 ## Flow (keep these script names)
 

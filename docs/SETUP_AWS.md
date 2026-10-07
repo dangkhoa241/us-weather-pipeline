@@ -107,10 +107,11 @@ Two things break AWS CLI commands in Git Bash (PowerShell is not affected):
   AWS as `C:/Program Files/Git/aws/lambda/...`. The command then fails with a misleading `AccessDenied` on that wrong
   resource. Set `MSYS_NO_PATHCONV=1` for commands that take `/aws/...` (or other `/...`) arguments.
 - **Output encoding.** The CLI prints with the Windows code page and crashes on characters like "→" in log lines
-  (`'charmap' codec can't encode character`). Force UTF-8 with `PYTHONIOENCODING=utf-8`.
+  (`'charmap' codec can't encode character`). Force UTF-8 mode with `PYTHONUTF8=1`. (`PYTHONIOENCODING=utf-8` alone
+  is not enough: `aws logs tail` still crashed with it on 2026-10-07, in PowerShell too; `PYTHONUTF8=1` fixed it.)
 
 ```bash
-MSYS_NO_PATHCONV=1 PYTHONIOENCODING=utf-8 aws logs tail /aws/lambda/weather-pipeline-nws-collector --since 1h \
+MSYS_NO_PATHCONV=1 PYTHONUTF8=1 aws logs tail /aws/lambda/weather-pipeline-nws-collector --since 1h \
   --profile weather-dev --region us-east-2
 ```
 
