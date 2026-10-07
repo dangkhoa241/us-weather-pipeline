@@ -9,7 +9,7 @@ import { defineConfig } from "vitest/config";
 const API = "http://127.0.0.1:3000";
 // Live data for the static demo (Stage 6a part 4): CloudFront in front of the dashboard publisher's files (stack output
 // DashboardDataUrl). Not a secret. Must match connect-src in vercel.json. Empty = bundled snapshot only.
-const LIVE_DATA_URL = "";
+const LIVE_DATA_URL = "https://d1dl5jm7af48m2.cloudfront.net";
 
 // Content-Security-Policy: vercel.json is the one source. `vite preview` serves the built app under the same policy;
 // the dev server gets only its connect-src (the full policy would block Vite's inline HMR/React Refresh scripts), so

@@ -9,8 +9,9 @@
 
 ### ▶ [Live demo: us-weather-pipeline.vercel.app](https://us-weather-pipeline.vercel.app)
 
-The demo is a static data snapshot (badge "Snapshot · data as of …"). Data collection already runs on AWS. Automatic
-updates for the dashboard (S3 + CloudFront, Part 4) are built but not deployed yet.
+The demo updates itself from AWS (badge "Live · data as of …"): a scheduled Lambda publishes recent history, forecasts
+and alerts to S3 behind CloudFront (Part 4). If CloudFront is unreachable, it falls back to the bundled snapshot
+("Snapshot · data as of …").
 
 ![Demo: US map → click a state → open a city → September → Replay forecasts (live from Open-Meteo)](docs/images/demo.gif)
 
@@ -106,7 +107,7 @@ flowchart LR
 
 Deployed on AWS: one SAM stack (`infra/template.yaml`) in us-east-2 on the AWS **Free plan**. It collects NWS data
 in the cloud, so the laptop can be off. The local Docker stack stays the primary system: AWS holds only the
-collector, alert emails and a 30-day raw archive. Setup and policies: [docs/SETUP_AWS.md](docs/SETUP_AWS.md).
+collector, the dashboard publisher (behind CloudFront), alert emails and a 30-day raw archive. Setup and policies: [docs/SETUP_AWS.md](docs/SETUP_AWS.md).
 
 ```mermaid
 flowchart LR
@@ -121,7 +122,7 @@ flowchart LR
   LOCAL -->|pipeline failures| SNS
   LOCAL -->|export:snapshot| VERCEL["Vercel dashboard<br/>(static snapshot)"]
   BOUND["IAM permissions boundary"] -.->|caps the Lambda roles| L
-  subgraph P4["Part 4: built, not deployed yet"]
+  subgraph P4["Part 4: live dashboard data"]
     EB2["EventBridge<br/>every 3 h + daily"] --> P["Lambda<br/>dashboard publisher"]
     P -->|recent / forecasts / alerts JSON| S3D[("S3 raw bucket<br/>dashboard/ prefix")]
     S3D -->|"Origin Access Control"| CF["CloudFront"]
@@ -134,17 +135,18 @@ flowchart LR
 | Service | Job | Free-tier allowance | Our use (measured / expected per month) |
 |---|---|---|---|
 | Lambda `weather-pipeline-nws-collector` | NWS alerts (hourly) and forecasts (every 3 h) → Atlas + S3 | 1 M requests, 400,000 GB-s | ~960 runs, ~6,800 GB-s (2%); 256 MB; alerts ~8 s, forecasts ~88 s, 168 MB peak |
-| EventBridge | 2 schedule rules | scheduled rules free | 32 invocations / day |
-| S3 raw archive | gzipped raw responses, deleted after 30 days | 5 GB, 2,000 PUT, 20,000 GET (12 months) | ~660 PUTs (33%; ≤ 806 = 40% by hard caps: Lambda 16 / day, local 10 / day); ~175 MB held by the 30-day rule |
+| Lambda `weather-pipeline-dashboard-publisher` | `recent.json` daily, `forecasts.json` + `alerts.json` every 3 h → S3 `dashboard/` | (shared with the collector) | 8 runs / day; 256 MB |
+| EventBridge | 4 schedule rules | scheduled rules free | 40 invocations / day |
+| S3 raw archive | gzipped raw responses (deleted after 30 days) + the 3 dashboard files | 5 GB, 2,000 PUT, 20,000 GET (12 months) | ~1,170 PUTs (59%; ≤ 1,333 = 67% by hard caps: collector 16 / day, local 10 / day, publisher 17 / day); ~175 MB held by the 30-day rule |
+| CloudFront | serves the 3 dashboard files (OAC, PriceClass_100, CORS only for the Vercel origin) | 1 TB out, 10 M requests (always free) | cache misses only reach S3 (~3,000 GETs, 15%) |
 | SNS | email on failed runs and new heat alerts | 1 M publishes, 1,000 emails | < 150 emails |
 | SSM Parameter Store | Atlas URI as a SecureString (AWS-managed key) | standard parameters free | 1 parameter, read at cold start |
 | CloudWatch Logs | Lambda logs, 7-day retention | 5 GB | < 50 MB |
 | CloudFormation / SAM, IAM | infrastructure as code, users, roles, boundary | free | 1 stack |
 
-**Why S3 + CloudFront instead of an API (Part 4, built, not deployed yet).** The dashboard already reads static JSON
-files. A scheduled Lambda will rewrite those files in S3 and CloudFront will serve them, so no code runs per request:
-there is no public API to rate-limit or secure, and no cold start. The first deploy is waiting for AWS to verify the
-account for CloudFront. The comparison with a DynamoDB + Lambda Function URL API
+**Why S3 + CloudFront instead of an API (Part 4, live since 2026-10-07).** The dashboard already reads static JSON
+files. A scheduled Lambda rewrites those files in S3 and CloudFront serves them, so no code runs per request:
+there is no public API to rate-limit or secure, and no cold start. The comparison with a DynamoDB + Lambda Function URL API
 is in [docs/analysis/live-dashboard.md](docs/analysis/live-dashboard.md).
 
 | Adapter interface | Local implementation | AWS |
@@ -206,7 +208,7 @@ For each key feature, Claude Code built **3 implementations** on separate branch
   - two least-privilege IAM users: `weather-dev` deploys (CLI only, no console) and `weather-runtime` can only publish to SNS and write archive objects;
   - every role the stack creates must carry a **permissions boundary**, so a leaked deploy key can't create an admin role;
   - the Atlas URI is an **SSM SecureString** (AWS-managed key), never in code or environment variables;
-  - the S3 bucket is private: account-wide **Block Public Access**, ACLs disabled, SSE-S3, a bucket policy that denies non-HTTPS requests (Part 4's CloudFront will read it only through **Origin Access Control**);
+  - the S3 bucket is private: account-wide **Block Public Access**, ACLs disabled, SSE-S3, a bucket policy that denies non-HTTPS requests (Part 4's CloudFront reads only its `dashboard/` prefix, through **Origin Access Control**; every other path returns 403);
   - keys live only in `~/.aws`, rotated every 90 days; `check:secrets` fails on AWS key IDs, secret keys and session tokens.
 - **A `/security-review` at the end of every stage**, with low findings logged in the [roadmap](docs/ROADMAP.md#known-limitations).
 
@@ -219,7 +221,7 @@ For each key feature, Claude Code built **3 implementations** on separate branch
 | API | Hono, @hono/zod-openapi, Zod, Swagger UI |
 | Dashboard | React 19, TypeScript, Vite, d3-geo / d3-scale / d3-shape, ECharts (sparklines), TanStack Query + Table, Zustand, Tailwind CSS, shadcn/ui |
 | Quality | Vitest, React Testing Library, Playwright (demo checks, GIF), Docker Compose |
-| Cloud (AWS) | Lambda, EventBridge, S3, SNS, SSM Parameter Store, IAM, CloudWatch Logs, CloudFormation / SAM (CloudFront: built, not deployed yet) |
+| Cloud (AWS) | Lambda, EventBridge, S3, SNS, SSM Parameter Store, IAM, CloudWatch Logs, CloudFormation / SAM, CloudFront |
 | Hosting | Vercel (static demo), GitHub Actions CI |
 
 Each storage layer sits behind an adapter (`RawStore`, `CacheStore`, `Warehouse`, `Scheduler`, `Notifier`). A cloud service such as BigQuery or DynamoDB can be added as one new file.

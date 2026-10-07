@@ -250,6 +250,11 @@ at most a few per edge location every 30 min (~3,000 / month expected, 15% of th
 
 ## 11. Part 4: live dashboard data (S3 + CloudFront, design B)
 
+**Status: done and live since 2026-10-07** (`DashboardDataUrl` = `https://d1dl5jm7af48m2.cloudfront.net`). The first
+deploy (2026-10-02) was refused because new accounts must be verified for CloudFront; a free AWS Support case lifted
+the restriction. If a new account hits "Your account must be verified before you can add new CloudFront resources",
+open a support case (Account and billing, free) and redeploy once it's resolved.
+
 A second Lambda, `weather-pipeline-dashboard-publisher` (Node.js 22, arm64, 256 MB, 4 min timeout, no VPC), writes three
 JSON files to `s3://weather-pipeline-raw-<ACCOUNT_ID>/dashboard/`. A CloudFront distribution serves **only that prefix**.
 CloudFront signs its requests with Origin Access Control, and the bucket policy allows `s3:GetObject` on `dashboard/*`

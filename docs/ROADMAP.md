@@ -138,11 +138,9 @@ Cost follow-ups:
 
 Accepted for now (personal project: good enough beats perfect). Revisit only if they break something visible.
 - AWS Free plan ends 2027-04-02: the account then closes unless upgraded (needs my OK), and AWS deletes the data
-  after 90 days. The Vercel dashboard doesn't depend on AWS (static snapshot); once Part 4 is built, it falls back to
-  the bundled snapshot when CloudFront is unavailable. NWS collection would fall back to the manual GitHub workflows.
-- The dashboard is not live yet (Part 4 built but not deployed: CloudFront needs account verification): it shows the
-  last exported snapshot.
-- Part 4, once live: the bundled snapshot must be re-exported at least every ~55 days (`recent.json` covers 60 days);
+  after 90 days. The Vercel dashboard doesn't depend on AWS: it falls back to the bundled snapshot when CloudFront is
+  unavailable. NWS collection would fall back to the manual GitHub workflows.
+- Part 4 (live): the bundled snapshot must be re-exported at least every ~55 days (`recent.json` covers 60 days);
   forecast accuracy stays as of the bundled snapshot, and the year-to-date preset finds no bundled accuracy after the
   live data moves on; an NWS alert text containing a `FORBIDDEN` word (e.g. "atlas") blocks that run's `alerts.json`.
 - NWS Lambda: a run that hits the 5 min timeout sends no SNS email (only the Lambda error in its logs). It doesn't seed
@@ -374,9 +372,11 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       with per-file bundled fallback and a Live / Snapshot badge; deploy permissions in `weather-dev-cloudfront`;
       S3 PUTs ~59% expected, ≤ 67% at all caps. Simplified from the design: no monthly city files and no backfill
       (`recent.json` covers 60 days over the bundled snapshot)
-- [ ] Part 4 deploy: **blocked** — the first deploy (2026-10-02) was refused by CloudFront ("Your account must be
-      verified before you can add new CloudFront resources"); the stack rolled back cleanly. Needs a (free) AWS Support
-      case to verify the account. Then: deploy, invoke, set `LIVE_DATA_URL` + CSP `connect-src`, confirm "Live"
+- [x] Part 4 deploy (2026-10-07, **live**): the first deploy (2026-10-02) was refused by CloudFront ("Your account must
+      be verified before you can add new CloudFront resources") and rolled back cleanly; a free AWS Support case lifted
+      the restriction. Change set reviewed (10 adds, 6 modifies, no replacements), publisher invoked (3 files), CloudFront
+      serves only `dashboard/*` (other paths 403), CORS only for the Vercel origin; `LIVE_DATA_URL` + CSP `connect-src`
+      set to `https://d1dl5jm7af48m2.cloudfront.net`; dashboard shows "Live"
 
 ## Cross-cutting
 
