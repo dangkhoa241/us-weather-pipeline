@@ -2,7 +2,11 @@
 // by `vite preview` under the vercel.json CSP. Free tools only: Playwright + ffmpeg-static.
 // Story: US map → click a state → open a city → September → "Replay forecasts" → wait for the Live chart → 2 s pause
 // → hover "ECMWF" so its glossary tooltip shows for ~2 s. The replay is live from Open-Meteo (2 requests).
-// Fails on any CSP violation, or if the last frame has no live data or no open ECMWF tooltip.
+// Served at localhost:4173, an origin the CloudFront CORS policy allows, so the header shows "Live · data as of …".
+// Fails on any CSP violation, or when:
+// - opening frame: the header badge isn't "Live · data as of …" (CloudFront data) or the overview isn't "All US · 53 cities";
+// - final frame: the replay's source label isn't "Live …" (with data) or the ECMWF tooltip isn't open. The header badge
+//   has scrolled out of view by then, so the final frame doesn't need it.
 // Usage: npm run build:snapshot && node scripts/recordDemo.mjs [--screenshots]   (writes docs/images/demo.gif)
 
 import { spawn, spawnSync } from "node:child_process";
@@ -14,7 +18,8 @@ import { chromium } from "playwright";
 
 const ROOT = new URL("../..", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1");
 const IMAGES = join(ROOT, "docs", "images");
-const BASE = "http://127.0.0.1:4175";
+const PORT = 4173;
+const BASE = `http://localhost:${PORT}`;   // exactly this origin is in the CloudFront CORS allow-list
 const MAX_GIF_MB = 4;
 const SCREENSHOTS = process.argv.includes("--screenshots");
 const SIZE = { width: 1280, height: 800 };
@@ -28,7 +33,7 @@ async function moveTo(page, locator, steps = 18) {
   if (box) await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps });
 }
 
-const preview = spawn("npx", ["vite", "preview", "--port", "4175", "--strictPort", "--host", "127.0.0.1"], { cwd: join(ROOT, "dashboard"), stdio: "ignore", shell: true });
+const preview = spawn("npx", ["vite", "preview", "--port", String(PORT), "--strictPort", "--host", "localhost"], { cwd: join(ROOT, "dashboard"), stdio: "ignore", shell: true });
 const tmp = mkdtempSync(join(tmpdir(), "uwp-demo-"));
 const browser = await chromium.launch();
 try {
@@ -38,11 +43,19 @@ try {
   const context = await browser.newContext({ viewport: SIZE, colorScheme: "light", recordVideo: { dir: tmp, size: SIZE } });
   const page = await context.newPage();
   const openMeteo = [];
+  const liveData = [];
   page.on("request", (r) => { if (r.url().includes("open-meteo.com")) openMeteo.push(new URL(r.url()).host); });
+  page.on("response", (r) => { if (r.url().includes(".cloudfront.net/")) liveData.push(`${r.status()} ${new URL(r.url()).pathname}`); });
   await page.addInitScript(() => document.addEventListener("securitypolicyviolation", (e) => (window.__csp ??= []).push(`${e.violatedDirective} ${e.blockedURI}`)));
   const started = Date.now();
   await page.goto(`${BASE}/`, { waitUntil: "load" });
   await page.waitForFunction(() => document.querySelectorAll("[data-map] [data-location]:not([data-loading])").length >= 10, null, { timeout: 30_000 });
+  const opening = {
+    badge: (await page.getByText(/(Live|Snapshot) · data as of \d{4}-\d{2}-\d{2}$/).first().textContent().catch(() => ""))?.trim(),
+    subject: await page.locator("[data-kpi-subject]").textContent(),
+  };
+  if (!/^Live · /.test(opening.badge ?? "")) throw new Error(`opening frame: no live dashboard data (badge "${opening.badge}", CloudFront ${JSON.stringify(liveData)})`);
+  if (!/^All US · 53 cities$/.test(opening.subject ?? "")) throw new Error(`opening frame: overview shows "${opening.subject}", not all 53 cities`);
   await wait(1500);                                                   // All US KPIs
 
   await scroll(page, 420);                                            // the map + states table
@@ -93,11 +106,14 @@ try {
     ({ visible: b.getBoundingClientRect().bottom > 0, bg: getComputedStyle(b).backgroundColor }));
 
   const csp = await page.evaluate(() => window.__csp ?? []);
-  console.log(`[demo] ${((Date.now() - started) / 1000).toFixed(1)} s recorded; CSP violations: ${csp.length}; Open-Meteo requests: ${openMeteo.length} (${[...new Set(openMeteo)].join(" ")})`);
+  const seconds = (Date.now() - started) / 1000;
+  if (seconds < 15 || seconds > 25) throw new Error(`recording is ${seconds.toFixed(1)} s, outside 15–25 s`);
+  console.log(`[demo] ${seconds.toFixed(1)} s recorded; CSP violations: ${csp.length}; Open-Meteo requests: ${openMeteo.length} (${[...new Set(openMeteo)].join(" ")})`);
+  console.log(`[demo] opening: ${JSON.stringify(opening)}; live data: ${liveData.join(", ")}`);
   console.log(`[demo] final frame: ${JSON.stringify(final)}`);
   if (csp.length) throw new Error(`CSP violations: ${csp.join("; ")}`);
-  if (!/^Live/.test(final.source ?? "") || !/was off by \d/.test(final.insight ?? "") || !(Number(final.models) > 0)) throw new Error("final frame has no live data");
-  if (!/European Centre for Medium-Range Weather Forecasts/.test(final.tooltip ?? "")) throw new Error("final frame has no ECMWF tooltip");
+  if (!/^Live/.test(final.source ?? "") || !/was off by \d/.test(final.insight ?? "") || !(Number(final.models) > 0)) throw new Error("final frame: the replay has no Live label or no live data");
+  if (!/European Centre for Medium-Range Weather Forecasts/.test(final.tooltip ?? "")) throw new Error("final frame: no ECMWF tooltip");
 
   const video = page.video();
   await context.close();
