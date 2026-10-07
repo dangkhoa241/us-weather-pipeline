@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import { config } from "../src/config.js";
-import { DAY_MS, columns, compactForecast, dayMs, publicJson, toDay } from "../src/publish/snapshotFormat.js";
+import { DAY_MS, FORECAST_MODELS, columns, compactForecast, dayMs, historyProblems, publicJson, toDay } from "../src/publish/snapshotFormat.js";
 
 const API = `http://${config.host === "0.0.0.0" ? "127.0.0.1" : config.host}:${config.port}/api/v1`;
 const OUT = new URL("../dashboard/public/data/", import.meta.url);
@@ -17,6 +17,10 @@ const MIN_WINDOW_DAYS = 731;      // at least 2 years: "last 12 months" compared
 const MAX_RANGE_DAYS = 4000;      // the API's longest range; used to find the earliest year with data
 const PRESET_DAYS = { "7d": 7, "30d": 30, "90d": 90, "365d": 365 };
 const MAX_TOTAL_KB = 5 * 1024;    // fail if the snapshot gets big (Vercel serves it as static files)
+// Accuracy rows only for the models the dashboard shows (legacy gfs_seamless / icon_seamless snapshots are left out).
+const ACCURACY_MODELS = new Set([...FORECAST_MODELS, "best_match"]);
+const known = (rows) => rows.filter((r) => ACCURACY_MODELS.has(r.model));
+const MIN_DAYS = 30;              // same as MIN_DAYS in dashboard/src/lib/accuracy.ts: fewer days → head-to-head note
 
 let calls = 0;
 async function get(path, params = {}) {
@@ -66,33 +70,45 @@ const locations = (await get("/locations")).data;
 const dataEnd = (await get("/map")).meta.range.to;
 // The window starts on Jan 1 of the earliest year any city has data for, so the drill-down covers every year
 // (monthly values are derived from the daily columns in the dashboard). One period=year call per city.
+// A year needs at least one full day of hours: history fetched from Jan 1 UTC starts on Dec 31 in US local time.
 const searchFrom = toDay(dayMs(dataEnd) - (MAX_RANGE_DAYS - 1) * DAY_MS);
 let firstYear = dataEnd.slice(0, 4);
 for (const loc of locations) {
   const years = (await get("/stats", { locations: loc.id, metric: "temp_c", period: "year", from: searchFrom, to: dataEnd })).data;
-  for (const r of years) if (r.n_values > 0 && r.period_start.slice(0, 4) < firstYear) firstYear = r.period_start.slice(0, 4);
+  for (const r of years) if (r.n_values >= 24 && r.period_start.slice(0, 4) < firstYear) firstYear = r.period_start.slice(0, 4);
 }
 const minFrom = toDay(dayMs(dataEnd) - (MIN_WINDOW_DAYS - 1) * DAY_MS);
 const windowFrom = `${firstYear}-01-01` < minFrom ? `${firstYear}-01-01` : minFrom;
 const WINDOW_DAYS = (dayMs(dataEnd) - dayMs(windowFrom)) / DAY_MS + 1;
 const snapshotId = `snapshot-${dataEnd}`;
 const dir = new URL(`${snapshotId}/`, OUT);
-rmSync(OUT, { recursive: true, force: true });   // keep only the current snapshot
 console.log(`[snapshot] ${locations.length} locations, data ${windowFrom} .. ${dataEnd}`);
 
-write(dir, "locations.json", locations);
-
 // Daily temperature and precipitation per location; the dashboard derives periods, comparisons and the map.
+const dailies = {};
 for (const loc of locations) {
   const base = { locations: loc.id, period: "day", from: windowFrom, to: dataEnd };
   const temp = (await get("/stats", { ...base, metric: "temp_c" })).data;
   const precip = (await get("/stats", { ...base, metric: "precip_mm" })).data;
-  write(dir, `daily-${loc.id}.json`, {
+  dailies[loc.id] = {
     location_id: loc.id, from: windowFrom, days: WINDOW_DAYS,
     temp: columns(temp, windowFrom, WINDOW_DAYS, ["min", "max", "avg", "n"]),
     precip: columns(precip, windowFrom, WINDOW_DAYS, ["sum", "n"]),
-  });
+  };
 }
+// Data quality: refuse to replace the current snapshot when a city has no history or a gap (e.g. a backfill that
+// stopped at the API budget and resumes on the next run).
+const problems = historyProblems(locations, dailies);
+if (problems.length) {
+  throw new Error(`history incomplete for ${problems.length} of ${locations.length} cities; snapshot not written:\n  ${problems.join("\n  ")}`);
+}
+
+// Keep only the current snapshot: remove older snapshot folders, not the other files in public/data (e.g. the
+// forecast replay sample, replay-sample.json).
+mkdirSync(OUT, { recursive: true });
+for (const name of readdirSync(OUT)) if (/^snapshot-\d{4}-\d{2}-\d{2}$/.test(name)) rmSync(new URL(`${name}/`, OUT), { recursive: true, force: true });
+write(dir, "locations.json", locations);
+for (const loc of locations) write(dir, `daily-${loc.id}.json`, dailies[loc.id]);
 
 // US-wide daily values (average across cities, as /stats?locations=all), so the default "All US" view loads one file.
 {
@@ -112,7 +128,7 @@ const accuracy = {};
 for (const location of ["", ...locations.map((l) => l.id)]) {
   for (const r of ranges) {
     const key = `${location}|${r.from}|${r.to}`;
-    if (!(key in accuracy)) accuracy[key] = (await get("/accuracy", { ...r, ...(location ? { location } : {}) })).data;
+    if (!(key in accuracy)) accuracy[key] = known((await get("/accuracy", { ...r, ...(location ? { location } : {}) })).data);
   }
 }
 write(dir, "accuracy.json", accuracy);
@@ -120,11 +136,17 @@ write(dir, "accuracy.json", accuracy);
 // Accuracy page details (map by state, bias by month, biggest misses) for all US over the dashboard's default range
 // (last 90 days) and lead days 1–7 only: other areas/ranges would multiply the snapshot size.
 const detailRange = presetRanges(dataEnd)["90d"];
-const details = { range: detailRange, states: {}, months: {}, misses: {} };
+const details = { range: detailRange, states: {}, months: {}, misses: {}, matched: {} };
 for (let lead = 1; lead <= 7; lead += 1) {
-  details.states[lead] = (await get("/accuracy/states", { ...detailRange, lead })).data;
-  details.months[lead] = (await get("/accuracy/months", { ...detailRange, lead })).data;
-  details.misses[lead] = (await get("/accuracy/misses", { ...detailRange, lead, limit: 10 })).data;
+  details.states[lead] = known((await get("/accuracy/states", { ...detailRange, lead })).data);
+  details.months[lead] = known((await get("/accuracy/months", { ...detailRange, lead })).data);
+  details.misses[lead] = known((await get("/accuracy/misses", { ...detailRange, lead, limit: 10 })).data);
+}
+// Head-to-head rows for models with a short history at a lead day (not ranked by the dashboard yet).
+const summary90 = accuracy[`|${detailRange.from}|${detailRange.to}`] ?? [];
+for (const r of summary90) {
+  if (r.model === "best_match" || r.days >= MIN_DAYS || !r.n || r.lead_days < 1 || r.lead_days > 7) continue;
+  (details.matched[r.model] ??= {})[r.lead_days] = known((await get("/accuracy/matched", { ...detailRange, lead: r.lead_days, model: r.model })).data);
 }
 write(dir, "accuracy-details.json", details);
 

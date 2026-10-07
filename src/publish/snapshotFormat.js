@@ -35,6 +35,35 @@ export function columns(rows, from, days, fields) {
   return out;
 }
 
+/** Longest run of days without data a city may have inside the snapshot window. */
+export const MAX_GAP_DAYS = 7;
+
+/**
+ * Data-quality check for the daily files: every location needs history, with no run of more than MAX_GAP_DAYS days
+ * without data anywhere in the window (start, middle or end). Returns one line per problem city; empty = OK.
+ * @param {{ id: string }[]} locations
+ * @param {Record<string, { from: string, days: number, temp: { n: (number | null)[] } }>} dailies  by location id
+ */
+export function historyProblems(locations, dailies) {
+  const problems = [];
+  for (const { id } of locations) {
+    const d = dailies[id];
+    const n = d?.temp?.n ?? [];
+    if (!n.some((v) => v != null)) { problems.push(`${id}: no history`); continue; }
+    let run = 0, worst = { len: 0, end: 0 };
+    for (let i = 0; i <= n.length; i += 1) {
+      if (i < n.length && n[i] == null) { run += 1; continue; }
+      if (run > worst.len) worst = { len: run, end: i - 1 };
+      run = 0;
+    }
+    if (worst.len > MAX_GAP_DAYS) {
+      const day = (i) => toDay(dayMs(d.from) + i * DAY_MS);
+      problems.push(`${id}: ${worst.len} days without data (${day(worst.end - worst.len + 1)}..${day(worst.end)})`);
+    }
+  }
+  return problems;
+}
+
 /**
  * Hourly values in LOCAL time (Open-Meteo `timezone=<city tz>`) → one stats row per local day, like the API's
  * /stats?period=day: min/max/avg/sum over the day's non-null hours, n_values = those hours, n_hours = all hours.

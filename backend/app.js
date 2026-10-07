@@ -33,6 +33,8 @@ const ROUTES = [
   { path: "/alerts", summary: "Active NWS alerts, optionally for one state", query: QUERY.alerts, response: RESPONSE.alerts, run: (s, q) => s.alerts(q) },
   { path: "/accuracy", summary: "Forecast MAE and bias per model and lead day (all US, one state or one city)", query: QUERY.accuracy, response: RESPONSE.accuracy, run: (s, q) => s.accuracy(q) },
   { path: "/accuracy/states", summary: "Forecast MAE and bias per state and model for one lead day", query: QUERY.accuracyStates, response: RESPONSE.accuracyStates, run: (s, q) => s.accuracyStates(q) },
+  { path: "/accuracy/matched", summary: "Head-to-head with one model: each other model's error and its error on the city-hours both were scored on",
+    query: QUERY.accuracyMatched, response: RESPONSE.accuracyMatched, run: (s, q) => s.accuracyMatched(q) },
   { path: "/accuracy/months", summary: "Forecast MAE and bias per month and model", query: QUERY.accuracyMonths, response: RESPONSE.accuracyMonths, run: (s, q) => s.accuracyMonths(q) },
   { path: "/accuracy/misses", summary: "Largest forecast errors (one per city and day)", query: QUERY.accuracyMisses, response: RESPONSE.misses, run: (s, q) => s.accuracyMisses(q) },
   { path: "/records", summary: "Record days for one location", query: QUERY.records, response: RESPONSE.records, run: (s, q) => s.records(q) },

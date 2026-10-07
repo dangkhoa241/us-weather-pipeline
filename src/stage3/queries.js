@@ -19,6 +19,10 @@ export const QUERY_TYPES = {
     normalize: ({ from, to, locationIds, state = "" }) => ({ from, to, locationIds: sortedUnique(locationIds), state }),
     run: (warehouse, p) => warehouse.accuracySummary(p),
   },
+  accuracyMatched: {
+    normalize: ({ from, to, lead = 1, model }) => ({ from, to, lead, model }),
+    run: (warehouse, p) => warehouse.accuracyMatched(p),
+  },
   accuracyStates: {
     normalize: ({ from, to, lead = 1 }) => ({ from, to, lead }),
     run: (warehouse, p) => warehouse.accuracyByState(p),

@@ -44,14 +44,23 @@ export class Warehouse {
    * Temperature forecast accuracy per model and lead day: MAE and bias (forecast − observed), hourly forecasts
    * joined with observations. Snapshots flagged exclude_from_accuracy are left out.
    * @param {{ from: string, to: string, locationIds?: string[] }} q  target dates (UTC), inclusive
-   * @returns {Promise<Array<{ model: string, lead_days: number, n: number, mae_c: number, bias_c: number }>>}
+   * `days` = distinct target dates with scores (the dashboard ranks a model only after enough days).
+   * @returns {Promise<Array<{ model: string, lead_days: number, n: number, days: number, mae_c: number, bias_c: number }>>}
    */
   async accuracySummary(q) { throw new Error("Warehouse.accuracySummary not implemented"); }
 
   /**
+   * Head-to-head with `model` (a fair comparison for a model with a short history): for each other model, both
+   * errors over the (city, hour) pairs both were scored on. n = those pairs. Optional lead day (0 = all).
+   * @param {{ from: string, to: string, lead: number, model: string }} q
+   * @returns {Promise<Array<{ model: string, n: number, mae_c: number, target_mae_c: number }>>}
+   */
+  async accuracyMatched(q) { throw new Error("Warehouse.accuracyMatched not implemented"); }
+
+  /**
    * Accuracy per state and model for one lead day (US map).
    * @param {{ from: string, to: string, lead: number }} q
-   * @returns {Promise<Array<{ state: string, model: string, n: number, mae_c: number, bias_c: number }>>}
+   * @returns {Promise<Array<{ state: string, model: string, n: number, days: number, mae_c: number, bias_c: number }>>}
    */
   async accuracyByState(q) { throw new Error("Warehouse.accuracyByState not implemented"); }
 

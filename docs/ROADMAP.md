@@ -140,6 +140,12 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
 - AWS Free plan ends 2027-04-02: the account then closes unless upgraded (needs my OK), and AWS deletes the data
   after 90 days. The Vercel dashboard doesn't depend on AWS: it falls back to the bundled snapshot when CloudFront is
   unavailable. NWS collection would fall back to the manual GitHub workflows.
+- "Data as of" can be one day past the last day with values: the 2026-10-02 snapshot (and live `recent.json`) say
+  2026-10-02, but that day has no values yet and 2026-10-01 is partial (1,004 of 1,272 city-hours; the archive lags
+  ~5 days and a city's local day ends after midnight UTC). KPIs over short ranges include that partial day.
+- Accuracy ranking needs at least 30 days of scores per model at the selected lead day (and 100 pairs). NWS (scored
+  since 2026-09-29) shows "not enough data yet" with a head-to-head note on shared city-hours until then; the 33
+  cities added on 2026-10-01 have under 30 days of model scores, so their states stay hatched on the accuracy map.
 - Part 4 (live): the bundled snapshot must be re-exported at least every ~55 days (`recent.json` covers 60 days);
   forecast accuracy stays as of the bundled snapshot, and the year-to-date preset finds no bundled accuracy after the
   live data moves on; an NWS alert text containing a `FORBIDDEN` word (e.g. "atlas") blocks that run's `alerts.json`.
@@ -377,6 +383,12 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       the restriction. Change set reviewed (10 adds, 6 modifies, no replacements), publisher invoked (3 files), CloudFront
       serves only `dashboard/*` (other paths 403), CORS only for the Vercel origin; `LIVE_DATA_URL` + CSP `connect-src`
       set to `https://d1dl5jm7af48m2.cloudfront.net`; dashboard shows "Live"
+- [x] City history gap (2026-10-07): the 2026-09-26 snapshot was exported while the 53-city history backfill was
+      paused at the Open-Meteo budget (13 cities + half of manchester-nh loaded 1.5 h later). Backfilled all 53 cities
+      from 2023-01-01 (1,358 weighted calls, 53 requests, idempotent upserts); export and `check:demo` now fail on a
+      city with no history or a gap > 7 days; the export keeps `replay-sample.json` (it used to wipe public/data)
+- [x] Accuracy ranking: models need ≥ 30 days of scores (`days` on /accuracy and /accuracy/states); short-history
+      models (NWS) get a head-to-head note from the new `/accuracy/matched`; legacy `icon_seamless` left out of the snapshot
 
 ## Cross-cutting
 

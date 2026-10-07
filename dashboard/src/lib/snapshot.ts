@@ -5,7 +5,7 @@
 // Live data (Stage 6a part 4): when the build sets VITE_LIVE_DATA_URL (CloudFront), recent history, forecasts and alerts
 // are fetched from there first; any live file that fails, times out or doesn't validate falls back to the bundled one.
 import { z } from "zod";
-import type { AccuracyMonthRow, AccuracyRow, AccuracyStateRow, AlertRow, AreaParams, MissRow, ForecastRow, LocationRow, MapRow, PeriodRow, StatsResponse, StatsRow } from "@/lib/api";
+import type { AccuracyMonthRow, AccuracyRow, AccuracyStateRow, AlertRow, AreaParams, MatchedRow, MissRow, ForecastRow, LocationRow, MapRow, PeriodRow, StatsResponse, StatsRow } from "@/lib/api";
 import { compareRange, dayMs, setDataEnd, toDay } from "@/lib/dates";
 
 const SUPPORTED_FORMAT = 1;
@@ -216,6 +216,8 @@ type AccuracyDetails = {
   states: Record<number, AccuracyStateRow[]>;
   months: Record<number, AccuracyMonthRow[]>;
   misses: Record<number, MissRow[]>;
+  // Head-to-head rows for models with a short history (model → lead day → rows); absent in older snapshots.
+  matched?: Record<string, Record<number, MatchedRow[]>>;
 };
 // Accuracy is computed locally and only bundled. With live history the presets end `shift` days later, so a range is
 // also looked up `shift` days earlier: "last 90 days" shows the bundled "last 90 days" (the page says "as of").
@@ -312,6 +314,11 @@ export const snapshotApi = {
   async accuracyStates(p: { from: string; to: string; lead: number }) {
     const d = await file<AccuracyDetails>("accuracy-details.json");
     return { data: (rangeMatch(d, p) ? d.states[p.lead] : null) ?? [], meta: meta(p) };
+  },
+
+  async accuracyMatched(p: { from: string; to: string; lead: number; model: string }) {
+    const d = await file<AccuracyDetails>("accuracy-details.json");
+    return { data: (rangeMatch(d, p) ? d.matched?.[p.model]?.[p.lead] : null) ?? [], meta: meta(p) };
   },
 
   async accuracyMonths(p: AreaParams & { lead: number }) {

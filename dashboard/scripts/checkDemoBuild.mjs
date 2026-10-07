@@ -10,6 +10,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { chromium } from "playwright";
 import { insideDir } from "./insideDir.mjs";
+import { MAX_GAP_DAYS, historyProblems } from "../../src/publish/snapshotFormat.js";
 
 const DIST = new URL("../dist/", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1");
 const vercel = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
@@ -40,6 +41,18 @@ const server = createServer((req, res) => {
 
 const checks = [];
 const check = (name, ok, detail = "") => checks.push({ check: name, result: ok ? "PASS" : "FAIL", detail: String(detail).slice(0, 90) });
+
+// Data quality of the bundled snapshot (same rule as export:snapshot): every city has history, no long gaps.
+{
+  const readData = (name) => JSON.parse(readFileSync(join(DIST, "data", name), "utf8"));
+  const { snapshot } = readData("manifest.json");
+  const locations = readData(`${snapshot}/locations.json`);
+  const dailies = Object.fromEntries(locations.map((l) => [l.id, existsSync(join(DIST, "data", snapshot, `daily-${l.id}.json`)) ? readData(`${snapshot}/daily-${l.id}.json`) : null]));
+  const problems = historyProblems(locations, dailies);
+  if (problems.length) console.error(`[check] history problems:\n  ${problems.join("\n  ")}`);
+  check(`history: all ${locations.length} cities, no gap > ${MAX_GAP_DAYS} days`, problems.length === 0,
+    problems.length ? `${problems.length} cities: ${problems.map((p) => p.split(":")[0]).join(", ")}` : `${locations.length} cities`);
+}
 const browser = await chromium.launch();
 const blockedLive = [];
 // Abort live-data requests (its CORS allows only the Vercel origin anyway): the fallback is then deterministic.

@@ -193,6 +193,15 @@ export function createService({ warehouse, cache, store }) {
 
     accuracyStates: ({ from, to, lead = 1 }) => accuracyQuery("accuracyStates", { from, to, lead }),
 
+    async accuracyMatched({ from, to, lead = 1, model }) {
+      if (typeof model !== "string" || !/^[a-z0-9_]{1,40}$/.test(model)) throw badRequest("model must be a model id");
+      const range = resolveRange(from, to);
+      if (!Number.isInteger(lead) || lead < 1 || lead > LIMITS.maxLeadDays) throw badRequest(`lead must be 1..${LIMITS.maxLeadDays}`);
+      const result = await query("accuracyMatched", { ...range, lead, model });
+      result.meta.range = range;
+      return result;
+    },
+
     accuracyMonths: ({ from, to, location, state, lead }) => accuracyQuery("accuracyMonths", { from, to, location, state, lead }),
 
     async accuracyMisses({ from, to, location, state, lead, limit = 10 }) {

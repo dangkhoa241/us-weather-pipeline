@@ -42,6 +42,10 @@ export const QUERY = {
   alerts: z.object({ state: z.string().regex(new RegExp(PATTERNS.state)).optional() }).strict(),
   accuracy: z.object({ location: locationId.optional(), state: stateCode.optional(), ...range }).strict(),
   accuracyStates: z.object({ ...range, lead: leadDay.default(1) }).strict(),
+  accuracyMatched: z.object({
+    ...range, lead: leadDay.default(1),
+    model: z.string().regex(/^[a-z0-9_]{1,40}$/).meta({ example: "nws" }),
+  }).strict(),
   accuracyMonths: z.object({ location: locationId.optional(), state: stateCode.optional(), ...range, lead: leadDay.optional() }).strict(),
   accuracyMisses: z.object({
     location: locationId.optional(), state: stateCode.optional(), ...range, lead: leadDay.optional(),
@@ -70,8 +74,11 @@ export const ROW = {
     state: z.string(), region: z.string(), cities: z.number(),
     temp_avg_c: num, temp_max_c: num, precip_mm_per_city: num,
   }),
-  accuracy: z.object({ model: z.string(), lead_days: z.number(), n: z.number(), mae_c: num, bias_c: num }),
-  accuracyState: z.object({ state: z.string(), model: z.string(), n: z.number(), mae_c: num, bias_c: num }),
+  // days: distinct target dates with scores (a model is ranked only after enough days, dashboard/src/lib/accuracy.ts)
+  accuracy: z.object({ model: z.string(), lead_days: z.number(), n: z.number(), days: z.number(), mae_c: num, bias_c: num }),
+  accuracyState: z.object({ state: z.string(), model: z.string(), n: z.number(), days: z.number(), mae_c: num, bias_c: num }),
+  // head-to-head with the requested model over the (city, hour) pairs both were scored on
+  accuracyMatched: z.object({ model: z.string(), n: z.number(), mae_c: num, target_mae_c: num }),
   accuracyMonth: z.object({ month: z.string(), model: z.string(), n: z.number(), mae_c: num, bias_c: num }),
   miss: z.object({
     target_time: z.string(), location_id: z.string(), model: z.string(), lead_days: z.number(),
@@ -123,6 +130,7 @@ export const RESPONSE = {
   alerts: envelope(z.array(ROW.alert)),
   accuracy: envelope(z.array(ROW.accuracy)),
   accuracyStates: envelope(z.array(ROW.accuracyState)),
+  accuracyMatched: envelope(z.array(ROW.accuracyMatched)),
   accuracyMonths: envelope(z.array(ROW.accuracyMonth)),
   misses: envelope(z.array(ROW.miss)),
   records: envelope(ROW.records),

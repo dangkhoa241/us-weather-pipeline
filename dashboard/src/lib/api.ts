@@ -15,6 +15,7 @@ export type AlertRow = z.infer<typeof ROW.alert>;
 export type AccuracyStateRow = z.infer<typeof ROW.accuracyState>;
 export type AccuracyMonthRow = z.infer<typeof ROW.accuracyMonth>;
 export type MissRow = z.infer<typeof ROW.miss>;
+export type MatchedRow = z.infer<typeof ROW.accuracyMatched>;
 /** Accuracy area: all US (both empty), one state or one city. */
 export type AreaParams = { from: string; to: string; location?: string; state?: string };
 
@@ -51,6 +52,7 @@ export const liveApi = {
   map: (p: { from: string; to: string }) => get("/map", p, RESPONSE.map),
   accuracy: (p: AreaParams) => get("/accuracy", p, RESPONSE.accuracy),
   accuracyStates: (p: { from: string; to: string; lead: number }) => get("/accuracy/states", p, RESPONSE.accuracyStates),
+  accuracyMatched: (p: { from: string; to: string; lead: number; model: string }) => get("/accuracy/matched", p, RESPONSE.accuracyMatched),
   accuracyMonths: (p: AreaParams & { lead: number }) => get("/accuracy/months", p, RESPONSE.accuracyMonths),
   accuracyMisses: (p: AreaParams & { lead: number; limit?: number }) => get("/accuracy/misses", p, RESPONSE.misses),
   forecast: (locationId: string, days = 8) => get(`/forecast/${encodeURIComponent(locationId)}`, { days }, RESPONSE.forecast),

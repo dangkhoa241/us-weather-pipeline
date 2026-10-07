@@ -298,7 +298,7 @@ export class ClickHouseWarehouse extends Warehouse {
 
   async accuracySummary({ from, to, locationIds, state = "" }) {
     return this.#rows(`
-      SELECT model, lead_days, count() AS n,
+      SELECT model, lead_days, count() AS n, toUInt32(uniqExact(toDate(target_time))) AS days,
         round(avg(temp_abs_error_c), 2) AS mae_c, round(avg(temp_error_c), 2) AS bias_c
       FROM forecast_accuracy
       WHERE ${ACCURACY_FILTER}
@@ -307,9 +307,28 @@ export class ClickHouseWarehouse extends Warehouse {
     accuracyParams({ from, to, locationIds, state, lead: 0 }));
   }
 
+  async accuracyMatched({ from, to, lead, model }) {
+    if (!/^[a-z0-9_]{1,40}$/.test(model ?? "")) throw new Error("model must be a model id");
+    // Pairwise: for each other model, only the (city, hour) pairs both models scored, one averaged error per pair
+    // (a model can have several runs at the same lead day), so n and both errors cover exactly the same hours.
+    return this.#rows(`
+      WITH per AS (
+        SELECT model, location_id, target_time, avg(temp_abs_error_c) AS e
+        FROM forecast_accuracy
+        WHERE ${ACCURACY_FILTER} AND temp_abs_error_c IS NOT NULL
+        GROUP BY model, location_id, target_time)
+      SELECT o.model AS model, count() AS n, round(avg(o.e), 2) AS mae_c, round(avg(t.e), 2) AS target_mae_c
+      FROM per AS o
+      INNER JOIN (SELECT location_id, target_time, e FROM per WHERE model = {model:String}) AS t USING (location_id, target_time)
+      WHERE o.model != {model:String}
+      GROUP BY o.model
+      ORDER BY mae_c, model`,
+    { ...accuracyParams({ from, to, lead }), model });
+  }
+
   async accuracyByState({ from, to, lead }) {
     return this.#rows(`
-      SELECT l.state AS state, a.model AS model, count() AS n,
+      SELECT l.state AS state, a.model AS model, count() AS n, toUInt32(uniqExact(toDate(a.target_time))) AS days,
         round(avg(a.temp_abs_error_c), 2) AS mae_c, round(avg(a.temp_error_c), 2) AS bias_c
       FROM forecast_accuracy AS a
       INNER JOIN (SELECT id, state FROM locations FINAL) AS l ON l.id = a.location_id

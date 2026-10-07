@@ -2,10 +2,10 @@
 // Hero line, leaderboard, error vs lead day, US map (best model per state, or one model's error), bias by month,
 // biggest misses, and a short "how this is measured" note. Errors/biases in °F are ×1.8 only (lib/accuracy.ts).
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { createColumnHelper, flexRender, getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
 import { api, isSnapshot, type AreaParams, type LocationRow } from "@/lib/api";
-import { bestModelByState, biasWord, errorToUnit, heroLine, leaderboard, LEAD_DAYS, MIN_SAMPLES, monthLabel, type LeaderRow } from "@/lib/accuracy";
+import { bestModelByState, biasWord, errorToUnit, headToHeadNote, heroLine, leaderboard, LEAD_DAYS, MIN_DAYS, MIN_SAMPLES, monthLabel, type LeaderRow } from "@/lib/accuracy";
 import { colorFor, extent } from "@/lib/colors";
 import { local } from "@/lib/forecast";
 import { MODELS, MODEL_BY_ID, modelName } from "@/lib/models";
@@ -43,6 +43,16 @@ export function AccuracyPage() {
   const board = useMemo(() => leaderboard(summary.data?.data ?? [], lead, f.unit), [summary.data, lead, f.unit]);
   const hero = heroLine(board, lead, f.unit);
   const baseline = board.find((r) => r.baseline);
+  // Models with a short history aren't ranked; compare them head-to-head with the leader on the same city-hours
+  // (all US only: the head-to-head query has no area filter).
+  const leader = board.find((r) => r.rank === 1);
+  const short = board.filter((r) => r.shortHistory && r.n > 0);
+  const matched = useQueries({ queries: short.map((r) => ({
+    queryKey: ["accuracyMatched", range, lead, r.model],
+    queryFn: () => api.accuracyMatched({ ...range, lead, model: r.model }),
+    enabled: !f.area && Boolean(leader),
+  })) });
+  const notes = f.area ? [] : short.map((r, i) => headToHeadNote(r, leader, matched[i]?.data?.data ?? [], f.unit)).filter((n): n is string => Boolean(n));
   const demoLimited = isSnapshot && demoRange.data && (f.area !== "" || demoRange.data.from !== range.from || demoRange.data.to !== range.to);
 
   return (
@@ -80,6 +90,7 @@ export function AccuracyPage() {
           {summary.error ? <Problem what="the leaderboard" error={summary.error} /> : summary.isPending ? <Skeleton className="h-48" /> : !board.length ? (
             <Empty />
           ) : <Leaderboard rows={board} lead={lead} deg={deg} />}
+          {notes.map((n) => <p key={n} className="mt-3 text-xs text-muted-foreground" data-head-to-head>{n}</p>)}
         </CardContent>
       </Card>
 
@@ -158,7 +169,7 @@ export function AccuracyPage() {
           <p><b className="text-foreground">Error (<Term k="MAE" />)</b>: each hourly temperature forecast is compared with the temperature observed at that hour (Open-Meteo archive); the average size of the difference, ignoring its sign.</p>
           <p><b className="text-foreground"><Term k="Bias" /></b>: the average signed difference (forecast − observed). Positive means the model runs too warm, negative too cold. In °F, errors and biases are ×1.8 (no +32).</p>
           <p><b className="text-foreground"><Term k="Lead day" /></b>: how many days before the forecast hour the model run was issued (1 = the day before). Errors usually grow with lead time.</p>
-          <p><b className="text-foreground">Data</b>: past model runs (<Term k="ECMWF" />, <Term k="GFS" />, <Term k="ICON" />, <Term k="HRRR" />) and <Term k="NWS" /> forecasts collected by the pipeline. <i><Term k="Best match" /></i> is a lead-day-only <Term k="Baseline">baseline</Term> (approximate issue time): listed in the leaderboard but not ranked, and left out of the biggest misses; legacy snapshots are excluded; models with fewer than {MIN_SAMPLES} pairs aren't ranked. NWS appears once its forecasts can be matched with observations (~5-day lag).</p>
+          <p><b className="text-foreground">Data</b>: past model runs (<Term k="ECMWF" />, <Term k="GFS" />, <Term k="ICON" />, <Term k="HRRR" />) and <Term k="NWS" /> forecasts collected by the pipeline. <i><Term k="Best match" /></i> is a lead-day-only <Term k="Baseline">baseline</Term> (approximate issue time): listed in the leaderboard but not ranked, and left out of the biggest misses; legacy snapshots are excluded; models with fewer than {MIN_SAMPLES} pairs or fewer than {MIN_DAYS} days of scores at the selected lead day aren't ranked ("not enough data yet"): a short history is measured over different weather than the others. NWS appears once its forecasts can be matched with observations (~5-day lag).</p>
         </CardContent>
       </Card>
     </>
@@ -170,7 +181,13 @@ const column = createColumnHelper<LeaderRow>();
 function Leaderboard({ rows, lead, deg }: { rows: LeaderRow[]; lead: number; deg: string }) {
   const [sorting, setSorting] = useState<SortingState>([{ id: "rank", desc: false }]);
   const columns = useMemo(() => [
-    column.accessor((r) => r.rank ?? 99, { id: "rank", header: "Rank", cell: (c) => c.row.original.rank ?? "–" }),
+    column.accessor((r) => r.rank ?? 99, { id: "rank", header: "Rank", cell: (c) => {
+      const r = c.row.original;
+      if (r.rank != null) return r.rank;
+      return r.shortHistory && r.n > 0
+        ? <span className="whitespace-nowrap text-xs text-muted-foreground" data-short-history>not enough data yet · {r.days} day{r.days === 1 ? "" : "s"}</span>
+        : "–";
+    } }),
     column.accessor("name", { header: "Model", cell: (c) => (
       <span className="flex items-center gap-2"><span className="inline-block size-2.5 rounded-full" style={{ background: MODEL_BY_ID.get(c.row.original.model)?.color }} />
         <ModelTerm name={c.getValue()} />{c.row.original.baseline && <span className="text-xs text-muted-foreground"><Term k="Baseline">baseline</Term></span>}</span>) }),
@@ -233,7 +250,7 @@ function BiasChart({ rows, unit, deg, areaName }: { rows: { month: string; model
 }
 
 function AccuracyMap({ rows, pending, error, lead, unit, deg, locations, onState }: {
-  rows: { state: string; model: string; n: number; mae_c: number | null; bias_c: number | null }[]; pending: boolean; error: Error | null;
+  rows: { state: string; model: string; n: number; days: number; mae_c: number | null; bias_c: number | null }[]; pending: boolean; error: Error | null;
   lead: number; unit: TempUnit; deg: string; locations: LocationRow[]; onState: (code: string) => void;
 }) {
   const [mode, setMode] = useState("best");

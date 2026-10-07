@@ -10,9 +10,9 @@ describe("computeKpis", () => {
   const temp = [day("2026-07-01", { avg: 20, max: 30, min: 10 }), day("2026-07-02", { avg: 24, max: 35, min: 12 }), day("2026-07-03", {})];
   const rain = [day("2026-07-01", { sum: 0 }), day("2026-07-02", { sum: 5.5 }), day("2026-07-03", { sum: 1 }), day("2026-07-04", { sum: null })];
   const acc: AccuracyRow[] = [
-    { model: "a", lead_days: 1, n: 100, mae_c: 1, bias_c: 0 },
-    { model: "b", lead_days: 1, n: 300, mae_c: 2, bias_c: 0 },
-    { model: "a", lead_days: 3, n: 100, mae_c: 9, bias_c: 0 },
+    { model: "a", lead_days: 1, n: 100, days: 90, mae_c: 1, bias_c: 0 },
+    { model: "b", lead_days: 1, n: 300, days: 90, mae_c: 2, bias_c: 0 },
+    { model: "a", lead_days: 3, n: 100, days: 90, mae_c: 9, bias_c: 0 },
   ];
 
   it("aggregates daily rows and skips missing values instead of counting them as 0", () => {

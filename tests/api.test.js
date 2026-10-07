@@ -53,6 +53,13 @@ describe("routes and validation", () => {
     expect(service.forecast).toHaveBeenCalledWith({ locationId: "miami-fl", days: 3 });
   });
 
+  it("defaults /accuracy/matched to lead day 1", async () => {
+    const service = fakeService({ accuracyMatched: vi.fn(async (args) => ({ data: [{ args }] })) });
+    const res = await request(createApp({ service }), "/api/v1/accuracy/matched?model=nws&from=2026-07-05&to=2026-10-02");
+    expect(res.status).toBe(200);
+    expect(service.accuracyMatched).toHaveBeenCalledWith({ model: "nws", lead: 1, from: "2026-07-05", to: "2026-10-02" });
+  });
+
   it.each([
     ["unknown metric", "/api/v1/stats?locations=stockton-ca&metric=DROP"],
     ["SQL-like location id", "/api/v1/stats?locations=stockton-ca'%20OR%201=1--"],
@@ -62,6 +69,8 @@ describe("routes and validation", () => {
     ["bad drill key", "/api/v1/drill?location=miami-fl&level=quarter&key=2025-Q9"],
     ["path traversal in id", "/api/v1/forecast/..%2F..%2Fetc%2Fpasswd"],
     ["bad state", "/api/v1/alerts?state=texas"],
+    ["SQL-like model", "/api/v1/accuracy/matched?model=nws'%20OR%201=1--"],
+    ["missing model", "/api/v1/accuracy/matched?lead=1"],
   ])("rejects %s with 400 before calling the service", async (_name, path) => {
     const service = fakeService();
     const res = await request(createApp({ service }), path);
@@ -120,10 +129,10 @@ describe("security headers, CORS, docs", () => {
     expect(other.headers.get("access-control-allow-origin")).not.toBe("https://evil.example");
   });
 
-  it("documents all 15 routes and serves a pinned Swagger UI under a CSP", async () => {
+  it("documents all 16 routes and serves a pinned Swagger UI under a CSP", async () => {
     const app = createApp({ service: fakeService() });
     const spec = await (await request(app, "/openapi.json")).json();
-    expect(Object.keys(spec.paths)).toHaveLength(15);
+    expect(Object.keys(spec.paths)).toHaveLength(16);
     expect(spec.paths["/api/v1/forecast/{locationId}"]).toBeDefined();
     const docs = await request(app, "/docs");
     expect(await docs.text()).toContain("swagger-ui-dist@5.33.0/swagger-ui-bundle.js");
