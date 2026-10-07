@@ -30,6 +30,7 @@
     "dashboard:dev": "npm --prefix dashboard run dev",
     "dashboard:build": "npm --prefix dashboard run build",
     "test:dashboard": "npm --prefix dashboard test",
+    "typecheck": "npm --prefix dashboard run typecheck",
     "export:snapshot": "node scripts/exportSnapshot.js"
   },
   "dependencies": {

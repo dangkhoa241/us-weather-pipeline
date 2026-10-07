@@ -32,7 +32,7 @@ jobs:
       - run: npm test
       - run: npm ci --ignore-scripts
         working-directory: dashboard
-      - run: npx tsc -b
+      - run: npm run typecheck
         working-directory: dashboard
       - run: npx vitest run
         working-directory: dashboard
