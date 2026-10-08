@@ -4,6 +4,7 @@
 
 import { COLLECTIONS } from "../collections.js";
 import { nwsGet } from "../lib/http.js";
+import { categoryOf, isUnmappedEvent } from "./alertCategories.js";
 
 const ALERTS = COLLECTIONS.alerts;
 const ACTIVE_URL = "https://api.weather.gov/alerts/active";
@@ -47,9 +48,13 @@ const isHeat = (d) => /heat/i.test(d.event ?? "");
 const endOf = (d) => d.ends ?? d.expires ?? null;
 const utcText = (date) => `${date.toISOString().slice(0, 16).replace("T", " ")} UTC`;
 
+const isNewFor = (d, knownIds) => d.location_ids.length && !knownIds.has(d.id) && d.message_type !== "Cancel";
+
 /** Heat alerts that affect a tracked city and weren't stored before (cancellations excluded). */
-export const newHeatAlerts = (docs, knownIds) =>
-  docs.filter((d) => isHeat(d) && d.location_ids.length && !knownIds.has(d.id) && d.message_type !== "Cancel");
+export const newHeatAlerts = (docs, knownIds) => docs.filter((d) => isHeat(d) && isNewFor(d, knownIds));
+
+/** Alerts of an emailable category (src/stage1/alertCategories.js) that affect a tracked city and are new. */
+export const newCategoryAlerts = (docs, knownIds) => docs.filter((d) => categoryOf(d.event) && isNewFor(d, knownIds));
 
 // Severity first, then the product: a Watch → Warning with the same NWS severity is still an upgrade.
 const SEVERITY_RANK = { Minor: 1, Moderate: 2, Severe: 3, Extreme: 4 };
@@ -57,19 +62,22 @@ const kindRank = (event) => (/warning/i.test(event) ? 3 : /advisory/i.test(event
 const rank = (d) => (SEVERITY_RANK[d.severity] ?? 0) * 10 + kindRank(d.event ?? "");
 
 /**
- * Which new heat alerts are worth an email, per city. NWS re-issues an alert about once a day with a new id (an Update
- * that references the earlier ones), mostly with nothing changed. Compared with the city's heat alerts still in effect
- * when the new one was sent: none → "New"; a higher severity or product → "Upgraded"; a later end time → "Extended".
- * Anything else (same or earlier end, same or lower level) is a re-issue: stored, not emailed.
- * `prior`: stored heat alerts (not cancellations). Returns [{ reason, until, alert, cities }] in send order.
+ * Which new alerts are worth an email, per city and group. NWS re-issues an alert about once a day with a new id (an
+ * Update that references the earlier ones), mostly with nothing changed. Compared with the city's alerts of the same
+ * group still in effect when the new one was sent: none → "New"; a higher severity or product → "Upgraded"; a later
+ * end time → "Extended". Anything else (same or earlier end, same or lower level) is a re-issue: stored, not emailed.
+ * `groupOf(alert)`: the group name, or null for alerts that are never emailed.
+ * `prior`: stored alerts (cancellations are ignored). Returns [{ reason, until, alert, cities, category }] in send order.
  */
-export function heatChanges(fresh, prior) {
-  const seen = prior.filter((d) => isHeat(d) && d.message_type !== "Cancel");
+function groupChanges(fresh, prior, groupOf) {
+  const seen = prior.filter((d) => groupOf(d) && d.message_type !== "Cancel");
   const changes = [];
   for (const d of [...fresh].sort((a, b) => (a.sent ?? 0) - (b.sent ?? 0))) {
+    const group = groupOf(d);
+    if (!group) continue;
     const byReason = new Map();
     for (const city of d.location_ids) {
-      const active = seen.filter((p) => p.location_ids.includes(city) && (endOf(p) == null || !d.sent || endOf(p) > d.sent));
+      const active = seen.filter((p) => groupOf(p) === group && p.location_ids.includes(city) && (endOf(p) == null || !d.sent || endOf(p) > d.sent));
       const lastEnd = active.reduce((a, p) => (endOf(p) && (!a || endOf(p) > a) ? endOf(p) : a), null);
       const reason = !active.length ? "New"
         : rank(d) > Math.max(...active.map(rank)) ? "Upgraded"
@@ -77,11 +85,17 @@ export function heatChanges(fresh, prior) {
         : null;
       if (reason) byReason.set(reason, [...(byReason.get(reason) ?? []), city]);
     }
-    for (const [reason, cities] of byReason) changes.push({ reason, until: endOf(d), alert: d, cities });
+    for (const [reason, cities] of byReason) changes.push({ reason, until: endOf(d), alert: d, cities, category: group });
     seen.push(d);   // two alerts for one city in the same run: the second compares with the first
   }
   return changes;
 }
+
+/** Your private heat emails (unchanged rule): every event with "heat" in its name is one group. */
+export const heatChanges = (fresh, prior) => groupChanges(fresh, prior, (d) => (isHeat(d) ? "heat" : null));
+
+/** Public emails: one group per alert category (heat, flood, …); "other" events never count. */
+export const categoryChanges = (fresh, prior) => groupChanges(fresh, prior, (d) => categoryOf(d.event));
 
 /** One notification for all heat changes of a run (keeps email volume low); each line says why it was sent. */
 export function heatAlertEvent(changes) {
@@ -97,7 +111,11 @@ export function heatAlertEvent(changes) {
   };
 }
 
-export async function fetchAlerts(store, locations, run, notifier) {
+/**
+ * @param publicAlerts optional `(changes, locations) => Promise` (src/stage1/publicAlerts.js): public subscriber emails.
+ *   Only the Lambda passes it; local runs never email subscribers.
+ */
+export async function fetchAlerts(store, locations, run, notifier, publicAlerts = null) {
   const states = [...new Set(locations.map((l) => l.state))].sort();
   const locationsByZone = new Map();
   for (const l of locations) {
@@ -114,23 +132,35 @@ export async function fetchAlerts(store, locations, run, notifier) {
     const sourceTimestamp = toDate(data.updated) ?? fetchedAt;
     const meta = { etl_batch_id: run.etlBatchId, source_timestamp: sourceTimestamp, fetched_at: fetchedAt };
     const docs = (data.features ?? []).map((f) => toAlert(f, locationsByZone, meta));
-    // Heat alerts for tracked cities, compared with what was stored before this run (read before the upsert):
-    // the cities' heat alerts that could still be in effect when the earliest new one was sent.
-    const candidates = newHeatAlerts(docs, new Set());
+    // Emailable alerts for tracked cities (heat; with public alerts also every category), compared with what was stored
+    // before this run (read before the upsert): the cities' alerts that could still be in effect when the earliest
+    // new one was sent.
+    const emailable = (d) => isHeat(d) || (publicAlerts && categoryOf(d.event));
+    const candidates = docs.filter((d) => emailable(d) && isNewFor(d, new Set()));
     let prior = [];
     if (candidates.length) {
       const since = new Date(Math.min(...candidates.map((d) => (d.sent ?? fetchedAt).getTime())));
       const open = { $or: [{ ends: { $gt: since } }, { ends: null, expires: { $gt: since } }, { ends: null, expires: null }] };
       prior = (await store.find(ALERTS.name, { location_ids: { $in: [...new Set(candidates.flatMap((d) => d.location_ids))] }, ...open },
-        { projection: { _id: 0, id: 1, event: 1, severity: 1, message_type: 1, location_ids: 1, sent: 1, ends: 1, expires: 1 } })).filter(isHeat);
+        { projection: { _id: 0, id: 1, event: 1, severity: 1, message_type: 1, location_ids: 1, sent: 1, ends: 1, expires: 1 } })).filter(emailable);
     }
     const result = docs.length ? await store.upsertMany(ALERTS.name, docs, ALERTS.uniqueKey) : {};
-    const changes = heatChanges(newHeatAlerts(docs, new Set(prior.map((d) => d.id))), prior);
+    const knownIds = new Set(prior.map((d) => d.id));
+    const changes = heatChanges(newHeatAlerts(docs, knownIds), prior);
     if (changes.length && notifier) await notifier.notify(heatAlertEvent(changes));
+    if (publicAlerts) {
+      // Public subscriber emails never break the run (and never reach the private notifier's text path).
+      try {
+        await publicAlerts(categoryChanges(newCategoryAlerts(docs, knownIds), prior), locations);
+      } catch (err) {
+        console.error(`[alerts:public] failed (${err?.name ?? "Error"}): ${err?.message ?? err}`);
+      }
+    }
     run.add(docs.length, result);
     const forOurCities = docs.filter((d) => d.location_ids.length);
     console.log(`[alerts] ${docs.length} active alerts in ${states.length} states, ${forOurCities.length} affect tracked cities`, result);
     for (const d of forOurCities) console.log(`  - ${d.event} (${d.severity}) → ${d.location_ids.join(", ")}`);
+    for (const event of new Set(forOurCities.map((d) => d.event).filter(isUnmappedEvent))) console.log(`[alerts] unmapped event: ${event}`);
   } catch (err) {
     run.error(null, err);
   }

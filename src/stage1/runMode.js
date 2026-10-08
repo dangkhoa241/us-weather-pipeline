@@ -28,7 +28,7 @@ export const JOBS = {
   "om-forecast": (store, locations, run) => fetchOpenMeteoForecasts(store, locations, run),
   "om-backfill": (store, locations, run, opts) => backfillOpenMeteoRuns(store, locations, run, { days: opts.days }),
   "om-baseline": (store, locations, run, opts) => backfillBestMatchBaseline(store, locations, run, { days: opts.days }),
-  alerts: (store, locations, run, opts) => fetchAlerts(store, locations, run, opts.notifier),
+  alerts: (store, locations, run, opts) => fetchAlerts(store, locations, run, opts.notifier, opts.publicAlerts),
   "sync-atlas": (store, locations, run) => syncFromAtlas(store, run),
 };
 
