@@ -24,6 +24,26 @@ export const config = Object.freeze({
     notifier: env.NOTIFIER || "console",
     warehouse: env.WAREHOUSE || "clickhouse",
     rawArchive: env.RAW_ARCHIVE || "none",     // none | s3: extra copy of raw API responses (Stage 6a part 2)
+    counterStore: env.COUNTER_STORE || "memory", // memory | dynamodb: email sign-up counters (Lambda: dynamodb)
+  },
+
+  // Public email sign-ups (docs/analysis/email-signups.md). Lambda only; local runs never email subscribers.
+  publicAlerts: {
+    mode: env.PUBLIC_ALERTS || "off",                          // off | sns
+    topicArn: env.PUBLIC_SNS_TOPIC_ARN || null,                // the PUBLIC topic (never the private SNS_TOPIC_ARN)
+    monthlyEmailCap: int(env.PUBLIC_EMAIL_MONTHLY_CAP, 900),   // SNS free tier 1,000 emails / month; 100 kept for ops
+    cooldownHours: int(env.PUBLIC_ALERT_COOLDOWN_HOURS, 24),   // per city + category; Upgraded is always sent
+    dashboardUrl: env.PUBLIC_DASHBOARD_URL || "https://us-weather-pipeline.vercel.app",
+  },
+  signups: {
+    table: env.SIGNUP_TABLE || null,                           // COUNTER_STORE=dynamodb: the DynamoDB table
+    subscriberCap: int(env.PUBLIC_SUBSCRIBER_CAP, 100),        // confirmed + pending; SNS allows 200 filter policies / topic
+    ipLimitPerHour: int(env.SIGNUP_IP_LIMIT_PER_HOUR, 5),
+    dailyLimit: int(env.SIGNUP_DAILY_LIMIT, 20),               // new subscriptions per UTC day (pending ones live 30 days)
+    emailCooldownHours: int(env.SIGNUP_EMAIL_COOLDOWN_HOURS, 24),
+    allowedHostnames: (env.SIGNUP_ALLOWED_HOSTNAMES || "us-weather-pipeline.vercel.app,localhost").split(",").map((s) => s.trim()).filter(Boolean),
+    turnstileSecretParam: env.TURNSTILE_SECRET_SSM_PARAM || null,   // SSM SecureString names (values never in .env)
+    hmacKeyParam: env.SIGNUP_HMAC_SSM_PARAM || null,
   },
 
   mongo: {

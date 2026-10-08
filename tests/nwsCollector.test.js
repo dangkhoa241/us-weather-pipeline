@@ -59,7 +59,7 @@ describe("NWS collector Lambda handler", () => {
     const res = await handler({ mode: "forecast" });
     expect(res).toEqual({ mode: "forecast", status: "success", etl_batch_id: "stage1-forecast-1", rows_fetched: 3, error_count: 0 });
     expect(makeStore).toHaveBeenCalledWith(URI);
-    expect(runMode).toHaveBeenCalledWith("forecast", store, notifier, {});
+    expect(runMode).toHaveBeenCalledWith("forecast", store, notifier, { publicAlerts: null });   // subscriber emails: alerts mode only
     expect(store.connect).toHaveBeenCalledTimes(1);
     expect(store.close).toHaveBeenCalledTimes(1);
     expect(notifier.notify).not.toHaveBeenCalled();
