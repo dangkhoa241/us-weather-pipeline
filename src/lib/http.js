@@ -80,6 +80,21 @@ export async function getJson(url, { limiter, cost = 1, headers = {}, maxRetries
   }
 }
 
+/**
+ * POST a form and parse the JSON answer: one attempt, short timeout (the sign-up Lambda's CAPTCHA check must stay
+ * fast and cheap). The User-Agent is the pipeline name only: the NWS one carries a contact address.
+ */
+export async function postFormJson(url, form, { timeoutMs = 3_000 } = {}) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "User-Agent": config.pipelineName, Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(form),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!res.ok) throw new HttpError(res.status, url);   // no body: never echo what was posted
+  return res.json();
+}
+
 // One limiter per API, shared by every caller in the process.
 export const limiters = Object.freeze({
   nws: new RateLimiter(config.http.nwsMinIntervalMs),
