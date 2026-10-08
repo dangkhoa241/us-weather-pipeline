@@ -11,7 +11,8 @@ import { liveTime } from "@/lib/snapshot";
 import { fmt, toUnit, type TempUnit } from "@/lib/units";
 import { useFilters } from "@/store/filters";
 import { FilterBar } from "@/components/FilterBar";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { SignupButton } from "@/components/SignupDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Term } from "@/components/Term";
@@ -66,6 +67,7 @@ function CityForecast({ id, name, state, tz, unit }: { id: string; name: string;
           <CardDescription data-forecast-issued>
             {nwsIssued ? (isSnapshot && !liveTime("forecasts") ? `Forecast as of ${nwsIssued.slice(0, 10)}` : <><Term k="NWS" /> forecast issued {fmtLocal(nwsIssued, tz)} (local time)</>) : "Loading forecast…"}
           </CardDescription>
+          <CardAction><SignupButton cityId={id} cityName={`${name}, ${state}`} /></CardAction>
         </CardHeader>
         <CardContent>
           {periods.error ? <Problem what="the daily forecast" error={periods.error} /> : periods.isPending ? <Skeleton className="h-36" /> : !cards.length ? (

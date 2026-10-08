@@ -131,6 +131,12 @@ flowchart LR
   ATLAS -.->|NWS forecasts + alerts| P
   OM["Open-Meteo"] -.->|history + 4 models| P
   CF -.->|"live JSON, falls back to the snapshot"| VERCEL
+  subgraph P5["Part 5: public email alerts"]
+    FORM["'Get alerts' form<br/>(Vercel + Turnstile)"] -->|POST| URL["Lambda Function URL<br/>sign-up"]
+    URL --> DDB[("DynamoDB<br/>limits + budget")]
+    URL -->|email subscription + filter| PUB["SNS public topic"]
+  end
+  L -->|"subscriber alerts (city, category)"| PUB
 ```
 
 | Service | Job | Free-tier allowance | Our use (measured / expected per month) |
@@ -141,9 +147,20 @@ flowchart LR
 | S3 raw archive | gzipped raw responses (deleted after 30 days) + the 3 dashboard files | 5 GB, 2,000 PUT, 20,000 GET (12 months) | ~1,170 PUTs (59%; ≤ 1,333 = 67% by hard caps: collector 16 / day, local 10 / day, publisher 17 / day); ~175 MB held by the 30-day rule |
 | CloudFront | serves the 3 dashboard files (OAC, PriceClass_100, CORS only for the Vercel origin) | 1 TB out, 10 M requests (always free) | cache misses only reach S3 (~3,000 GETs, 15%) |
 | SNS | email on failed runs and new, upgraded or extended heat alerts | 1 M publishes, 1,000 emails | < 150 emails |
-| SSM Parameter Store | Atlas URI as a SecureString (AWS-managed key) | standard parameters free | 1 parameter, read at cold start |
+| Lambda `weather-pipeline-signup` + Function URL | public email sign-ups: validation, Turnstile, limits, SNS email subscription | (shared with the collector) | < 1,000 requests; 128 MB, 8 s timeout |
+| SNS public topic | subscriber alert emails, one message per city + category (filter policies) | shares the 1,000 emails above | ≤ 900 / month (hard cap), ≤ 100 subscriptions |
+| DynamoDB `weather-pipeline-signups` | rate limits, monthly email budget, cooldowns (TTL) | 25 GB, 25 RCU / 25 WCU provisioned (always free) | 1 RCU / 1 WCU, < 1 MB |
+| SSM Parameter Store | Atlas URI, Turnstile secret, HMAC key as SecureStrings (AWS-managed key) | standard parameters free | 3 parameters, read at cold start |
 | CloudWatch Logs | Lambda logs, 7-day retention | 5 GB | < 50 MB |
 | CloudFormation / SAM, IAM | infrastructure as code, users, roles, boundary | free | 1 stack |
+
+**Public email alerts (Part 5, deployed 2026-10-08).** Visitors pick a city and alert types (heat, flood,
+wind/storm, winter, fire & air quality, tropical) on the dashboard and confirm by email (SNS double opt-in). The
+hourly collector emails only new, upgraded or extended alerts per city and category, at most once a day per city and
+category unless upgraded. Subscriber emails use their own SNS topic, so they never mix with pipeline failure emails.
+Abuse and cost limits: Cloudflare Turnstile checked on the server, 5 attempts per IP per hour, 20 new subscriptions a
+day, 100 subscriptions in all, and a hard stop at 900 emails a month (SNS free tier: 1,000). Design, measured email
+volumes and trade-offs: [docs/analysis/email-signups.md](docs/analysis/email-signups.md).
 
 **Why S3 + CloudFront instead of an API (Part 4, live since 2026-10-07).** The dashboard already reads static JSON
 files. A scheduled Lambda rewrites those files in S3 and CloudFront serves them, so no code runs per request:
@@ -156,6 +173,7 @@ is in [docs/analysis/live-dashboard.md](docs/analysis/live-dashboard.md).
 | `RawStore` | MongoDB | MongoDB + **S3 archive copy** (deployed) |
 | `Scheduler` | node-cron | **EventBridge** for NWS collection (deployed) |
 | `CacheStore` | Redis | not planned (Part 4 serves static files instead) |
+| `CounterStore` | in memory | **DynamoDB** for the email sign-ups (deployed) |
 
 ## By the numbers
 
@@ -259,6 +277,7 @@ More: [cloud collection setup](docs/SETUP_CLOUD_COLLECTION.md), [Vercel demo](do
 | MongoDB Atlas M0 | 512 MB | ~370 MB with a 7-day retention |
 | Vercel Hobby | 100 GB transfer / month | ~0.5 MB per visit (static snapshot) |
 | GitHub Actions | Free on public repos | CI (+ manual collection fallback) |
+| Cloudflare Turnstile | Free plan, unlimited verifications | 1 widget (email sign-up form) |
 | MongoDB, ClickHouse, Redis | Self-hosted in Docker | Local disk only |
 
 | AWS (Lambda, S3, SNS, SSM, EventBridge, CloudWatch Logs) | Free plan + always-free allowances | ≤ 2% of Lambda, ~33% of S3 PUTs (table above) |

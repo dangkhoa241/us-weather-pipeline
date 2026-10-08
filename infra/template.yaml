@@ -34,6 +34,31 @@ Parameters:
     AllowedPattern: "^https://[a-z0-9.-]+$"
     Description: The dashboard's browser origin, the only non-localhost origin CORS allows on the live data.
 
+  # Public email sign-ups (docs/analysis/email-signups.md). Names (not values) of SSM SecureStrings created by hand.
+  TurnstileSecretParameter:
+    Type: String
+    Default: /weather-pipeline/turnstile-secret
+    AllowedPattern: "^/weather-pipeline/[A-Za-z0-9_.-]+$"
+    Description: SSM SecureString with the Cloudflare Turnstile secret key.
+
+  SignupHmacParameter:
+    Type: String
+    Default: /weather-pipeline/signup-hmac-key
+    AllowedPattern: "^/weather-pipeline/[A-Za-z0-9_.-]+$"
+    Description: SSM SecureString with the HMAC key for hashed IP addresses and emails (32 random bytes, hex).
+
+  SignupReservedConcurrency:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    MaxValue: 5
+    Description: >-
+      Reserved concurrency for the sign-up Lambda; 0 = none. The account limit is 10 today and Lambda keeps 10
+      unreserved, so leave 0 until the limit is raised (then e.g. 2).
+
+Conditions:
+  HasSignupReservedConcurrency: !Not [!Equals [!Ref SignupReservedConcurrency, 0]]
+
 Resources:
   # Free tier: 1,000 email deliveries and 1 M publishes / month. Expected: a few emails / day (warn + error only).
   # Not encrypted with KMS: messages are public NWS alerts and pipeline error summaries, and the cost guard rules
@@ -69,6 +94,63 @@ Resources:
       TopicArn: !Ref AlertsTopic
       Protocol: email
       Endpoint: !Ref AlertEmail
+
+  # Public email sign-ups: subscriber alerts ONLY (never pipeline failures; those stay on AlertsTopic). Visitors subscribe
+  # through the sign-up Lambda with a filter policy on the `city` + `category` message attributes. Free tier: 1,000
+  # email deliveries / month for the account, shared with AlertsTopic; the collector stops public emails at 900
+  # (PUBLIC_EMAIL_MONTHLY_CAP). Default quota: 200 filter policies per topic; the sign-up cap is 100.
+  PublicAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: weather-pipeline-public-alerts
+      DisplayName: US Weather Alerts
+
+  PublicAlertsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics: [!Ref PublicAlertsTopic]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: OwnAccountOnly
+            Effect: Allow
+            Principal: { AWS: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:root" }
+            Action: [sns:Publish, sns:Subscribe, sns:GetTopicAttributes, sns:ListSubscriptionsByTopic]
+            Resource: !Ref PublicAlertsTopic
+          - Sid: HttpsOnly
+            Effect: Deny
+            Principal: "*"
+            Action: [sns:Publish, sns:Subscribe]
+            Resource: !Ref PublicAlertsTopic
+            Condition: { Bool: { "aws:SecureTransport": "false" } }
+          # Email only: no SMS (the one paid SNS delivery), HTTP, Lambda or SQS subscriptions, whoever asks.
+          - Sid: EmailSubscriptionsOnly
+            Effect: Deny
+            Principal: "*"
+            Action: sns:Subscribe
+            Resource: !Ref PublicAlertsTopic
+            Condition: { StringNotEquals: { "sns:Protocol": "email" } }
+
+  # Sign-up counters, the monthly email budget, cooldowns and the subscription registry (no email addresses: hashed
+  # keys and subscription ARNs only). Provisioned 1 RCU / 1 WCU, no auto scaling (always free: 25 + 25); short bursts
+  # use burst capacity, and a throttled sign-up gets "try again later". TTL deletes expired items for free.
+  SignupTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: weather-pipeline-signups
+      BillingMode: PROVISIONED
+      ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 }
+      AttributeDefinitions:
+        - { AttributeName: pk, AttributeType: S }
+      KeySchema:
+        - { AttributeName: pk, KeyType: HASH }
+      TimeToLiveSpecification: { AttributeName: expires_at, Enabled: true }
+      PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: false }
+      # No StreamSpecification (no streams); encryption at rest with the AWS-owned key (default, free).
+      Tags:
+        - { Key: Project, Value: us-weather-pipeline }
 
   # Part 2: raw API responses (RAW_ARCHIVE=s3), one gzipped object per source and Stage 1 run.
   # Part 4: also the live dashboard files under dashboard/ (3 small JSON files, overwritten every 3 h / daily).
@@ -175,6 +257,15 @@ Resources:
                 Effect: Allow
                 Action: sns:Publish
                 Resource: !Ref AlertsTopic
+              # Public sign-ups: subscriber alerts, and listing subscriptions to prune the registry.
+              - Sid: PublishPublicAlerts
+                Effect: Allow
+                Action: [sns:Publish, sns:ListSubscriptionsByTopic]
+                Resource: !Ref PublicAlertsTopic
+              - Sid: SignupCounters        # email budget, cooldowns, registry (scan of a ≤ ~100-item table)
+                Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem, dynamodb:Scan]
+                Resource: !GetAtt SignupTable.Arn
       Tags:
         - { Key: Project, Value: us-weather-pipeline }
 
@@ -217,6 +308,21 @@ Resources:
           RAW_ARCHIVE_BUCKET: !Ref RawArchiveBucket
           RAW_ARCHIVE_MAX_PUTS_PER_DAY: "16"   # 8 alerts (every 3 h) + 8 forecast runs; own ledger in Atlas
           TZ: UTC
+          # Public sign-ups: subscriber alerts on their own topic (alerts mode only), counters in DynamoDB.
+          PUBLIC_ALERTS: sns
+          PUBLIC_SNS_TOPIC_ARN: !Ref PublicAlertsTopic
+          COUNTER_STORE: dynamodb
+          SIGNUP_TABLE: !Ref SignupTable
+          PUBLIC_EMAIL_MONTHLY_CAP: "900"
+          PUBLIC_ALERT_COOLDOWN_HOURS: "24"
+          PUBLIC_DASHBOARD_URL: !Ref DashboardOrigin
+      # Scheduled runs are asynchronous invocations. All Lambdas share the account's 10 concurrent executions; a
+      # throttled event stays in Lambda's async queue and is retried with backoff until MaximumEventAgeInSeconds.
+      # 50 min < the hourly alerts interval (the next run covers a dropped one). No retries after a function error:
+      # the handler never throws, and a timed-out run is not repeated (no duplicate emails).
+      EventInvokeConfig:
+        MaximumEventAgeInSeconds: 3000
+        MaximumRetryAttempts: 0
       Events:
         AlertsHourly:
           Type: Schedule
@@ -225,6 +331,9 @@ Resources:
             Description: NWS alerts every hour
             Schedule: cron(23 * * * ? *)
             Input: '{"mode":"alerts"}'
+            RetryPolicy:              # EventBridge → Lambda hand-off failures (e.g. the Invoke API throttled)
+              MaximumRetryAttempts: 4
+              MaximumEventAgeInSeconds: 900
         ForecastsEvery3Hours:
           Type: Schedule
           Properties:
@@ -232,6 +341,9 @@ Resources:
             Description: NWS forecasts every 3 hours
             Schedule: cron(7 0/3 * * ? *)
             Input: '{"mode":"forecast"}'
+            RetryPolicy:
+              MaximumRetryAttempts: 4
+              MaximumEventAgeInSeconds: 900
       Tags:
         Project: us-weather-pipeline
 
@@ -320,6 +432,11 @@ Resources:
           DASHBOARD_MAX_PUTS_PER_DAY: "17"     # 8 runs × 2 files + recent.json once a day
           DASHBOARD_RECENT_DAYS: "60"
           TZ: UTC
+      # Same as the collector: throttled events wait in the async queue (shared concurrency of 10); no retry after a
+      # function error (the handler never throws; PUT caps would be spent twice).
+      EventInvokeConfig:
+        MaximumEventAgeInSeconds: 3000
+        MaximumRetryAttempts: 0
       Events:
         # After the collector (forecasts at :07, alerts at :23). Together: one run every 3 h.
         HistoryDaily:
@@ -329,6 +446,9 @@ Resources:
             Description: Live dashboard history + forecasts + alerts, once a day
             Schedule: cron(35 6 * * ? *)
             Input: '{"parts":["history","forecasts","alerts"]}'
+            RetryPolicy:
+              MaximumRetryAttempts: 4
+              MaximumEventAgeInSeconds: 900
         LiveEvery3Hours:
           Type: Schedule
           Properties:
@@ -336,6 +456,126 @@ Resources:
             Description: Live dashboard forecasts + alerts every 3 hours
             Schedule: cron(35 0,3,9,12,15,18,21 * * ? *)
             Input: '{"parts":["forecasts","alerts"]}'
+            RetryPolicy:
+              MaximumRetryAttempts: 4
+              MaximumEventAgeInSeconds: 900
+      Tags:
+        Project: us-weather-pipeline
+
+  # Public email sign-ups (docs/analysis/email-signups.md): a Function URL (no API Gateway). The function rejects cheaply
+  # (method, size, validation before any network call), then per-IP limit, Turnstile, caps, SNS Subscribe.
+  # Free tier: Lambda as above (expected < 1,000 requests and < 100 GB-s / month at 128 MB, 8 s timeout).
+  SignupLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: /aws/lambda/weather-pipeline-signup
+      RetentionInDays: 7          # outcome codes only, emails masked; expected < 5 MB / month
+      Tags:
+        - { Key: Project, Value: us-weather-pipeline }
+
+  SignupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/weather-pipeline-boundary"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: signup
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: Logs
+                Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub "${SignupLogGroup.Arn}"
+              - Sid: ReadSignupSecrets     # SecureStrings with aws/ssm; exactly these two names
+                Effect: Allow
+                Action: ssm:GetParameter
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${TurnstileSecretParameter}"
+                  - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SignupHmacParameter}"
+              # Write-only counters: no read, scan or delete, and only its own key prefixes (not cool#/paused#).
+              - Sid: SignupCounters
+                Effect: Allow
+                Action: [dynamodb:UpdateItem, dynamodb:PutItem]
+                Resource: !GetAtt SignupTable.Arn
+                Condition:
+                  ForAllValues:StringLike:
+                    "dynamodb:LeadingKeys": ["ip#*", "day#*", "emails#*", "email#*", "sub#*"]
+              - Sid: EmailSubscriptionsOnly
+                Effect: Allow
+                Action: sns:Subscribe
+                Resource: !Ref PublicAlertsTopic
+                Condition: { StringEquals: { "sns:Protocol": "email" } }
+              - Sid: CountSubscriptions
+                Effect: Allow
+                Action: sns:ListSubscriptionsByTopic
+                Resource: !Ref PublicAlertsTopic
+      Tags:
+        - { Key: Project, Value: us-weather-pipeline }
+
+  SignupFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [src/lambda/signup.js]
+        Format: esm
+        OutExtension: [.js=.mjs]
+        Target: node22
+        Minify: false
+        Sourcemap: false
+        External: ["@aws-sdk/*"]
+        Banner: ["js=import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);"]
+    Properties:
+      FunctionName: weather-pipeline-signup
+      Description: Public email sign-ups for NWS alerts (Function URL, Turnstile, SNS email subscription)
+      CodeUri: ../
+      Handler: signup.handler
+      Runtime: nodejs22.x
+      Architectures: [arm64]
+      MemorySize: 128
+      Timeout: 8                 # Turnstile 3 s + a few DynamoDB/SNS calls
+      # 0 = none (account limit 10, of which Lambda keeps 10 unreserved). Set SignupReservedConcurrency=2 once raised.
+      ReservedConcurrentExecutions: !If [HasSignupReservedConcurrency, !Ref SignupReservedConcurrency, !Ref AWS::NoValue]
+      Role: !GetAtt SignupRole.Arn
+      LoggingConfig:
+        LogGroup: !Ref SignupLogGroup
+      Environment:
+        Variables:
+          PUBLIC_SNS_TOPIC_ARN: !Ref PublicAlertsTopic
+          SNS_TOPIC_ARN: !Ref AlertsTopic            # only to refuse it as the public topic; no permission on it
+          COUNTER_STORE: dynamodb
+          SIGNUP_TABLE: !Ref SignupTable
+          PUBLIC_SUBSCRIBER_CAP: "100"
+          PUBLIC_EMAIL_MONTHLY_CAP: "900"
+          SIGNUP_IP_LIMIT_PER_HOUR: "5"
+          SIGNUP_DAILY_LIMIT: "20"
+          SIGNUP_EMAIL_COOLDOWN_HOURS: "24"
+          # The deployed endpoint accepts Turnstile tokens from the dashboard's hostname only (not localhost).
+          SIGNUP_ALLOWED_HOSTNAMES: !Select [2, !Split ["/", !Ref DashboardOrigin]]
+          TURNSTILE_SECRET_SSM_PARAM: !Ref TurnstileSecretParameter
+          SIGNUP_HMAC_SSM_PARAM: !Ref SignupHmacParameter
+          TZ: UTC
+      # Public URL (AuthType NONE): SAM (translator ≥ 1.113) adds both permissions a new public URL needs since Oct 2025:
+      # lambda:InvokeFunctionUrl and lambda:InvokeFunction limited to calls through the URL (InvokedViaFunctionUrl).
+      # CORS: the dashboard + local Vite servers, POST only,
+      # no credentials (the function's own checks are the security boundary; CORS only limits browsers).
+      FunctionUrlConfig:
+        AuthType: NONE
+        InvokeMode: BUFFERED
+        Cors:
+          AllowOrigins: [!Ref DashboardOrigin, "http://localhost:5173", "http://localhost:4173"]
+          AllowMethods: [POST]
+          AllowHeaders: [content-type]
+          AllowCredentials: false
+          MaxAge: 600
       Tags:
         Project: us-weather-pipeline
 
@@ -411,6 +651,15 @@ Outputs:
   DashboardPublisherFunctionName:
     Description: Test with `aws lambda invoke` (docs/SETUP_AWS.md step 11)
     Value: !Ref DashboardPublisherFunction
+  PublicAlertsTopicArn:
+    Description: Public subscriber topic (never put it in SNS_TOPIC_ARN)
+    Value: !Ref PublicAlertsTopic
+  SignupTableName:
+    Description: DynamoDB table of the sign-up counters
+    Value: !Ref SignupTable
+  SignupUrl:
+    Description: Sign-up endpoint (SIGNUP_URL in dashboard/vite.config.ts, connect-src in dashboard/vercel.json)
+    Value: !GetAtt SignupFunctionUrl.FunctionUrl
   DashboardDataUrl:
     Description: Live dashboard data base URL (LIVE_DATA_URL in dashboard/vite.config.ts, connect-src in dashboard/vercel.json)
     Value: !Sub "https://${DashboardDistribution.DomainName}"

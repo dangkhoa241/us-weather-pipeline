@@ -31,6 +31,25 @@
       "Action": "kms:Decrypt",
       "Resource": "*",
       "Condition": { "StringEquals": { "kms:ViaService": "ssm.us-east-2.amazonaws.com" } }
+    },
+    {
+      "Sid": "PublicSignupsSubscribeEmailOnly",
+      "Effect": "Allow",
+      "Action": "sns:Subscribe",
+      "Resource": "arn:aws:sns:us-east-2:<ACCOUNT_ID>:weather-pipeline-public-alerts",
+      "Condition": { "StringEquals": { "sns:Protocol": "email" } }
+    },
+    {
+      "Sid": "PublicSignupsListSubscriptions",
+      "Effect": "Allow",
+      "Action": "sns:ListSubscriptionsByTopic",
+      "Resource": "arn:aws:sns:us-east-2:<ACCOUNT_ID>:weather-pipeline-public-alerts"
+    },
+    {
+      "Sid": "PublicSignupsCounters",
+      "Effect": "Allow",
+      "Action": ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Scan"],
+      "Resource": "arn:aws:dynamodb:us-east-2:<ACCOUNT_ID>:table/weather-pipeline-*"
     }
   ]
 }

@@ -40,6 +40,10 @@ Approved free stack:
 | CloudWatch Logs (part 3) | Always free: 5 GB ingest + 5 GB storage / month | Free plan: credits | No | < 50 MB / month | 7-day retention |
 | SSM Parameter Store (part 3) | Standard parameters free; SecureString with the AWS-managed key `aws/ssm` (KMS: 20,000 free requests / month) | Standard throughput: throttled, not billed | No | 1 parameter, ≤ ~1,000 reads / month (cold starts) | no customer KMS key |
 | AWS S3 raw archive (Stage 6a part 2, deployed 2026-10-02, us-east-2) | 12-month free tier: 5 GB storage, 2,000 PUT + 20,000 GET / month (Free plan: over that is paid from the credits, never billed) | Free plan: credits; used up → account closes | No (Free plan) | ~22 PUTs / day ≈ 660 / month (33%: Lambda 16, local ~6); caps Lambda 16 + local 10 / day ≤ 806 / month (40%); first day: 6 objects, 3.2 MB; ~175 MB held by the 30-day rule (3.5%); GET only by hand | one object per source and run; ≤ 1 per source per hour; hard cap RAW_ARCHIVE_MAX_PUTS_PER_DAY=50 (≤ 1,500 / month); 32 MB per source and run |
+| AWS SNS public alerts topic (email sign-ups, deployed 2026-10-08) | Same 1,000 free email deliveries / month as above, **shared** by both topics; 200 filter policies per topic (default quota) | Free plan: credits; used up → account closes | No (Free plan) | ≤ 900 / month by a hard cap (counter in DynamoDB; confirmation emails included); measured ~2.7 alert emails per subscriber per month (Oct 1–8, all 6 categories, 24 h cooldown) | sign-up cap 100 subscriptions (pending + confirmed); owner notified once when paused |
+| AWS DynamoDB `weather-pipeline-signups` (email sign-ups, deployed 2026-10-08) | Always free: 25 GB, 25 RCU + 25 WCU **provisioned** (on-demand is not always free) | Throttled (provisioned), not billed | No (Free plan) | 1 RCU / 1 WCU, no auto scaling, < 1 MB, < 1,000 reads/writes a day | TTL on, no PITR, no streams |
+| AWS Lambda sign-up + Function URL (deployed 2026-10-08) | Lambda allowance above (shared); Function URLs have no extra charge | Free plan: credits | No (Free plan) | < 1,000 requests, < 100 GB-s / month (128 MB, 8 s timeout) | rejects oversize/invalid requests before any network call |
+| Cloudflare Turnstile (sign-up CAPTCHA, since 2026-10-08) | Free plan: unlimited verifications, up to 20 widgets | — | No | 1 widget, < 1,000 verifications / month | secret in SSM SecureString |
 
 AWS (Stage 6a, docs/SETUP_AWS.md; cost guard in CLAUDE.md): **Free plan** account (new sign-up experience, until 2027-04-02).
 No charges are possible: usage above the always-free allowances is paid from the sign-up credits ($100 + up to $100), and
@@ -134,7 +138,7 @@ Cost follow-ups:
 - AWS (Free plan, $0): NWS collection on Lambda + EventBridge (~960 runs / month, ~2% of the free GB-s; forecast run
   106 requests → ~9,000 rows in ~88 s at 168 MB), SNS alerts, 30-day S3 archive (~33% of free PUTs, ≤ 40% by hard caps);
   one SAM stack, permissions boundary on every role, removed by `npm run aws:teardown`.
-- Tests: 209 Vitest tests (77 backend + 132 dashboard), no Docker needed, run in GitHub Actions CI; 21 automated checks on the static demo build.
+- Tests: 315 Vitest tests (166 backend + 149 dashboard), no Docker needed, run in GitHub Actions CI; 23 automated checks on the static demo build.
 
 ## Known limitations
 
@@ -157,6 +161,20 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
 - Part 4 (live): the bundled snapshot must be re-exported at least every ~55 days (`recent.json` covers 60 days);
   forecast accuracy stays as of the bundled snapshot, and the year-to-date preset finds no bundled accuracy after the
   live data moves on; an NWS alert text containing a `FORBIDDEN` word (e.g. "atlas") blocks that run's `alerts.json`.
+- **Shared Lambda concurrency (account limit 10, increase to 1,000 requested 2026-10-08).** All Lambdas share it,
+  so a burst of sign-up requests could throttle the scheduled collector/publisher. Mitigations: the sign-up Lambda
+  rejects bad requests in milliseconds before any network call (128 MB, 8 s timeout); scheduled runs are async, so a
+  throttled event waits in Lambda's queue and is retried with backoff for up to 50 min (`EventInvokeConfig`
+  MaximumEventAgeInSeconds 3000; EventBridge `RetryPolicy` 4 attempts / 15 min for the hand-off itself); no retries
+  after a function error (MaximumRetryAttempts 0: handlers never throw, no duplicate emails). Reserved concurrency for
+  the sign-up Lambda is impossible at limit 10 (Lambda keeps 10 unreserved); switch it on with the stack parameter
+  `SignupReservedConcurrency=2` once the increase is granted.
+- Email sign-ups: one city per email address (one SNS subscription per topic and address); changing choices means
+  unsubscribe + sign up again. Unconfirmed email subscriptions occupy a place for 30 days. The SNS confirmation email
+  shows the topic ARN (account ID). Alerts are checked hourly. Public alert emails are only sent by the Lambda (local
+  runs never email subscribers).
+- `npm audit`: 1 high in a dev-only dependency (`source-map-js` via the test/build tools, also on `main`); production
+  dependencies: 0.
 - NWS Lambda: a run that hits the 5 min timeout sends no SNS email (only the Lambda error in its logs). It doesn't seed
   locations (Atlas already has them; a new city needs one manual `seed:locations` against Atlas). Heat-alert emails can
   arrive twice if alerts are run locally by hand (`npm run fetch` / `fetch:watch` outside Docker), because Atlas and the
@@ -412,6 +430,22 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       forecast from …"); no email on the first failure, while it keeps failing, or on recovery. Every partial run is
       still in `pipeline_runs`; fatal runs and other modes email as before. No per-city retry pass within a run (the
       HTTP layer retries each call 4×; the next run is 3 h later)
+- [x] Public email sign-ups, Stage A design (2026-10-08): `docs/analysis/email-signups.md` (separate public SNS
+      topic, 6 alert categories, per-category New/Upgraded/Extended rule, Function URL + Turnstile, DynamoDB counters,
+      900-email monthly guard); awaiting review
+- [x] Public email sign-ups, Stage B build (2026-10-08, branch `feature/email-signups`, not deployed): category
+      mapping (`src/stage1/alertCategories.js`), per-category New/Upgraded/Extended rule + 24 h public cooldown
+      (Upgraded exempt), `SnsAlertPublisher` / `SnsSubscriptionManager` on a separate public topic, `CounterStore`
+      adapter (memory | DynamoDB), sign-up Lambda + Function URL (Turnstile, per-IP 5/h, 20/day, cap 100, 900-email
+      monthly guard, generic answer), dashboard "Get alerts" dialog (hidden until configured), CSP for Turnstile;
+      EventBridge targets and async invoke config set explicitly (see Known limitations); 87 new tests (79 backend + 8 dashboard); security review
+      clean (deployed endpoint accepts Turnstile tokens from the Vercel hostname only)
+- [ ] Public email sign-ups, Stage C deploy + end-to-end test
+  - [x] Deployed 2026-10-08 (change set: 11 adds, 11 modifies, no replacements); live checks: 405 / 413 / 400 for bad
+        method, size, JSON and the owner-only `test` category; CORS only for the Vercel origin; logs carry outcome codes only
+  - [x] Turnstile 400 answers are now read (error codes in the log), so a wrong SSM secret is told apart from a bad token
+  - [ ] End-to-end on the live site: sign up (Stockton + Tropical) → confirm → filter switched to `test` → one test
+        email → unsubscribe → 0 subscriptions
 
 ## Cross-cutting
 

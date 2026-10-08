@@ -38,6 +38,13 @@ export const GLOSSARY = {
   History: { full: "History date", text: "Historical data comes from Open-Meteo's archive, which publishes about 5 days late. Forecasts and alerts are current." },
   Reanalysis: { full: "Reanalysis", text: "An estimate of past weather that combines observations with a weather model." },
   "CC BY 4.0": { full: "Creative Commons Attribution 4.0", text: "A licence that allows reuse of the data as long as the source is credited." },
+  // Email alert categories (sign-up form); the exact NWS events are in src/stage1/alertCategories.js
+  "Heat alerts": { full: "Heat alerts", text: "NWS Extreme Heat Warnings and Watches and Heat Advisories." },
+  "Flood alerts": { full: "Flood alerts", text: "NWS flood, flash flood, coastal and lakeshore flood warnings, watches, advisories and statements." },
+  "Wind & storm alerts": { full: "Wind and storm alerts", text: "NWS tornado and severe thunderstorm warnings and watches, high wind and dust alerts." },
+  "Winter alerts": { full: "Winter alerts", text: "NWS winter storm, blizzard, ice, snow squall, freeze, frost and extreme cold alerts." },
+  "Fire & air quality alerts": { full: "Fire and air quality alerts", text: "NWS Red Flag Warnings, fire weather watches, air quality alerts and dense smoke advisories." },
+  "Tropical alerts": { full: "Tropical alerts", text: "NWS hurricane, tropical storm and storm surge warnings and watches, and local tropical statements." },
 } as const satisfies Record<string, GlossaryEntry>;
 
 export type GlossaryKey = keyof typeof GLOSSARY;

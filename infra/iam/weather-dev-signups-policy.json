@@ -1,0 +1,66 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "Part5OwnerTestSubscription",
+      "Effect": "Allow",
+      "Action": [
+        "sns:SetSubscriptionAttributes",
+        "sns:GetSubscriptionAttributes"
+      ],
+      "Resource": "arn:aws:sns:us-east-2:<ACCOUNT_ID>:weather-pipeline-public-alerts"
+    },
+    {
+      "Sid": "Part5SignupTable",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:CreateTable",
+        "dynamodb:DeleteTable",
+        "dynamodb:DescribeTable",
+        "dynamodb:UpdateTable",
+        "dynamodb:UpdateTimeToLive",
+        "dynamodb:DescribeTimeToLive",
+        "dynamodb:DescribeContinuousBackups",
+        "dynamodb:UpdateContinuousBackups",
+        "dynamodb:DescribeContributorInsights",
+        "dynamodb:DescribeKinesisStreamingDestination",
+        "dynamodb:GetResourcePolicy",
+        "dynamodb:TagResource",
+        "dynamodb:UntagResource",
+        "dynamodb:ListTagsOfResource",
+        "dynamodb:GetItem",
+        "dynamodb:Scan"
+      ],
+      "Resource": "arn:aws:dynamodb:us-east-2:<ACCOUNT_ID>:table/weather-pipeline-*"
+    },
+    {
+      "Sid": "Part5SignupFunctionUrlAndInvokeConfig",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:CreateFunctionUrlConfig",
+        "lambda:GetFunctionUrlConfig",
+        "lambda:UpdateFunctionUrlConfig",
+        "lambda:DeleteFunctionUrlConfig",
+        "lambda:PutFunctionConcurrency",
+        "lambda:DeleteFunctionConcurrency",
+        "lambda:GetFunctionConcurrency",
+        "lambda:PutFunctionEventInvokeConfig",
+        "lambda:UpdateFunctionEventInvokeConfig",
+        "lambda:DeleteFunctionEventInvokeConfig",
+        "lambda:GetFunctionEventInvokeConfig"
+      ],
+      "Resource": "arn:aws:lambda:us-east-2:<ACCOUNT_ID>:function:weather-pipeline-*"
+    },
+    {
+      "Sid": "Part5ReadLambdaAccountLimits",
+      "Effect": "Allow",
+      "Action": "lambda:GetAccountSettings",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "us-east-2"
+        }
+      }
+    }
+  ]
+}

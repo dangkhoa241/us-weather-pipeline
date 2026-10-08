@@ -7,9 +7,11 @@
 import { config } from "../config.js";
 import { ensureCollections } from "../collections.js";
 import { createRawStore } from "../adapters/rawStore/index.js";
-import { createNotifier } from "../adapters/notifier/index.js";
+import { createAlertPublisher, createNotifier } from "../adapters/notifier/index.js";
+import { createCounterStore } from "../adapters/counterStore/index.js";
 import { redact } from "../adapters/notifier/snsNotifier.js";
 import { runMode } from "../stage1/runMode.js";
+import { createPublicAlerts } from "../stage1/publicAlerts.js";
 import { getSecureParameter } from "./ssmParameter.js";
 
 const MODES = ["alerts", "forecast"];
@@ -19,6 +21,8 @@ export function createHandler({
   getParameter = getSecureParameter,
   makeStore = (uri) => createRawStore(config.adapters.rawStore, { uri }, { archive: true }),
   makeNotifier = createNotifier,
+  makeAlertPublisher = createAlertPublisher,   // null when PUBLIC_ALERTS=off
+  makeCounters = createCounterStore,
 } = {}) {
   let mongoUri = null;   // kept for warm invocations
 
@@ -35,7 +39,14 @@ export function createHandler({
       store = makeStore(mongoUri);
       await store.connect();
       await ensureCollections(store);
-      const { status, etl_batch_id, rows_fetched, error_count } = await runMode(mode, store, notifier, {});   // notifies on failure
+      // Subscriber emails (alerts mode only): their own publisher on the public topic; `notifier` (private) only for
+      // the owner's "paused" notice.
+      const publisher = mode === "alerts" ? makeAlertPublisher() : null;
+      const publicAlerts = publisher && createPublicAlerts({
+        publisher, counters: makeCounters(), notifier, monthlyCap: config.publicAlerts.monthlyEmailCap,
+        cooldownHours: config.publicAlerts.cooldownHours, dashboardUrl: config.publicAlerts.dashboardUrl,
+      });
+      const { status, etl_batch_id, rows_fetched, error_count } = await runMode(mode, store, notifier, { publicAlerts });   // notifies on failure
       return { mode, status, etl_batch_id, rows_fetched, error_count };
     } catch (err) {
       mongoUri = null;   // re-read next time (the parameter may have been rotated)
