@@ -145,6 +145,10 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
 - "Data as of" can be one day past the last day with values: the 2026-10-02 snapshot (and live `recent.json`) say
   2026-10-02, but that day has no values yet and 2026-10-01 is partial (1,004 of 1,272 city-hours; the archive lags
   ~5 days and a city's local day ends after midnight UTC). KPIs over short ranges include that partial day.
+- Heat-alert emails compare each new NWS heat alert with the city's stored heat alerts still in effect. Atlas keeps 7
+  days of alerts, so a heat event longer than 7 days could send one more "New" email; a "Cancel" doesn't close the
+  event early (the next alert before the old end time counts as a re-issue); an end time moved back and then forward
+  again only emails when it passes the latest end seen.
 - Accuracy ranking needs at least 30 days of scores per model at the selected lead day (and 100 pairs). NWS (scored
   since 2026-09-29) shows "not enough data yet" with a head-to-head note on shared city-hours until then; the 33
   cities added on 2026-10-01 have under 30 days of model scores, so their states stay hatched on the accuracy map.
@@ -350,7 +354,7 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       AWS CLI + SAM CLI on Windows, `aws configure --profile weather-dev`; keys only in `~/.aws`;
       `check:secrets` catches AWS key IDs, secret keys and session tokens
 - [x] Part 1 code: `SnsNotifier` (NOTIFIER=sns; warn/error emailed, failures never break the pipeline, credentials
-      redacted), heat alerts (new NWS heat alerts for tracked cities, one email per run), SAM template (SNS topic,
+      redacted), heat alerts (new NWS heat alerts for tracked cities, one email per run; since 2026-10-07 only New / Upgraded / Extended), SAM template (SNS topic,
       HTTPS-only topic policy, email subscription), `npm run aws:validate | aws:deploy | aws:teardown`; tests with a mocked SDK client
 - [x] Part 1 deploy: stack `weather-pipeline` in us-east-2, email subscription confirmed; `.env` NOTIFIER=sns +
       SNS_TOPIC_ARN, test alert sent (2026-10-01)
@@ -395,6 +399,11 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       ~5 days late; forecasts and alerts are current), Forecast "forecast updated <NWS issue time>" (selected city, its
       time zone; latest across cities without one), Accuracy "scored through <last scored day>"; same wording after
       "Snapshot · " on fallback. Rain chance chart on the Forecast page: fixed 0–100% axis, values and tooltip in %
+- [x] Heat-alert fatigue fix (2026-10-07): NWS re-issues alerts about daily as Updates with new ids (referencing the
+      old ones), and every new id was emailed (LA Extreme Heat Warning 7×, Stockton Heat Advisory ~7×). Now an email
+      only for a new event in a city ("New"), a higher severity/product ("Upgraded", e.g. Advisory → Warning, Watch →
+      Warning) or a later end time ("Extended to …"); every alert is still stored. Replay of the 17 stored alerts
+      (2026-09-30 → 10-07): 5 emails instead of 17. Emails still only for heat events (`/heat/i`) in tracked cities
 
 ## Cross-cutting
 
