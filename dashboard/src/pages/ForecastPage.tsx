@@ -67,7 +67,7 @@ function CityForecast({ id, name, state, tz, unit }: { id: string; name: string;
           <CardDescription data-forecast-issued>
             {nwsIssued ? (isSnapshot && !liveTime("forecasts") ? `Forecast as of ${nwsIssued.slice(0, 10)}` : <><Term k="NWS" /> forecast issued {fmtLocal(nwsIssued, tz)} (local time)</>) : "Loading forecast…"}
           </CardDescription>
-          <CardAction><SignupButton cityId={id} cityName={`${name}, ${state}`} /></CardAction>
+          <CardAction><SignupButton cityId={id} cityName={name} /></CardAction>
         </CardHeader>
         <CardContent>
           {periods.error ? <Problem what="the daily forecast" error={periods.error} /> : periods.isPending ? <Skeleton className="h-36" /> : !cards.length ? (
