@@ -123,6 +123,17 @@ describe("sign-up handler: limits, CAPTCHA, generic answer", () => {
     expect(logs.join("\n")).toContain("captcha_failed (not_success:invalid-input-response)");
   });
 
+  it("a wrong stored Turnstile secret (invalid-input-secret) makes the next request re-read SSM; a bad token doesn't", async () => {
+    const s = setup({ captcha: { ok: false, reason: "not_success:invalid-input-secret" } });
+    await s.handler(request(valid()));
+    await s.handler(request(valid({ email: "b@example.com" })));
+    expect(s.getParameter).toHaveBeenCalledTimes(4);   // 2 parameters × 2 requests: re-read after the bad secret
+    const t = setup({ captcha: { ok: false, reason: "not_success:invalid-input-response" } });
+    await t.handler(request(valid()));
+    await t.handler(request(valid({ email: "b@example.com" })));
+    expect(t.getParameter).toHaveBeenCalledTimes(2);   // cached: the visitor's token was the problem
+  });
+
   it("per-IP rate limit: 5 attempts per hour, the 6th → 429 before the CAPTCHA call", async () => {
     const s = setup();
     for (let i = 0; i < 5; i += 1) expect((await s.handler(request(valid({ email: `user${i}@example.com` })))).statusCode).toBe(200);

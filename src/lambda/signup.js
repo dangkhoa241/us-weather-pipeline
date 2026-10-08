@@ -128,7 +128,13 @@ export function createSignupHandler({
 
       // 3. CAPTCHA, verified server-side.
       const captcha = await verifyCaptcha({ secret: turnstileSecret, token, remoteIp: ip, allowedHostnames: limits.allowedHostnames });
-      if (!captcha.ok) { log("captcha_failed", `(${captcha.reason})`); return json(400, "Verification failed. Please try again."); }
+      if (!captcha.ok) {
+        log("captcha_failed", `(${captcha.reason})`);
+        // Our stored secret is wrong (not the visitor's fault): re-read SSM next time, so a corrected parameter takes
+        // effect without waiting for a cold start.
+        if (/invalid-input-secret/.test(captcha.reason)) secrets = null;
+        return json(400, "Verification failed. Please try again.");
+      }
 
       // 4. Limits that don't depend on the email address (so their answers reveal nothing about subscribers).
       if (await subscriptions.count() >= limits.subscriberCap) { log("full"); return json(503, "Sign-ups are full right now."); }
