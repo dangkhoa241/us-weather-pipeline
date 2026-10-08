@@ -13,8 +13,8 @@ const LIVE_DATA_URL = "https://d1dl5jm7af48m2.cloudfront.net";
 // Public email sign-ups (docs/analysis/email-signups.md): the sign-up Function URL (stack output SignupUrl) and the
 // Cloudflare Turnstile site key. Both are public values, not secrets. Empty = the "Get alerts" button is hidden.
 // The URL's host must also be in connect-src in vercel.json.
-const SIGNUP_URL = "";
-const TURNSTILE_SITE_KEY = "";
+const SIGNUP_URL = "https://thplcq453wwnmxoazfwnpcvbye0eefie.lambda-url.us-east-2.on.aws/";
+const TURNSTILE_SITE_KEY = "0x4AAAAAAFRvgWDRGsJF6-WI";
 
 // Content-Security-Policy: vercel.json is the one source. `vite preview` serves the built app under the same policy;
 // the dev server gets only its connect-src (the full policy would block Vite's inline HMR/React Refresh scripts), so

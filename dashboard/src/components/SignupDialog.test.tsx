@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SignupButton } from "@/components/SignupDialog";
-import { looksLikeEmail, signupEnabled, submitSignup } from "@/lib/signup";
+import { SIGNUP_URL, looksLikeEmail, signupEnabled, submitSignup } from "@/lib/signup";
 import vercelJson from "../../vercel.json?raw";
 
 const URL_ = "https://abc123.lambda-url.us-east-2.on.aws/";
@@ -115,6 +115,9 @@ describe("CSP for the sign-up form (vercel.json)", () => {
     expect(directive("frame-src")).toBe("frame-src https://challenges.cloudflare.com");
     expect(csp).not.toMatch(/\*|'unsafe-eval'|script-src[^;]*'unsafe-inline'/);
     expect(directive("form-action")).toBe("form-action 'none'");
+    // the configured sign-up endpoint's exact origin is allowed for fetch (and nothing like *.on.aws)
+    expect(signupEnabled()).toBe(true);
+    expect(directive("connect-src").split(" ")).toContain(new URL(SIGNUP_URL).origin);
     expect(directive("frame-ancestors")).toBe("frame-ancestors 'none'");
   });
 });
