@@ -4,10 +4,7 @@
     {
       "Sid": "LambdaLogs",
       "Effect": "Allow",
-      "Action": [
-        "logs:CreateLogStream",
-        "logs:PutLogEvents"
-      ],
+      "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
       "Resource": "arn:aws:logs:us-east-2:<ACCOUNT_ID>:log-group:/aws/lambda/weather-pipeline-*:*"
     },
     {
@@ -19,19 +16,13 @@
     {
       "Sid": "RawArchiveObjects",
       "Effect": "Allow",
-      "Action": [
-        "s3:PutObject",
-        "s3:GetObject"
-      ],
+      "Action": ["s3:PutObject", "s3:GetObject"],
       "Resource": "arn:aws:s3:::weather-pipeline-raw-*/*"
     },
     {
       "Sid": "ReadConfigParameters",
       "Effect": "Allow",
-      "Action": [
-        "ssm:GetParameter",
-        "ssm:GetParameters"
-      ],
+      "Action": ["ssm:GetParameter", "ssm:GetParameters"],
       "Resource": "arn:aws:ssm:us-east-2:<ACCOUNT_ID>:parameter/weather-pipeline/*"
     },
     {
@@ -39,39 +30,25 @@
       "Effect": "Allow",
       "Action": "kms:Decrypt",
       "Resource": "*",
-      "Condition": {
-        "StringEquals": {
-          "kms:ViaService": "ssm.us-east-2.amazonaws.com"
-        }
-      }
+      "Condition": { "StringEquals": { "kms:ViaService": "ssm.us-east-2.amazonaws.com" } }
     },
     {
       "Sid": "PublicSignupsSubscribeEmailOnly",
       "Effect": "Allow",
       "Action": "sns:Subscribe",
-      "Resource": "arn:aws:sns:us-east-2:<ACCOUNT_ID>:weather-pipeline-*",
-      "Condition": {
-        "StringEquals": {
-          "sns:Protocol": "email"
-        }
-      }
+      "Resource": "arn:aws:sns:us-east-2:<ACCOUNT_ID>:weather-pipeline-public-alerts",
+      "Condition": { "StringEquals": { "sns:Protocol": "email" } }
     },
     {
       "Sid": "PublicSignupsListSubscriptions",
       "Effect": "Allow",
       "Action": "sns:ListSubscriptionsByTopic",
-      "Resource": "arn:aws:sns:us-east-2:<ACCOUNT_ID>:weather-pipeline-*"
+      "Resource": "arn:aws:sns:us-east-2:<ACCOUNT_ID>:weather-pipeline-public-alerts"
     },
     {
       "Sid": "PublicSignupsCounters",
       "Effect": "Allow",
-      "Action": [
-        "dynamodb:GetItem",
-        "dynamodb:PutItem",
-        "dynamodb:UpdateItem",
-        "dynamodb:DeleteItem",
-        "dynamodb:Scan"
-      ],
+      "Action": ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Scan"],
       "Resource": "arn:aws:dynamodb:us-east-2:<ACCOUNT_ID>:table/weather-pipeline-*"
     }
   ]
