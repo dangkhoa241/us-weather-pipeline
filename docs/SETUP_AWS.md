@@ -320,6 +320,54 @@ runtime policies don't change.
 4. Put the stack output `DashboardDataUrl` in `dashboard/vite.config.ts` (`LIVE_DATA_URL`) and add it to `connect-src`
    in `dashboard/vercel.json`, then push (Vercel rebuilds). The header should then show **Live**.
 
+## 12. Part 5: public email sign-ups
+
+**Status: deployed 2026-10-08.** Design and limits: [analysis/email-signups.md](analysis/email-signups.md).
+Visitors sign up on the dashboard. A Lambda behind a **Function URL** (`weather-pipeline-signup`, 128 MB, 8 s, no VPC,
+no API Gateway) checks the request, verifies Cloudflare Turnstile and subscribes the email to a separate SNS topic,
+`weather-pipeline-public-alerts`, with a filter policy (`city` + `category`). The collector publishes subscriber
+alerts there; pipeline failures stay on `weather-pipeline-alerts`. Counters live in the DynamoDB table
+`weather-pipeline-signups` (provisioned 1/1, TTL on, no auto scaling, PITR or streams).
+
+1. **Turnstile widget** (free, no card): dash.cloudflare.com → Turnstile → Add widget; hostname
+   `us-weather-pipeline.vercel.app`, mode Managed, pre-clearance No. The **site key** is public (it goes in
+   `dashboard/vite.config.ts`); the **secret key** goes only into SSM (next step).
+2. **SSM SecureStrings** (Git Bash; the secret is typed, not kept in shell history):
+
+   ```bash
+   read -rs -p "Turnstile secret key: " TS; echo
+   MSYS_NO_PATHCONV=1 aws ssm put-parameter --profile weather-dev --region us-east-2 \
+     --name /weather-pipeline/turnstile-secret --type SecureString \
+     --tags Key=Project,Value=us-weather-pipeline --value "$TS"; unset TS
+   MSYS_NO_PATHCONV=1 aws ssm put-parameter --profile weather-dev --region us-east-2 \
+     --name /weather-pipeline/signup-hmac-key --type SecureString \
+     --tags Key=Project,Value=us-weather-pipeline --value "$(openssl rand -hex 32)"
+   ```
+3. **IAM (console):** add the three `PublicSignups*` statements of
+   [weather-pipeline-boundary.json](../infra/iam/weather-pipeline-boundary.json) to the boundary (the SNS rights name
+   the public topic exactly), and create and attach a fifth deploy policy, `weather-dev-signups`
+   ([weather-dev-signups-policy.json](../infra/iam/weather-dev-signups-policy.json): DynamoDB table, Function URL,
+   concurrency and async-invoke settings, `lambda:GetAccountSettings`, and `SetSubscriptionAttributes` on the public
+   topic for the owner's test subscription). Replace `<ACCOUNT_ID>` as in step 2.
+4. `npm run aws:deploy -- --no-execute-changeset`, review, then execute. Put the stack output `SignupUrl` in
+   `dashboard/vite.config.ts` (`SIGNUP_URL`, next to `TURNSTILE_SITE_KEY`) and its host in `connect-src` in
+   `dashboard/vercel.json`, then push (Vercel rebuilds; the "Get alerts" button appears).
+5. **Checks** (no subscription is created):
+
+   ```bash
+   U=<SignupUrl>
+   curl -s -w ' %{http_code}\n' "$U"                                                              # 405
+   curl -s -w ' %{http_code}\n' -X POST -H 'content-type: application/json' --data '{nope' "$U"   # 400
+   MSYS_NO_PATHCONV=1 PYTHONUTF8=1 aws logs tail /aws/lambda/weather-pipeline-signup --since 15m --profile weather-dev --region us-east-2
+   ```
+
+   Logs show outcome codes only (`[signup] invalid`, `captcha_failed (...)`, `ok v***@e***.com ...`), never an address
+   or IP. `captcha_failed (not_success:invalid-input-secret)` means the SSM secret is wrong.
+6. **Shared Lambda concurrency:** the account limit was 10 at deploy time (Lambda keeps 10 unreserved), so the sign-up
+   function has no reserved concurrency. After the quota increase, deploy with `SignupReservedConcurrency=2` added to
+   the parameter overrides. Scheduled Lambdas retry throttled events from the async queue for up to 50 min
+   (`EventInvokeConfig`).
+
 ## Remove everything: `npm run aws:teardown`
 
 Empties the raw archive bucket (`aws s3 rm --recursive`; CloudFormation can't delete a non-empty bucket), then runs
