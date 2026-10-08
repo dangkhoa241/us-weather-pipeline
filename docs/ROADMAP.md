@@ -138,7 +138,7 @@ Cost follow-ups:
 - AWS (Free plan, $0): NWS collection on Lambda + EventBridge (~960 runs / month, ~2% of the free GB-s; forecast run
   106 requests → ~9,000 rows in ~88 s at 168 MB), SNS alerts, 30-day S3 archive (~33% of free PUTs, ≤ 40% by hard caps);
   one SAM stack, permissions boundary on every role, removed by `npm run aws:teardown`.
-- Tests: 315 Vitest tests (166 backend + 149 dashboard), no Docker needed, run in GitHub Actions CI; 23 automated checks on the static demo build.
+- Tests: 317 Vitest tests (167 backend + 150 dashboard), no Docker needed, run in GitHub Actions CI; 23 automated checks on the static demo build.
 
 ## Known limitations
 
@@ -173,6 +173,8 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
   unsubscribe + sign up again. Unconfirmed email subscriptions occupy a place for 30 days. The SNS confirmation email
   shows the topic ARN (account ID). Alerts are checked hourly. Public alert emails are only sent by the Lambda (local
   runs never email subscribers).
+- Email sign-ups: after an unsubscribe, SNS keeps listing the subscription as `Deleted` for a while; the subscriber
+  cap counts those too (only over-counts, so it errs on the safe side).
 - `npm audit`: 1 high in a dev-only dependency (`source-map-js` via the test/build tools, also on `main`); production
   dependencies: 0.
 - NWS Lambda: a run that hits the 5 min timeout sends no SNS email (only the Lambda error in its logs). It doesn't seed
@@ -440,12 +442,17 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       monthly guard, generic answer), dashboard "Get alerts" dialog (hidden until configured), CSP for Turnstile;
       EventBridge targets and async invoke config set explicitly (see Known limitations); 87 new tests (79 backend + 8 dashboard); security review
       clean (deployed endpoint accepts Turnstile tokens from the Vercel hostname only)
-- [ ] Public email sign-ups, Stage C deploy + end-to-end test
+- [x] Public email sign-ups, Stage C deploy + end-to-end test (2026-10-08)
   - [x] Deployed 2026-10-08 (change set: 11 adds, 11 modifies, no replacements); live checks: 405 / 413 / 400 for bad
         method, size, JSON and the owner-only `test` category; CORS only for the Vercel origin; logs carry outcome codes only
   - [x] Turnstile 400 answers are now read (error codes in the log), so a wrong SSM secret is told apart from a bad token
-  - [ ] End-to-end on the live site: sign up (Stockton + Tropical) → confirm → filter switched to `test` → one test
-        email → unsubscribe → 0 subscriptions
+  - [x] End-to-end on the live site (23:00–23:38 UTC): a wrong Turnstile secret in SSM was caught by the new log line
+        (`invalid-input-secret`) and replaced; sign-up → SNS confirmation → filter switched to `test` (the form had
+        Heat ticked; switched at once, so no public heat email could go out) → one `category=test` email → unsubscribe →
+        the subscription shows `Deleted`; the private subscription untouched. 0 CSP violations with the form open
+  - [x] After a successful sign-up the dialog now shows a "check your inbox" screen (it used to stay on the form, so it
+        looked as if nothing happened); the Lambda re-reads SSM after `invalid-input-secret` (committed; change set 3,
+        sign-up function code only, not deployed yet)
 
 ## Cross-cutting
 
