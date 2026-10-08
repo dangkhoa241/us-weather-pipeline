@@ -60,19 +60,40 @@ describe("SignupButton / dialog", () => {
     expect(submit).toBeDisabled();                          // expired token
   });
 
-  it("sends one request, shows the server's message, and resets the single-use CAPTCHA", async () => {
+  it("on success: one request, then the form is replaced by a clear \"check your inbox\" screen with focus on Close", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ message: "Check your inbox to confirm." }), { status: 200 }));
     await open();
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: " me@example.com " } });
     fireEvent.click(screen.getByRole("checkbox", { name: "Flood alerts" }));
     act(() => callbacks.ok("token-1"));
     fireEvent.click(screen.getByRole("button", { name: "Sign up" }));
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Check your inbox to confirm."));
+    await waitFor(() => expect(document.querySelector("[data-signup-done]")).toBeInTheDocument());
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(URL_);
     expect(init).toMatchObject({ method: "POST", credentials: "omit", headers: { "content-type": "application/json" } });
     expect(JSON.parse(String(init!.body))).toEqual({ email: "me@example.com", city: "stockton-ca", categories: ["heat", "flood"], turnstileToken: "token-1" });
+    const done = screen.getByRole("status");
+    expect(done).toHaveTextContent("Almost done: check your inbox");
+    expect(done).toHaveTextContent("me@example.com");
+    expect(done).toHaveTextContent("Nothing is sent until you confirm.");
+    expect(screen.queryByRole("button", { name: "Sign up" })).not.toBeInTheDocument();   // no second submit
+    expect(turnstile.remove).toHaveBeenCalledWith("widget-1");
+    const close = screen.getByText("Close", { selector: "button" });   // the text button (the × is also labelled "Close")
+    expect(close).toHaveFocus();
+    fireEvent.click(close);
+    expect(document.querySelector("[data-signup-dialog]")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Get alerts" })).toHaveFocus();
+  });
+
+  it("on an error: keeps the form, shows the server's message and resets the single-use CAPTCHA", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ message: "Verification failed. Please try again." }), { status: 400 }));
+    await open();
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "me@example.com" } });
+    act(() => callbacks.ok("token-1"));
+    fireEvent.click(screen.getByRole("button", { name: "Sign up" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Verification failed. Please try again."));
+    expect(document.querySelector("[data-signup-done]")).not.toBeInTheDocument();
     expect(turnstile.reset).toHaveBeenCalledWith("widget-1");
     expect(screen.getByRole("button", { name: "Sign up" })).toBeDisabled();   // needs a fresh token
   });

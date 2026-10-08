@@ -1,8 +1,11 @@
 // "Get alerts" button + sign-up form for one city (docs/analysis/email-signups.md, section 9). A native <dialog>
 // (focus trap, Escape, ::backdrop) with: email, alert-type checkboxes (glossary tooltips), the Turnstile widget (loaded
-// only when the dialog opens), privacy note and disclaimer. The answer is shown inline (role="status"), never alert().
+// only when the dialog opens), privacy note and disclaimer. Errors are shown inline (role="status"), never alert(); after
+// a successful request the form is replaced by a "check your inbox" screen (the server's answer is the same whether or
+// not the address was already subscribed, so the wording stays neutral).
 // Hidden unless the sign-up URL and Turnstile site key are configured (vite.config.ts).
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { MailCheck } from "lucide-react";
 import { DISCLAIMER } from "@alerts";
 import { Term } from "@/components/Term";
 import {
@@ -37,6 +40,10 @@ function SignupDialog({ cityId, cityName, url, siteKey, onClose }: Required<Prop
   const [captchaError, setCaptchaError] = useState(false);
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
+  const [done, setDone] = useState(false);
+  const closeButton = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => { if (done) closeButton.current?.focus(); }, [done]);
 
   useEffect(() => {
     const d = dialog.current!;
@@ -65,20 +72,51 @@ function SignupDialog({ cityId, cityName, url, siteKey, onClose }: Required<Prop
     setSending(true);
     setStatus(null);
     const res = await submitSignup({ email, city: cityId, categories, turnstileToken: token }, { url });
-    setStatus({ ok: res.ok, text: res.message });
     setSending(false);
     setToken("");   // tokens are single-use
+    if (res.ok) {
+      if (widgetId.current) window.turnstile?.remove(widgetId.current);
+      widgetId.current = null;
+      setDone(true);
+      return;
+    }
+    setStatus({ ok: false, text: res.message });
     if (widgetId.current) window.turnstile?.reset(widgetId.current);
   }
+
+  const header = (
+    <div className="flex items-start justify-between gap-2">
+      <h2 id={ids.title} className="text-lg font-semibold">Email alerts for {cityName}</h2>
+      <button type="button" aria-label="Close" onClick={onClose} className="rounded-md px-2 py-1 text-lg leading-none text-muted-foreground hover:bg-muted">×</button>
+    </div>
+  );
+
+  // Same <dialog> element in both states (a new one would not be opened by showModal); only its content changes.
+  const success = (
+        <div className="flex flex-col gap-4">
+          {header}
+          <div role="status" data-signup-done className="flex gap-3 rounded-md border-l-4 border-emerald-600 bg-muted/50 p-3">
+            <MailCheck aria-hidden className="mt-0.5 size-6 shrink-0 text-emerald-600" />
+            <div className="flex flex-col gap-1.5 text-sm">
+              <p className="text-base font-semibold">Almost done: check your inbox</p>
+              <p>A confirmation email is on its way to <strong className="break-all">{email.trim()}</strong> from "US Weather Alerts" (Amazon SNS).
+                Click <strong>Confirm subscription</strong> in it. Nothing is sent until you confirm.</p>
+              <p className="text-xs text-muted-foreground">No email after a few minutes? Check your spam folder. If this address is already signed up, nothing changes.</p>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground" data-signup-disclaimer>{DISCLAIMER}</p>
+          <div>
+            <button ref={closeButton} type="button" onClick={onClose}
+              className="rounded-md bg-cta px-3 py-1.5 text-sm font-medium text-cta-foreground shadow-sm hover:bg-cta-hover">Close</button>
+          </div>
+        </div>
+  );
 
   return (
     <dialog ref={dialog} aria-labelledby={ids.title} onClose={onClose} data-signup-dialog
       className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-xl border bg-card p-5 text-card-foreground shadow-lg backdrop:bg-black/40">
-      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
-        <div className="flex items-start justify-between gap-2">
-          <h2 id={ids.title} className="text-lg font-semibold">Email alerts for {cityName}</h2>
-          <button type="button" aria-label="Close" onClick={onClose} className="rounded-md px-2 py-1 text-lg leading-none text-muted-foreground hover:bg-muted">×</button>
-        </div>
+      {done ? success : <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+        {header}
         <p className="rounded-md border-l-4 border-amber-500 bg-muted/50 p-2 text-sm" data-signup-disclaimer>{DISCLAIMER}</p>
 
         <label className="flex flex-col gap-1 text-sm" htmlFor={ids.email}>
@@ -112,7 +150,7 @@ function SignupDialog({ cityId, cityName, url, siteKey, onClose }: Required<Prop
           </button>
           <p role="status" aria-live="polite" className={`text-sm ${status && !status.ok ? "text-destructive" : ""}`} data-signup-status>{status?.text ?? ""}</p>
         </div>
-      </form>
+      </form>}
     </dialog>
   );
 }
