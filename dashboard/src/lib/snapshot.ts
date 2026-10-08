@@ -232,6 +232,12 @@ export async function snapshotAccuracyRange() {
   return back((await file<AccuracyDetails>("accuracy-details.json")).range, -shift);
 }
 
+/** Latest NWS issue time across all cities (UTC, "YYYY-MM-DD HH:MM:SS"), or null if there is none. */
+export async function latestNwsIssued(): Promise<string | null> {
+  const all = await file<Record<string, Record<string, { issued_at: string }>>>("forecasts.json");
+  return Object.values(all).reduce<string | null>((a, m) => (m.nws?.issued_at && (!a || m.nws.issued_at > a) ? m.nws.issued_at : a), null);
+}
+
 /** Last day of the bundled snapshot: forecast accuracy is "as of" this day even when history is live. */
 export const accuracyAsOf = () => manifest?.data_as_of ?? null;
 

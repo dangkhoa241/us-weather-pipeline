@@ -78,7 +78,7 @@ try {
   check("CSP header served", Boolean(res.headers()["content-security-policy"]), res.headers()["content-security-policy"]);
   await page.waitForFunction(() => performance.getEntriesByName("map-ready").length > 0, null, { timeout: 30_000 });
   await page.waitForTimeout(1500);
-  const badge = await page.getByText(/(Live|Snapshot) · data as of \d{4}-\d{2}-\d{2}$/).textContent().catch(() => null);
+  const badge = await page.getByText(/^(Live|Snapshot) · history through [A-Z][a-z]{2} \d{1,2}$/).textContent().catch(() => null);
   check("data source badge", Boolean(badge), badge);
   check("live data requested and blocked", LIVE_HOSTS.length === 0 || blockedLive.length > 0, `${blockedLive.length} blocked (${LIVE_HOSTS.join(", ") || "no live host"})`);
   check("live blocked → badge shows Snapshot", /^Snapshot · /.test(badge ?? ""), badge);
@@ -143,6 +143,8 @@ try {
   const modelSeries = await page.locator("[data-multiline]").first().getAttribute("data-series").catch(() => null);
   check("forecast page: 'Forecast as of', cards, models", /^Forecast as of \d{4}-\d{2}-\d{2}$/.test(issued ?? "") && days >= 5 && Number(modelSeries) >= 3,
     `${issued}; ${days} days; ${modelSeries} models`);
+  const forecastBadge = (await page.locator("[data-source]").textContent())?.trim();
+  check("forecast badge: Snapshot · forecast updated …", /^Snapshot · forecast updated [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} [AP]M$/.test(forecastBadge ?? ""), forecastBadge);
   await shot(page, "dashboard-demo-forecast.png", { fullPage: true });
 
   // Accuracy page: hero from data, leaderboard, map by state.
@@ -154,6 +156,8 @@ try {
   const colored = await page.locator("[data-accuracy-map] [data-state]").evaluateAll((els) => els.filter((e) => !e.style.fill.includes("hatch")).length);
   check("accuracy page: hero, leaderboard, map", /is the most accurate model: \d+\.\d°F average error 1 day ahead/.test(hero ?? "") && models >= 4 && colored >= 10,
     `${hero?.slice(0, 40)}…; ${models} models; ${colored} states`);
+  const accuracyBadge = (await page.locator("[data-source]").textContent())?.trim();
+  check("accuracy badge: Snapshot · scored through …", /^Snapshot · scored through [A-Z][a-z]{2} \d{1,2}$/.test(accuracyBadge ?? ""), accuracyBadge);
   await shot(page, "dashboard-demo-accuracy.png", { fullPage: true });
 
   // Dark mode follows the system by default: same page with a dark color scheme.

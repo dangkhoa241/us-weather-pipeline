@@ -342,7 +342,7 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
 - [ ] Records page
 - [ ] Pipeline Ops page
 - [x] Dark mode (follows the system, toggle stored per browser), inline errors (no `alert()`), missing data shown as gaps
-- [ ] Freshness badge
+- [x] Freshness badge (page-aware header badge, see Stage 6a)
 
 ## Stage 6a – AWS, part 1 (Free plan; docs/SETUP_AWS.md, cost guard in CLAUDE.md)
 
@@ -391,6 +391,10 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       city with no history or a gap > 7 days; the export keeps `replay-sample.json` (it used to wipe public/data)
 - [x] Accuracy ranking: models need ≥ 30 days of scores (`days` on /accuracy and /accuracy/states); short-history
       models (NWS) get a head-to-head note from the new `/accuracy/matched`; legacy `icon_seamless` left out of the snapshot
+- [x] Page-aware header badge (2026-10-07): Overview "Live · history through Oct 2" (tooltip: Open-Meteo's archive is
+      ~5 days late; forecasts and alerts are current), Forecast "forecast updated <NWS issue time>" (selected city, its
+      time zone; latest across cities without one), Accuracy "scored through <last scored day>"; same wording after
+      "Snapshot · " on fallback. Rain chance chart on the Forecast page: fixed 0–100% axis, values and tooltip in %
 
 ## Cross-cutting
 

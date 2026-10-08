@@ -45,6 +45,8 @@ export function StatsChart({ points, metric, unit, title, onSelect, readyMark, m
 
   const rain = metric === "precip_mm";
   const unitLabel = rain ? rainUnit : `°${unit}`;
+  const pct = rain && rainUnit === "%";   // rain chance: fixed 0–100% axis, whole percents
+  const rainText = (v: number | null) => (pct ? `${fmt(v, 0)}%` : `${fmt(v)} ${rainUnit}`);
   const rows = points.map((p) => ({ p, value: valueOf(p, metric, unit), min: toUnit(p.min, metric, unit), max: toUnit(p.max, metric, unit) }));
   type Row = (typeof rows)[number];
   const ma = movingAverage(rows.map((r) => r.value), maWindow);
@@ -61,7 +63,7 @@ export function StatsChart({ points, metric, unit, title, onSelect, readyMark, m
   const ys = rows.flatMap((r) => (rain ? [r.value] : [r.min, r.max, r.value])).concat(ma).filter((v): v is number => v != null);
   const [lo, hi] = ys.length ? [Math.min(...ys), Math.max(...ys)] : [0, 1];
   const x = scaleBand<string>().domain(points.map((p) => p.key)).range([M.left, W - M.right]).padding(rain ? 0.28 : 0.1);
-  const y = scaleLinear().domain(rain ? [0, Math.max(hi, 1)] : [lo, hi === lo ? hi + 1 : hi]).nice().range([H - M.bottom, M.top]);
+  const y = scaleLinear().domain(pct ? [0, 100] : rain ? [0, Math.max(hi, 1)] : [lo, hi === lo ? hi + 1 : hi]).nice().range([H - M.bottom, M.top]);
   const ticks = y.ticks(5);
   const tickDigits = ticks.length > 1 && ticks[1] - ticks[0] < 1 ? 1 : 0;
   const cx = (key: string) => (x(key) ?? 0) + x.bandwidth() / 2;
@@ -75,7 +77,7 @@ export function StatsChart({ points, metric, unit, title, onSelect, readyMark, m
   const maLine = line<number | null>().defined((v) => v != null).x((_, i) => cx(points[i].key)).y((v) => y(v as number)).curve(curveMonotoneX);
 
   const describe = (r: Row) => r.value == null ? `${r.p.label}: no data`
-    : rain ? `${r.p.label}: ${fmt(r.value)} ${rainUnit}` : `${r.p.label}: average ${fmt(r.value)}${unitLabel}, min ${fmt(r.min)}, max ${fmt(r.max)}`;
+    : rain ? `${r.p.label}: ${rainText(r.value)}` : `${r.p.label}: average ${fmt(r.value)}${unitLabel}, min ${fmt(r.min)}, max ${fmt(r.max)}`;
   const activate = (key: string) => (e: React.KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect?.(key); }
   };
@@ -115,7 +117,7 @@ export function StatsChart({ points, metric, unit, title, onSelect, readyMark, m
           {ticks.map((t) => (
             <g key={t} transform={`translate(0,${y(t)})`}>
               <line x1={M.left} x2={W - M.right} style={{ stroke: "var(--border)" }} />
-              <text x={M.left - 6} dy="0.32em" textAnchor="end" fontSize={11} style={{ fill: "var(--muted-foreground)" }}>{fmt(t, tickDigits)}</text>
+              <text x={M.left - 6} dy="0.32em" textAnchor="end" fontSize={11} style={{ fill: "var(--muted-foreground)" }}>{fmt(t, tickDigits)}{pct ? "%" : ""}</text>
             </g>
           ))}
           {points.map((p, i) => i % every === 0 && (
@@ -146,22 +148,22 @@ export function StatsChart({ points, metric, unit, title, onSelect, readyMark, m
               <g data-mean>
                 <line x1={M.left} x2={W - M.right} y1={y(mean)} y2={y(mean)} strokeDasharray="6 4" strokeWidth={1.2} style={{ stroke: "var(--c-avg)" }} />
                 <text x={W - M.right - 2} y={y(mean) - 4} textAnchor="end" fontSize={11} fontWeight={600} paintOrder="stroke" strokeWidth={3}
-                  style={{ fill: "var(--c-avg)", stroke: "var(--card)" }}>avg {fmt(mean)}{rain ? ` ${rainUnit}` : unitLabel}</text>
+                  style={{ fill: "var(--c-avg)", stroke: "var(--card)" }}>avg {rain ? rainText(mean) : `${fmt(mean)}${unitLabel}`}</text>
               </g>
             </g>
           )}
 
           {showValues && rows.map((r, i) => r.value != null && !(rain && r.value === 0) && i !== top && i !== bottom && (
             <text key={r.p.key} x={cx(r.p.key)} y={y(r.value) - 8} textAnchor="middle" fontSize={10}
-              paintOrder="stroke" strokeWidth={3} style={{ fill: "var(--muted-foreground)", stroke: "var(--card)" }} data-value-label>{fmt(r.value, rain ? 1 : 0)}</text>
+              paintOrder="stroke" strokeWidth={3} style={{ fill: "var(--muted-foreground)", stroke: "var(--card)" }} data-value-label>{pct ? `${fmt(r.value, 0)}%` : fmt(r.value, rain ? 1 : 0)}</text>
           ))}
           {top >= 0 && !flat && (
             <text x={cx(rows[top].p.key)} y={y(hiOf(rows[top]) as number) - 7} textAnchor="middle" fontSize={11} fontWeight={700}
-              paintOrder="stroke" strokeWidth={3} style={{ fill: markColor, stroke: "var(--card)" }} data-marker="max">▲ {fmt(hiOf(rows[top]))}</text>
+              paintOrder="stroke" strokeWidth={3} style={{ fill: markColor, stroke: "var(--card)" }} data-marker="max">▲ {pct ? rainText(hiOf(rows[top])) : fmt(hiOf(rows[top]))}</text>
           )}
           {bottom >= 0 && bottom !== top && !flat && (
             <text x={cx(rows[bottom].p.key)} y={rain ? y(loOf(rows[bottom]) as number) - 7 : Math.min(y(loOf(rows[bottom]) as number) + 15, H - M.bottom - 3)} textAnchor="middle" fontSize={11} fontWeight={700}
-              paintOrder="stroke" strokeWidth={3} style={{ fill: "var(--c-cool)", stroke: "var(--card)" }} data-marker="min">▼ {fmt(loOf(rows[bottom]))}</text>
+              paintOrder="stroke" strokeWidth={3} style={{ fill: "var(--c-cool)", stroke: "var(--card)" }} data-marker="min">▼ {pct ? rainText(loOf(rows[bottom])) : fmt(loOf(rows[bottom]))}</text>
           )}
         </g>
 
@@ -183,14 +185,14 @@ export function StatsChart({ points, metric, unit, title, onSelect, readyMark, m
           style={cx(hr.p.key) > W * 0.6 ? { right: W - cx(hr.p.key) + 10 } : { left: cx(hr.p.key) + 10 }}>
           <div className="font-medium">{hr.p.label}</div>
           {hr.value == null ? <div className="text-muted-foreground">No data</div> : rain ? (
-            <div>{fmt(hr.value)} {rainUnit}</div>
+            <div>{rainText(hr.value)}</div>
           ) : (
             <>
               <div>avg {fmt(hr.value)}{unitLabel}</div>
               <div className="text-muted-foreground">min {fmt(hr.min)} · max {fmt(hr.max)}</div>
             </>
           )}
-          {ma[hIdx] != null && <div className="text-muted-foreground">trend {fmt(ma[hIdx])}{rain ? ` ${rainUnit}` : unitLabel}</div>}
+          {ma[hIdx] != null && <div className="text-muted-foreground">trend {rain ? rainText(ma[hIdx]) : `${fmt(ma[hIdx])}${unitLabel}`}</div>}
         </div>
       )}
       <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground" data-chart-legend>

@@ -48,6 +48,18 @@ describe("StatsChart (d3)", () => {
     expect(csvOf(rain, "precip_mm", "C").split("\n").slice(0, 4)).toEqual(["bucket,label,precip_mm", "01,Jan,30", "02,Feb,4", "03,Mar,"]);
   });
 
+  it("shows rain chance in percent: a fixed 0–100% axis, values, markers and tooltip in whole percents", () => {
+    const chance = monthPoints([row("2026-01-01", null, 20), row("2026-02-01", null, 65)]);
+    const { container } = render(<StatsChart points={chance} metric="precip_mm" rainUnit="%" unit="F" title="Rain chance" hoverKey="02" />);
+    const ticks = [...container.querySelectorAll("text[x='40']")].map((t) => t.textContent);   // y-axis labels (x = left margin − 6)
+    expect(ticks[0]).toBe("0%");
+    expect(ticks.at(-1)).toBe("100%");
+    expect(container.querySelector('[data-marker="max"]')?.textContent).toBe("▲ 65%");
+    expect(container.querySelector("[data-mean]")?.textContent).toBe("avg 43%");
+    expect(container.querySelector("[data-tooltip]")?.textContent).toContain("65%");
+    expect(container.querySelector("[data-tooltip]")?.textContent).not.toContain("65.0");
+  });
+
   it("follows a hover key from outside (synced crosshair) and reports its own hover", async () => {
     const user = userEvent.setup();
     const onHoverKey = vi.fn();

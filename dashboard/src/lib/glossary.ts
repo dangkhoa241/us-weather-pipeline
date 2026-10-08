@@ -35,6 +35,7 @@ export const GLOSSARY = {
   // Forecast replay and data
   "Previous runs": { full: "Open-Meteo Previous Runs", text: "Archived forecasts: what each model predicted 1–7 days before a past date." },
   Observed: { full: "Observed value", text: "What actually happened, from Open-Meteo's historical reanalysis (not a single station)." },
+  History: { full: "History date", text: "Historical data comes from Open-Meteo's archive, which publishes about 5 days late. Forecasts and alerts are current." },
   Reanalysis: { full: "Reanalysis", text: "An estimate of past weather that combines observations with a weather model." },
   "CC BY 4.0": { full: "Creative Commons Attribution 4.0", text: "A licence that allows reuse of the data as long as the source is credited." },
 } as const satisfies Record<string, GlossaryEntry>;

@@ -273,9 +273,9 @@ The cache times follow the schedule. CloudFront keeps a file for at most about 1
 extra requests are needed.
 
 The dashboard (Vercel) loads its bundled snapshot first, then tries `recent.json` from CloudFront (4 s timeout,
-validated with Zod). The live days are laid over the bundled daily files, and the header shows **Live · data as of
-…**. If CloudFront fails, times out or returns something unexpected, the bundled data stays and the header shows
-**Snapshot · data as of …**. Forecasts and alerts fall back on their own in the same way. Forecast accuracy always
+validated with Zod). The live days are laid over the bundled daily files, and the header shows **Live · history through
+…** (Forecast page: "forecast updated …", Accuracy page: "scored through …"). If CloudFront fails, times out or returns something unexpected, the bundled data stays and the header shows
+**Snapshot · …** with the same wording. Forecasts and alerts fall back on their own in the same way. Forecast accuracy always
 comes from the bundled snapshot (it needs the local ClickHouse history).
 
 CloudFront settings: PriceClass_100, the default `*.cloudfront.net` certificate, `https-only`, GET/HEAD only,

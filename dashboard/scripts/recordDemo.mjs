@@ -2,9 +2,9 @@
 // by `vite preview` under the vercel.json CSP. Free tools only: Playwright + ffmpeg-static.
 // Story: US map → click a state → open a city → September → "Replay forecasts" → wait for the Live chart → 2 s pause
 // → hover "ECMWF" so its glossary tooltip shows for ~2 s. The replay is live from Open-Meteo (2 requests).
-// Served at localhost:4173, an origin the CloudFront CORS policy allows, so the header shows "Live · data as of …".
+// Served at localhost:4173, an origin the CloudFront CORS policy allows, so the header shows "Live · history through …".
 // Fails on any CSP violation, or when:
-// - opening frame: the header badge isn't "Live · data as of …" (CloudFront data) or the overview isn't "All US · 53 cities";
+// - opening frame: the header badge isn't "Live · history through …" (CloudFront data) or the overview isn't "All US · 53 cities";
 // - final frame: the replay's source label isn't "Live …" (with data) or the ECMWF tooltip isn't open. The header badge
 //   has scrolled out of view by then, so the final frame doesn't need it.
 // Usage: npm run build:snapshot && node scripts/recordDemo.mjs [--screenshots]   (writes docs/images/demo.gif)
@@ -51,7 +51,7 @@ try {
   await page.goto(`${BASE}/`, { waitUntil: "load" });
   await page.waitForFunction(() => document.querySelectorAll("[data-map] [data-location]:not([data-loading])").length >= 10, null, { timeout: 30_000 });
   const opening = {
-    badge: (await page.getByText(/(Live|Snapshot) · data as of \d{4}-\d{2}-\d{2}$/).first().textContent().catch(() => ""))?.trim(),
+    badge: (await page.getByText(/^(Live|Snapshot) · history through [A-Z][a-z]{2} \d{1,2}$/).first().textContent().catch(() => ""))?.trim(),
     subject: await page.locator("[data-kpi-subject]").textContent(),
   };
   if (!/^Live · /.test(opening.badge ?? "")) throw new Error(`opening frame: no live dashboard data (badge "${opening.badge}", CloudFront ${JSON.stringify(liveData)})`);

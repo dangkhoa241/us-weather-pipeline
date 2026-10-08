@@ -3,15 +3,15 @@
 **Which weather model forecasts the US best? An end-to-end data pipeline and dashboard that collects forecasts from 5 models, scores them against what actually happened, and explains 3 years of weather for 53 US cities, on a $0 budget.**
 
 [![CI](https://github.com/dangkhoa241/us-weather-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/dangkhoa241/us-weather-pipeline/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-209%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-218%20passing-brightgreen)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Live demo](https://img.shields.io/badge/live%20demo-vercel-black?logo=vercel)](https://us-weather-pipeline.vercel.app)
 
 ### ▶ [Live demo: us-weather-pipeline.vercel.app](https://us-weather-pipeline.vercel.app)
 
-The demo updates itself from AWS (badge "Live · data as of …"): a scheduled Lambda publishes recent history, forecasts
+The demo updates itself from AWS (badge "Live · history through …"; the Forecast and Accuracy pages show when the forecast was updated and the last scored day): a scheduled Lambda publishes recent history, forecasts
 and alerts to S3 behind CloudFront (Part 4). If CloudFront is unreachable, it falls back to the bundled snapshot
-("Snapshot · data as of …").
+("Snapshot · history through …").
 
 ![Demo: US map → click a state → open a city → September → Replay forecasts (live from Open-Meteo)](docs/images/demo.gif)
 
@@ -165,7 +165,7 @@ is in [docs/analysis/live-dashboard.md](docs/analysis/live-dashboard.md).
 | Rows loaded | **1.74 M** hourly observations (53 cities, full history from 2023-01-01), **3.05 M** forecast snapshots |
 | Cache, warm p95 | **35.4 → 2.9 ms** (12× faster); cold p95 62.2 → 32.3 ms |
 | API | ~1,600 req/s, p95 12.7 ms, 0 errors; 22/22 security probe checks |
-| Tests | **209** Vitest tests (77 backend + 132 dashboard) and 21 checks on the demo build |
+| Tests | **218** Vitest tests (77 backend + 141 dashboard) and 23 checks on the demo build |
 | Demo snapshot | 3.0 MB (557 KB gzipped) for 53 cities × 3.75 years (2023-01-01 to 2026-10-02) |
 | Compare & review | **5** features × 3 implementations (15 design branches on GitHub) |
 | AWS Lambda | 256 MB; alerts run ~8 s, forecast run ~88 s (106 NWS requests, ~9,000 rows, 168 MB peak); ~960 runs / month ≈ 2% of the free GB-s |
