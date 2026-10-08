@@ -206,7 +206,7 @@ describe("verifyTurnstile (mocked siteverify)", () => {
   it("accepts success from our hostname with the signup action", async () => {
     const post = vi.fn(async () => ({ success: true, hostname: "us-weather-pipeline.vercel.app", action: "signup" }));
     expect(await verifyTurnstile({ ...base, post })).toEqual({ ok: true });
-    expect(post).toHaveBeenCalledWith("https://challenges.cloudflare.com/turnstile/v0/siteverify", { secret: "s", response: "t", remoteip: IP });
+    expect(post).toHaveBeenCalledWith("https://challenges.cloudflare.com/turnstile/v0/siteverify", { secret: "s", response: "t", remoteip: IP }, { jsonStatuses: [400] });
   });
   it.each([
     [{ success: false, "error-codes": ["timeout-or-duplicate"] }, "not_success:timeout-or-duplicate"],
@@ -216,6 +216,17 @@ describe("verifyTurnstile (mocked siteverify)", () => {
   ])("rejects %j", async (answer, reason) => {
     expect(await verifyTurnstile({ ...base, post: async () => answer })).toEqual({ ok: false, reason });
   });
+  it("reads Cloudflare's 400 answer (error codes), but still fails closed on other HTTP errors", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ success: false, "error-codes": ["invalid-input-secret"] }), { status: 400 }));
+    expect(await verifyTurnstile(base)).toEqual({ ok: false, reason: "not_success:invalid-input-secret" });
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init).toMatchObject({ method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" } });
+    expect(String(init.body)).toBe(`secret=s&response=t&remoteip=${IP}`);
+    fetchMock.mockResolvedValueOnce(new Response("oops", { status: 500 }));
+    expect(await verifyTurnstile(base)).toEqual({ ok: false, reason: "siteverify_error:HttpError" });
+  });
+
   it("fails closed on a network error or timeout", async () => {
     const post = async () => { throw Object.assign(new Error("aborted"), { name: "TimeoutError" }); };
     expect(await verifyTurnstile({ ...base, post })).toEqual({ ok: false, reason: "siteverify_error:TimeoutError" });

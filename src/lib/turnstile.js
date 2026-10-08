@@ -15,7 +15,9 @@ export const TURNSTILE_ACTION = "signup";
 export async function verifyTurnstile({ secret, token, remoteIp, allowedHostnames, post = postFormJson }) {
   let out;
   try {
-    out = await post(SITEVERIFY_URL, { secret, response: token, ...(remoteIp ? { remoteip: remoteIp } : {}) });
+    // siteverify answers invalid input with HTTP 400 + error codes (e.g. invalid-input-secret vs invalid-input-response):
+    // read them, so a wrong secret in SSM can be told apart from a bad token in the logs.
+    out = await post(SITEVERIFY_URL, { secret, response: token, ...(remoteIp ? { remoteip: remoteIp } : {}) }, { jsonStatuses: [400] });
   } catch (err) {
     return { ok: false, reason: `siteverify_error:${err?.name ?? "Error"}` };
   }
