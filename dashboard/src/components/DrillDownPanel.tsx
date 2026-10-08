@@ -6,6 +6,7 @@ import { api, type StatsRow } from "@/lib/api";
 import { allYearsRange, dayPoints, drillLevel, monthName, monthPoints, rangeFor, yearPoints, yearsWithData } from "@/lib/drill";
 import { ALL_US, useFilters } from "@/store/filters";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { SignupButton } from "@/components/SignupDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TwinCharts, type TwinData } from "@/components/chart/TwinCharts";
 import { maWindowFor } from "@/lib/movingAverage";
@@ -93,6 +94,7 @@ function DrillDownCard({ city: cityId }: { city: string }) {
             </nav>
           </CardDescription>
           <CardAction className="flex items-center gap-2">
+            <SignupButton cityId={cityId} cityName={cityName} />
             {level === "days" && (
               <button ref={replayButton} type="button" aria-expanded={replay} aria-controls="forecast-replay" onClick={() => setReplayNow(replay ? null : Date.now())}
                 className="rounded-md bg-cta px-2.5 py-1 text-sm font-medium text-cta-foreground shadow-sm transition-colors hover:bg-cta-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cta aria-expanded:bg-cta-hover">

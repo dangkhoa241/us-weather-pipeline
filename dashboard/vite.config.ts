@@ -10,6 +10,11 @@ const API = "http://127.0.0.1:3000";
 // Live data for the static demo (Stage 6a part 4): CloudFront in front of the dashboard publisher's files (stack output
 // DashboardDataUrl). Not a secret. Must match connect-src in vercel.json. Empty = bundled snapshot only.
 const LIVE_DATA_URL = "https://d1dl5jm7af48m2.cloudfront.net";
+// Public email sign-ups (docs/analysis/email-signups.md): the sign-up Function URL (stack output SignupUrl) and the
+// Cloudflare Turnstile site key. Both are public values, not secrets. Empty = the "Get alerts" button is hidden.
+// The URL's host must also be in connect-src in vercel.json.
+const SIGNUP_URL = "";
+const TURNSTILE_SITE_KEY = "";
 
 // Content-Security-Policy: vercel.json is the one source. `vite preview` serves the built app under the same policy;
 // the dev server gets only its connect-src (the full policy would block Vite's inline HMR/React Refresh scripts), so
@@ -22,9 +27,13 @@ export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss()],
   // `vite build --mode snapshot` (npm run build:snapshot) makes the static demo read public/data/ instead of /api.
   // Set here rather than in a .env.snapshot file, so the repository has no .env files at all.
-  define: mode === "snapshot"
-    ? { "import.meta.env.VITE_DATA_MODE": JSON.stringify("snapshot"), "import.meta.env.VITE_LIVE_DATA_URL": JSON.stringify(LIVE_DATA_URL) }
-    : {},
+  define: {
+    "import.meta.env.VITE_SIGNUP_URL": JSON.stringify(SIGNUP_URL),
+    "import.meta.env.VITE_TURNSTILE_SITE_KEY": JSON.stringify(TURNSTILE_SITE_KEY),
+    ...(mode === "snapshot"
+      ? { "import.meta.env.VITE_DATA_MODE": JSON.stringify("snapshot"), "import.meta.env.VITE_LIVE_DATA_URL": JSON.stringify(LIVE_DATA_URL) }
+      : {}),
+  },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
@@ -32,6 +41,8 @@ export default defineConfig(({ mode }) => ({
       "@shared": path.resolve(import.meta.dirname, "../src/api"),
       // The 53 tracked cities (id, lat, lon, IANA zone): the forecast replay validates against them.
       "@cities": path.resolve(import.meta.dirname, "../src/locations/cities.js"),
+      // NWS alert categories + the disclaimer, shared with the collector and the sign-up Lambda.
+      "@alerts": path.resolve(import.meta.dirname, "../src/stage1/alertCategories.js"),
     },
     dedupe: ["zod"],
   },
@@ -39,7 +50,7 @@ export default defineConfig(({ mode }) => ({
     proxy: { "/api": API },
     headers: { "Content-Security-Policy": CONNECT_SRC! },
     // The dev server may read this app plus only the shared API schema files outside it.
-    fs: { allow: [import.meta.dirname, path.resolve(import.meta.dirname, "../src/api"), path.resolve(import.meta.dirname, "../src/adapters/warehouse"), path.resolve(import.meta.dirname, "../src/locations")] },
+    fs: { allow: [import.meta.dirname, path.resolve(import.meta.dirname, "../src/api"), path.resolve(import.meta.dirname, "../src/adapters/warehouse"), path.resolve(import.meta.dirname, "../src/locations"), path.resolve(import.meta.dirname, "../src/stage1/alertCategories.js")] },
   },
   preview: { proxy: { "/api": API }, headers: { "Content-Security-Policy": CSP } },
   // globals: lets React Testing Library clean up the DOM after each test automatically

@@ -35,6 +35,9 @@
       "@cities": [
         "../src/locations/cities.js"
       ],
+      "@alerts": [
+        "../src/stage1/alertCategories.js"
+      ],
       "zod": [
         "./node_modules/zod"
       ]
@@ -45,6 +48,7 @@
     "../src/api/schemas.js",
     "../src/api/params.js",
     "../src/adapters/warehouse/Warehouse.js",
-    "../src/locations/cities.js"
+    "../src/locations/cities.js",
+    "../src/stage1/alertCategories.js"
   ]
 }
