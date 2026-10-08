@@ -4,7 +4,7 @@
 import { COLLECTIONS } from "../collections.js";
 import { RunLog } from "../lib/runLog.js";
 import { fetchHistory } from "./openMeteoHistory.js";
-import { fetchForecasts } from "./nwsForecast.js";
+import { fetchForecasts, forecastPartialNotice } from "./nwsForecast.js";
 import { fetchOpenMeteoForecasts } from "./openMeteoForecast.js";
 import { backfillOpenMeteoRuns } from "./openMeteoBackfill.js";
 import { backfillBestMatchBaseline } from "./openMeteoBaseline.js";
@@ -36,8 +36,9 @@ export const JOBS = {
 export async function runMode(mode, store, notifier, opts) {
   const run = await new RunLog(store, { stage: "stage1", mode }).start();
   let summary;
+  let locations = [];
   try {
-    const locations = mode === "sync-atlas" ? [] : await loadLocations(store, opts.locationIds);
+    locations = mode === "sync-atlas" ? [] : await loadLocations(store, opts.locationIds);
     await JOBS[mode](store, locations, run, { ...opts, notifier });
     summary = await run.finish();
   } catch (err) {
@@ -48,7 +49,11 @@ export async function runMode(mode, store, notifier, opts) {
   const { status, etl_batch_id, rows_fetched, inserted, updated, unchanged, error_count, skipped_count, duration_ms } = summary;
   console.log(`[stage1:${mode}] ${status} in ${(duration_ms / 1000).toFixed(1)}s`,
     { etl_batch_id, rows_fetched, inserted, updated, unchanged, error_count, skipped_count });
-  if (status !== "success") {
+  // NWS forecast partial runs: email only when a city fails 2 runs in a row (every run is still in pipeline_runs).
+  if (mode === "forecast" && status === "partial") {
+    const event = await forecastPartialNotice(store, run, locations);
+    if (event) await notifier.notify(event);
+  } else if (status !== "success") {
     await notifier.notify({
       level: status === "failed" ? "error" : "warn",
       title: `Stage 1 ${mode} ${status}`,

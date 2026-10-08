@@ -145,6 +145,8 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
 - "Data as of" can be one day past the last day with values: the 2026-10-02 snapshot (and live `recent.json`) say
   2026-10-02, but that day has no values yet and 2026-10-01 is partial (1,004 of 1,272 city-hours; the archive lags
   ~5 days and a city's local day ends after midnight UTC). KPIs over short ranges include that partial day.
+- Known quirk: each SAM deploy also redeploys the publisher with identical code because esbuild bundles include
+  build-folder path comments; this is harmless.
 - Heat-alert emails compare each new NWS heat alert with the city's stored heat alerts still in effect. Atlas keeps 7
   days of alerts, so a heat event longer than 7 days could send one more "New" email; a "Cancel" doesn't close the
   event early (the next alert before the old end time counts as a re-issue); an end time moved back and then forward
@@ -404,6 +406,12 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       only for a new event in a city ("New"), a higher severity/product ("Upgraded", e.g. Advisory → Warning, Watch →
       Warning) or a later end time ("Extended to …"); every alert is still stored. Replay of the 17 stored alerts
       (2026-09-30 → 10-07): 5 emails instead of 17. Emails still only for heat events (`/heat/i`) in tracked cities
+- [x] NWS forecast partial-run email (2026-10-08): NWS answered HTTP 500 for Kansas City's grid point (EAX/44,51) in
+      3 runs on 2026-10-07 (00:07–06:07 UTC) and recovered by 09:07; each run emailed. Now one email per failure streak,
+      when a city fails 2 runs in a row, worded by city ("Kansas City, MO failed: NWS HTTP 500 on 2 calls; last good
+      forecast from …"); no email on the first failure, while it keeps failing, or on recovery. Every partial run is
+      still in `pipeline_runs`; fatal runs and other modes email as before. No per-city retry pass within a run (the
+      HTTP layer retries each call 4×; the next run is 3 h later)
 
 ## Cross-cutting
 
