@@ -174,7 +174,11 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
   shows the topic ARN (account ID). Alerts are checked hourly. Public alert emails are only sent by the Lambda (local
   runs never email subscribers).
 - Email sign-ups: after an unsubscribe, SNS keeps listing the subscription as `Deleted` for a while; the subscriber
-  cap counts those too (only over-counts, so it errs on the safe side).
+  cap counts those too (only over-counts, so it errs on the safe side). While that `Deleted` entry exists (seen > 20 h
+  after the unsubscribe), signing up again with a different city/categories fails in SNS ("Subscription already exists
+  with different attributes"): the user sees "check your inbox" but gets no email (logged as `subscribe_failed`).
+  Re-signing up within 24 h is also silently skipped by the per-email cooldown (`email_cooldown`). Both are by design of
+  the generic answer; for testing, use a `+alias` address.
 - `npm audit`: 1 high in a dev-only dependency (`source-map-js` via the test/build tools, also on `main`); production
   dependencies: 0.
 - NWS Lambda: a run that hits the 5 min timeout sends no SNS email (only the Lambda error in its logs). It doesn't seed
