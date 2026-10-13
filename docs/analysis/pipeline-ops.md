@@ -11,11 +11,12 @@ records the jobs already write. It adds no new service and costs nothing extra.
 | Job cards | Alerts collector, forecast collector, dashboard publisher: schedule (UTC), last run, status (dot **and** text: OK / Partial / Failed / No run recorded), duration, ok runs in the last 7 days | `pipeline_runs` in Atlas |
 | Data freshness | History through (day), forecast updated at (UTC), accuracy scored through | publisher run records; accuracy from the bundled snapshot (labelled "not live") |
 | Recent incidents | Last 7 days, one line per failure streak: "Kansas City, MO: NWS error, recovered after 3 runs" | `pipeline_runs.errors`, mapped to categories |
-| Alert emails | Sent, skipped by cooldown, skipped as not new, counted per city + category (not per recipient) | `public_alerts` on alerts runs |
+| Alert emails | Sent, skipped by cooldown, skipped as not new, counted per city + category (not per recipient); "counting since <first run>" until 7 full days are recorded | `public_alerts` on alerts runs |
 | Performance | Redis warm p95 35.4 → 2.9 ms (about 12×) | static, from [caching.md](caching.md) |
 
-A **stale banner** appears when `generatedAt` is more than 6 hours old. The file is rewritten every 3 hours, so a
-stale file means the publisher missed at least one run.
+A **stale warning** appears when the **live** `generatedAt` is more than 6 hours old. The file is rewritten every
+3 hours, so a stale file means the publisher missed at least one run. The bundled copy is old by nature, so it gets a
+neutral note instead of the warning: "Snapshot from <date>. Live status unavailable."
 
 **Live / Snapshot:** the page loads `status.json` from CloudFront first. If that fails, times out or doesn't
 validate, it shows `/data/status.json`, which is bundled with the build (`npm run export:status`), and labels it
@@ -42,6 +43,8 @@ collectors (Lambda) ─▶ pipeline_runs (Atlas, 7-day TTL) ─▶ publisher: bu
   archive, about 5 days behind. It comes from this run when it published history (once a day). Otherwise it comes
   from the newest publisher run record that has one.
 - **Forecast updated at:** `generated_at` of the latest `forecasts.json` (every run).
+- Both come from the `recent.json` / `forecasts.json` the publisher uploaded **in the same run**, never from bundled
+  files (test: "freshness comes from the recent.json and forecasts.json uploaded in the same run").
 - **Accuracy scored through:** `data_as_of` of the bundled snapshot, read in the browser. Accuracy is scored on the
   local pipeline only, so it is never live.
 - The bundled fallback uses the snapshot's own dates instead (history through, latest NWS issue), because that is

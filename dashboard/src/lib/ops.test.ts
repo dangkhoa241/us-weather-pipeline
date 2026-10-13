@@ -3,7 +3,7 @@ import { OPS_NOW, opsStatus } from "@/test/opsFixtures";
 
 const live = vi.hoisted(() => ({ value: null as unknown }));
 vi.mock("@/lib/snapshot", () => ({ fetchLive: vi.fn(async () => live.value) }));
-const { STALE_MS, ago, formatDuration, isStale, loadOpsStatus, overall, utcTime } = await import("@/lib/ops");
+const { STALE_MS, ago, alertsCountingSince, formatDuration, isStale, loadOpsStatus, overall, utcTime } = await import("@/lib/ops");
 
 describe("stale banner logic", () => {
   const generated = "2026-10-08T12:40:00.000Z";
@@ -12,6 +12,17 @@ describe("stale banner logic", () => {
     expect(isStale(generated, Date.parse(generated) + STALE_MS)).toBe(false);
     expect(isStale(generated, Date.parse(generated) + STALE_MS + 1)).toBe(true);
     expect(isStale(generated, Date.parse("2026-10-13T00:00:00Z"))).toBe(true);
+  });
+});
+
+describe("alerts window", () => {
+  const at = (since: string | null) => opsStatus({ alerts7d: { ...opsStatus().alerts7d, since } });
+  it("says 'counting since' until the first counted run is at the start of the 7-day window", () => {
+    expect(alertsCountingSince(at("2026-10-01T13:23:00.000Z"))).toBeNull();   // full window (generated Oct 8 12:40)
+    expect(alertsCountingSince(at("2026-10-01T14:39:00.000Z"))).toBeNull();   // within the 2 h slack
+    expect(alertsCountingSince(at("2026-10-01T14:41:00.000Z"))).toBe("counting since Oct 1");
+    expect(alertsCountingSince(at("2026-10-06T17:23:00.000Z"))).toBe("counting since Oct 6");
+    expect(alertsCountingSince(at(null))).toBeNull();   // nothing recorded: the numbers say "Not recorded yet"
   });
 });
 

@@ -27,6 +27,8 @@ describe("OpsPage", () => {
     expect(await screen.findByText("All jobs ok on their last run")).toBeInTheDocument();
     expect(document.querySelector("[data-ops-source]")).toHaveTextContent("Live");
     expect(document.querySelector("[data-ops-stale]")).toBeNull();
+    expect(document.querySelector("[data-ops-snapshot-note]")).toBeNull();
+    expect(document.querySelector("[data-ops-counting-since]")).toBeNull();   // full 7 days counted
     const forecast = within(job("forecast"));
     expect(forecast.getByText("Forecast collector")).toBeInTheDocument();
     expect(forecast.getByText("Every 3 hours at :07 UTC")).toBeInTheDocument();
@@ -62,18 +64,22 @@ describe("OpsPage", () => {
     expect(within(job("publisher")).getByText("Failed")).toBeInTheDocument();
   });
 
+  it("alert counts younger than 7 days: 'counting since <first run>'", async () => {
+    show(opsStatus({ alerts7d: { sent: 1, skippedCooldown: 0, skippedNotNew: 2, runsCounted: 30, since: "2026-10-07T07:23:00.000Z" } }));
+    expect(await screen.findByText("(counting since Oct 7)")).toBeInTheDocument();
+  });
+
   it("empty: no incidents and no alert counts recorded yet", async () => {
     show(opsStatus({ incidents: [], alerts7d: { sent: null, skippedCooldown: null, skippedNotNew: null, runsCounted: 0 } }));
     expect(await screen.findByText("No incidents in the last 7 days")).toBeInTheDocument();
     expect(document.querySelector("[data-ops-alerts]")?.textContent).toMatch(/(Not recorded yet.*){3}/);
   });
 
-  it("snapshot fallback: live unreachable → bundled status, labelled Snapshot, with the stale banner", async () => {
+  it("snapshot fallback: live unreachable → bundled status, labelled Snapshot, a neutral note instead of the stale warning", async () => {
     show(null, { bundled: opsStatus({ generatedAt: "2026-10-05T20:00:00.000Z" }) });
-    expect(await screen.findByText("Status is stale")).toBeInTheDocument();
+    expect(await screen.findByText("Snapshot from Oct 5, 8:00 PM UTC. Live status unavailable.")).toBeInTheDocument();
     expect(document.querySelector("[data-ops-source]")).toHaveTextContent("Snapshot");
-    expect(document.querySelector("[data-ops-stale]")).toHaveTextContent("from 3 days ago");
-    expect(document.querySelector("[data-ops-stale]")).toHaveTextContent("copy bundled with this build");
+    expect(document.querySelector("[data-ops-stale]")).toBeNull();   // 3 days old, but not a warning for the bundled copy
   });
 
   it("stale live status (older than 6 h) also shows the banner", async () => {

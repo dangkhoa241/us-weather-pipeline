@@ -22,7 +22,7 @@ export const statusSchema = z.object({
   jobs: z.array(jobSchema),
   freshness: z.object({ historyThrough: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(), forecastUpdatedAt: isoTime.nullable() }),
   incidents: z.array(z.object({ at: isoTime, job: z.string(), city: z.string().nullable(), category: z.string(), runs: z.number().int(), recovered: z.boolean(), text: z.string() })),
-  alerts7d: z.object({ sent: count, skippedCooldown: count, skippedNotNew: count, runsCounted: z.number().int().min(0) }),
+  alerts7d: z.object({ sent: count, skippedCooldown: count, skippedNotNew: count, runsCounted: z.number().int().min(0), since: isoTime.nullable().optional() }),
   performance: z.object({ redisWarmP95: z.object({ beforeMs: z.number(), afterMs: z.number(), speedup: z.number(), source: z.string() }) }),
 });
 export type OpsStatus = z.infer<typeof statusSchema>;
@@ -41,6 +41,18 @@ export async function loadOpsStatus(): Promise<OpsData> {
 }
 
 export const isStale = (generatedAt: string, now: number) => now - Date.parse(generatedAt) > STALE_MS;
+
+// Alerts run hourly: a first counted run within 2 h of the window's start means the window is full.
+const FULL_WINDOW_SLACK_MS = 2 * 3_600_000;
+
+/** "counting since Oct 14" while the alert counts cover less than the full window, else null. */
+export function alertsCountingSince(s: Pick<OpsStatus, "alerts7d" | "generatedAt" | "windowDays">) {
+  const since = s.alerts7d.since;
+  if (!since) return null;
+  const windowStart = Date.parse(s.generatedAt) - s.windowDays * 86_400_000;
+  if (Date.parse(since) <= windowStart + FULL_WINDOW_SLACK_MS) return null;
+  return `counting since ${new Date(since).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" })}`;
+}
 
 /** 2491 → "2.5 s", 95712 → "1 min 36 s". */
 export function formatDuration(ms: number | null) {

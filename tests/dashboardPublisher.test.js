@@ -235,11 +235,34 @@ describe("dashboard publisher handler", () => {
     // forecasts from this run, history from the last run that published it
     expect(status.freshness).toEqual({ historyThrough: "2026-09-26", forecastUpdatedAt: NOW.toISOString() });
     expect(status.incidents.map((i) => i.text)).toEqual(["Forecast collector run: NWS error, not recovered yet"]);   // no city name in this fixture
-    expect(status.alerts7d).toEqual({ sent: 1, skippedCooldown: 2, skippedNotNew: 3, runsCounted: 1 });
+    expect(status.alerts7d).toEqual({ sent: 1, skippedCooldown: 2, skippedNotNew: 3, runsCounted: 1, since: "2026-10-02T11:23:00.000Z" });
 
     const own = store.data.pipeline_runs.find((r) => r.etl_batch_id);
     expect(own).toMatchObject({ stage: "publish", mode: "dashboard", status: "success", uploaded: ["forecasts.json", "alerts.json", "status.json"],
       history_as_of: null, forecasts_generated_at: NOW });
+  });
+
+  it("freshness comes from the recent.json and forecasts.json uploaded in the same run, never older records", async () => {
+    // An older publisher record with stale values: this run's files must win over it.
+    const runs = [{ stage: "publish", mode: "dashboard", status: "success", started_at: at("2026-10-01T06:35:00Z"), duration_ms: 1,
+      history_as_of: "2026-09-20", forecasts_generated_at: at("2026-09-28T00:00:00Z") }];
+    const { handler, body, store } = setup({ store: fakeStore({ runs, snapshots: nwsSnapshots("chicago-il") }) });
+    const out = await handler({ parts: ["history", "forecasts", "alerts"] });
+    expect(out.uploaded).toEqual(["recent.json", "forecasts.json", "alerts.json", "status.json"]);
+    const { freshness } = body("status.json");
+    expect(freshness.historyThrough).toBe(body("recent.json").data_as_of);
+    expect(freshness.forecastUpdatedAt).toBe(body("forecasts.json").generated_at);
+    // NOW = 2026-10-02 12:10 UTC; archive lag 5 days → window ends 2026-09-27, whose last day has no values yet
+    expect(freshness).toEqual({ historyThrough: "2026-09-26", forecastUpdatedAt: "2026-10-02T12:10:00.000Z" });
+    // ... and the run record keeps them for the next runs (history is only published once a day)
+    expect(store.data.pipeline_runs.find((r) => r.etl_batch_id)).toMatchObject({ history_as_of: "2026-09-26", forecasts_generated_at: NOW });
+  });
+
+  it("a forecasts-only run takes history from the last run that published it", async () => {
+    const runs = [{ stage: "publish", mode: "dashboard", status: "success", started_at: at("2026-10-02T06:35:00Z"), duration_ms: 1, history_as_of: "2026-09-27" }];
+    const { handler, body } = setup({ store: fakeStore({ runs, snapshots: nwsSnapshots("chicago-il") }) });
+    await handler({});
+    expect(body("status.json").freshness).toEqual({ historyThrough: "2026-09-27", forecastUpdatedAt: body("forecasts.json").generated_at });
   });
 
   it("still publishes status.json when every data file fails, and records the run as failed", async () => {

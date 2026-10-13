@@ -90,13 +90,13 @@ describe("buildStatus", () => {
 
   it("sums the alert counters of the alerts runs; null while none recorded them", () => {
     const none = buildStatus({ now: NOW, locations: LOCATIONS, runs: [run("alerts", "2026-10-08T11:23:00Z", "success")] });
-    expect(none.alerts7d).toEqual({ sent: null, skippedCooldown: null, skippedNotNew: null, runsCounted: 0 });
+    expect(none.alerts7d).toEqual({ sent: null, skippedCooldown: null, skippedNotNew: null, runsCounted: 0, since: null });
     const some = buildStatus({ now: NOW, locations: LOCATIONS, runs: [
       run("alerts", "2026-10-08T10:23:00Z", "success", { public_alerts: { sent: 2, cooldown: 1, not_new: 4, failed: 0 } }),
       run("alerts", "2026-10-08T11:23:00Z", "success", { public_alerts: { sent: 1, cooldown: 0, not_new: 3, failed: 0 } }),
       run("alerts", "2026-10-08T12:23:00Z", "success"),   // older code: not counted
     ] });
-    expect(some.alerts7d).toEqual({ sent: 3, skippedCooldown: 1, skippedNotNew: 7, runsCounted: 2 });
+    expect(some.alerts7d).toEqual({ sent: 3, skippedCooldown: 1, skippedNotNew: 7, runsCounted: 2, since: "2026-10-08T10:23:00.000Z" });
   });
 
   it("freshness: this run's values first, else the latest publisher run that has them", () => {
@@ -138,7 +138,7 @@ describe("status.json sanitizer (public file)", () => {
       "Forecast collector run: storage error, not recovered yet",
       "Stockton, CA: other error, not recovered yet",
     ]);
-    expect(Object.keys(parsed.alerts7d)).toEqual(["sent", "skippedCooldown", "skippedNotNew", "runsCounted"]);
+    expect(Object.keys(parsed.alerts7d)).toEqual(["sent", "skippedCooldown", "skippedNotNew", "runsCounted", "since"]);
   });
 
   it("whitelist: unknown fields, free text and bad values are dropped or replaced by fixed labels", () => {
@@ -159,7 +159,7 @@ describe("status.json sanitizer (public file)", () => {
     expect(clean.jobs[0]).toEqual({ id: "alerts", name: "Alerts collector", schedule: JOBS[0].schedule, lastRunAt: null, lastStatus: null, lastDurationMs: null, runs7d: 0, okRuns7d: 0 });
     expect(clean.freshness).toEqual({ historyThrough: null, forecastUpdatedAt: "2026-10-08T09:36:00.000Z" });
     expect(clean.incidents.map((i) => i.text)).toEqual(["Stockton, CA: other error, recovered after 2 runs", "Forecast collector run: timeout, not recovered yet"]);
-    expect(clean.alerts7d).toEqual({ sent: 3, skippedCooldown: null, skippedNotNew: null, runsCounted: 2 });
+    expect(clean.alerts7d).toEqual({ sent: 3, skippedCooldown: null, skippedNotNew: null, runsCounted: 2, since: null });
     expect(clean.performance).toEqual(PERFORMANCE);
     expect("secret" in clean).toBe(false);
     expect(() => assertPublicStatus(JSON.stringify(clean))).not.toThrow();

@@ -15,7 +15,7 @@ export function opsStatus(patch: Partial<OpsStatus> = {}): OpsStatus {
     incidents: [
       { at: "2026-10-07T00:07:07.000Z", job: "forecast", city: "Kansas City, MO", category: "NWS error", runs: 3, recovered: true, text: "Kansas City, MO: NWS error, recovered after 3 runs" },
     ],
-    alerts7d: { sent: 4, skippedCooldown: 2, skippedNotNew: 11, runsCounted: 168 },
+    alerts7d: { sent: 4, skippedCooldown: 2, skippedNotNew: 11, runsCounted: 168, since: "2026-10-01T13:23:00.000Z" },
     performance: { redisWarmP95: { beforeMs: 35.4, afterMs: 2.9, speedup: 12, source: "Stage 3 cache benchmark, 10 dashboard queries on local Docker (docs/analysis/caching.md)" } },
     ...patch,
   };

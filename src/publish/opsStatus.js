@@ -92,11 +92,15 @@ function streaks(job, finished, byId) {
   return incidents;
 }
 
-/** Sum of the public alert-email counters saved by the alerts runs; null while no run has recorded them. */
+/**
+ * Sum of the public alert-email counters saved by the alerts runs (oldest first); null while no run has recorded them.
+ * `since`: the first counted run, so the page can say "counting since …" until the window is full.
+ */
 function alertTotals(runs) {
   const recorded = runs.filter((r) => r.public_alerts && typeof r.public_alerts === "object");
   const sum = (k) => (recorded.length ? recorded.reduce((a, r) => a + (Number.isInteger(r.public_alerts[k]) ? r.public_alerts[k] : 0), 0) : null);
-  return { sent: sum("sent"), skippedCooldown: sum("cooldown"), skippedNotNew: sum("not_new"), runsCounted: recorded.length };
+  return { sent: sum("sent"), skippedCooldown: sum("cooldown"), skippedNotNew: sum("not_new"), runsCounted: recorded.length,
+    since: time(recorded[0]?.started_at) };
 }
 
 /** Benchmark numbers (static): docs/analysis/caching.md. */
@@ -186,7 +190,7 @@ export function sanitizeStatus(s) {
     }),
     alerts7d: {
       sent: count(s.alerts7d?.sent), skippedCooldown: count(s.alerts7d?.skippedCooldown), skippedNotNew: count(s.alerts7d?.skippedNotNew),
-      runsCounted: count(s.alerts7d?.runsCounted) ?? 0,
+      runsCounted: count(s.alerts7d?.runsCounted) ?? 0, since: iso(s.alerts7d?.since),
     },
     performance: PERFORMANCE,
   };

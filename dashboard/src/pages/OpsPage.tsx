@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Term } from "@/components/Term";
 import { shortDay } from "@/lib/badge";
 import { accuracyAsOf } from "@/lib/snapshot";
-import { ago, formatDuration, isStale, loadOpsStatus, overall, utcTime, type OpsJob } from "@/lib/ops";
+import { ago, alertsCountingSince, formatDuration, isStale, loadOpsStatus, overall, utcTime, type OpsJob } from "@/lib/ops";
 
 type Level = OpsJob["lastStatus"] | "unknown";
 const LEVELS: Record<NonNullable<Level>, { dot: string; label: string }> = {
@@ -69,7 +69,9 @@ export function OpsPage({ now: fixedNow }: { now?: number }) {
     );
   }
   const { kind, status } = q.data;
-  const stale = isStale(status.generatedAt, now);
+  // Stale warning for live data only; the bundled copy is old by nature and gets a neutral note instead.
+  const stale = kind === "live" && isStale(status.generatedAt, now);
+  const countingSince = alertsCountingSince(status);
   const head = overall(status.jobs);
   const { freshness, alerts7d, incidents } = status;
   const perf = status.performance.redisWarmP95;
@@ -98,13 +100,17 @@ export function OpsPage({ now: fixedNow }: { now?: number }) {
         </CardHeader>
       </Card>
 
+      {kind === "snapshot" && (
+        <p className="text-sm text-muted-foreground" data-ops-snapshot-note>
+          Snapshot from {utcTime(status.generatedAt)}. Live status unavailable.
+        </p>
+      )}
       {stale && (
         <Alert variant="destructive" data-ops-stale>
           <AlertTitle>Status is stale</AlertTitle>
           <AlertDescription>
-            This status is from {ago(status.generatedAt, now)} (it should be at most 3 hours old)
-            {kind === "snapshot" ? ": the live status could not be loaded, so the copy bundled with this build is shown." : ": the publisher may have stopped."}
-            {" "}Jobs may have run since.
+            This status is from {ago(status.generatedAt, now)} (it should be at most 3 hours old): the publisher may have
+            stopped. Jobs may have run since.
           </AlertDescription>
         </Alert>
       )}
@@ -131,7 +137,10 @@ export function OpsPage({ now: fixedNow }: { now?: number }) {
         <Card data-ops-alerts>
           <CardHeader>
             <CardTitle>Alert emails, last {status.windowDays} days</CardTitle>
-            <CardDescription>Counted per city and alert category, not per recipient.</CardDescription>
+            <CardDescription>
+              Counted per city and alert category, not per recipient.
+              {countingSince && <span className="ml-1 font-medium text-foreground" data-ops-counting-since>({countingSince})</span>}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <dl className="grid grid-cols-3 gap-3">
