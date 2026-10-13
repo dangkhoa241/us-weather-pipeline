@@ -184,6 +184,11 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
   A Lambda killed by its timeout leaves its run as "running"; after 30 min the page counts it as failed ("timeout").
   With live history but no live `status.json` (before deploy, or CloudFront down), the header badge's "history
   through" (live) can be newer than the Ops page's bundled freshness. Incidents use a city's first error category.
+- Dashboard publisher upload cap has **zero headroom**: `DASHBOARD_MAX_PUTS_PER_DAY=17` is exactly what the schedule
+  uses (7 runs × 2 files + 3 at 06:35; measured 17 of 17 on 2026-10-13). A manual `aws lambda invoke` later in the UTC
+  day fails its data uploads with "budget reached" (a failed run, an incident on /ops and an error email); only
+  `status.json` (own cap of 10 / day) still goes up. Test by hand early in the UTC day, or raise the cap (~+30 PUTs /
+  month per extra run, well inside the free 2,000) if manual runs become routine.
 - `npm audit`: 1 high in a dev-only dependency (`source-map-js` via the test/build tools, also on `main`); production
   dependencies: 0.
 - NWS Lambda: a run that hits the 5 min timeout sends no SNS email (only the Lambda error in its logs). It doesn't seed
@@ -460,9 +465,11 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
         Heat ticked; switched at once, so no public heat email could go out) → one `category=test` email → unsubscribe →
         the subscription shows `Deleted`; the private subscription untouched. 0 CSP violations with the form open
   - [x] After a successful sign-up the dialog now shows a "check your inbox" screen (it used to stay on the form, so it
-        looked as if nothing happened); the Lambda re-reads SSM after `invalid-input-secret` (committed; change set 3,
-        sign-up function code only, not deployed yet)
-- [x] Pipeline Ops page, Stage 1 build (2026-10-13, branch `feature/pipeline-ops`, not deployed): `/ops` in the dashboard
+        looked as if nothing happened); the Lambda re-reads SSM after `invalid-input-secret` (change set 3,
+        sign-up function code only; deployed 2026-10-08 23:39 UTC, checked 2026-10-13: deployed CodeSha256 matches
+        and the bundle contains the re-read)
+- [x] Pipeline Ops page, Stage 1 (2026-10-13, merged to main; deployed 21:53 UTC by executing the reviewed change set,
+      10 modifies, no replacements; live verification below): `/ops` in the dashboard
       (job cards with a text label next to each dot, freshness, incidents and alert-email counts of the last 7 days, the
       Redis benchmark, stale banner after 6 h, Live / Snapshot label); the publisher writes `status.json` last in every
       run from `pipeline_runs` (whitelist sanitizer + leak check, error text mapped to fixed categories only) and records
