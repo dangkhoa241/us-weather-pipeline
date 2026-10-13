@@ -138,7 +138,7 @@ Cost follow-ups:
 - AWS (Free plan, $0): NWS collection on Lambda + EventBridge (~960 runs / month, ~2% of the free GB-s; forecast run
   106 requests → ~9,000 rows in ~88 s at 168 MB), SNS alerts, 30-day S3 archive (~33% of free PUTs, ≤ 40% by hard caps);
   one SAM stack, permissions boundary on every role, removed by `npm run aws:teardown`.
-- Tests: 366 Vitest tests (203 backend + 163 dashboard), no Docker needed, run in GitHub Actions CI; 24 automated checks on the static demo build.
+- Tests: 370 Vitest tests (205 backend + 165 dashboard), no Docker needed, run in GitHub Actions CI; 24 automated checks on the static demo build.
 
 ## Known limitations
 
@@ -469,7 +469,7 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       its own run (`stage: "publish"`); alerts runs save `public_alerts` counts (sent, cooldown, not new). No new AWS
       service and no IAM change (the publisher already reads Atlas); `status.json` has its own PUT cap (10 / day):
       +8 PUTs / day → S3 PUTs ~71% of the free 2,000 / month expected, ≤ 82% at all caps. Bundled fallback:
-      `npm run export:status`. CSP unchanged. 49 new tests (36 backend + 13 dashboard), 24/24 demo checks
+      `npm run export:status`. CSP unchanged. 53 new tests (38 backend + 15 dashboard), 24/24 demo checks
 
 ## Cross-cutting
 
