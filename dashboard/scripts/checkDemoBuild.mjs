@@ -160,6 +160,15 @@ try {
   check("accuracy badge: Snapshot · scored through …", /^Snapshot · scored through [A-Z][a-z]{2} \d{1,2}$/.test(accuracyBadge ?? ""), accuracyBadge);
   await shot(page, "dashboard-demo-accuracy.png", { fullPage: true });
 
+  // Ops page: live status.json blocked → the bundled one, labelled Snapshot, 3 job cards each with a text label.
+  await page.goto(`${base}ops`, { waitUntil: "load" });
+  await page.waitForSelector("[data-job]", { timeout: 15_000 }).catch(() => {});
+  const opsSource = (await page.locator("[data-ops-source]").textContent().catch(() => null))?.trim();
+  const jobLabels = await page.locator("[data-job] [data-status]").allTextContents();
+  check("ops page: bundled status (Snapshot), 3 jobs with text labels", opsSource === "Snapshot" && jobLabels.length === 3 && jobLabels.every((t) => t.trim().length > 1),
+    `${opsSource}; ${jobLabels.join(", ")}`);
+  await shot(page, "dashboard-demo-ops.png", { fullPage: true });
+
   // Dark mode follows the system by default: same page with a dark color scheme.
   const dark = await browser.newPage({ viewport: { width: 1400, height: 1000 }, colorScheme: "dark" });
   await blockLive(dark);

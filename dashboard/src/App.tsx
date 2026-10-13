@@ -6,6 +6,7 @@ import { useFilters } from "@/store/filters";
 import { OverviewPage } from "@/pages/OverviewPage";
 import { ForecastPage } from "@/pages/ForecastPage";
 import { AccuracyPage } from "@/pages/AccuracyPage";
+import { OpsPage } from "@/pages/OpsPage";
 
 export default function App() {
   const page = useFilters((s) => s.page);
@@ -23,7 +24,7 @@ export default function App() {
         </div>
       </header>
       <main className="flex flex-col gap-5" data-page={page}>
-        {page === "forecast" ? <ForecastPage /> : page === "accuracy" ? <AccuracyPage /> : <OverviewPage />}
+        {page === "forecast" ? <ForecastPage /> : page === "accuracy" ? <AccuracyPage /> : page === "ops" ? <OpsPage /> : <OverviewPage />}
       </main>
     </div>
   );

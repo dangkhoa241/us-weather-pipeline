@@ -45,6 +45,13 @@ export const GLOSSARY = {
   "Winter alerts": { full: "Winter alerts", text: "NWS winter storm, blizzard, ice, snow squall, freeze, frost and extreme cold alerts." },
   "Fire & air quality alerts": { full: "Fire and air quality alerts", text: "NWS Red Flag Warnings, fire weather watches, air quality alerts and dense smoke advisories." },
   "Tropical alerts": { full: "Tropical alerts", text: "NWS hurricane, tropical storm and storm surge warnings and watches, and local tropical statements." },
+  // Pipeline Ops page
+  p95: { full: "95th percentile", text: "95% of requests were at least this fast; the slowest 5% took longer." },
+  "Warm cache": { full: "Warm cache", text: "The answer was already in the Redis cache, so the warehouse was not queried." },
+  "Partial run": { full: "Partial run", text: "The job finished, but some cities or files failed; the rest was saved and the next run tries again." },
+  Cooldown: { full: "Alert email cooldown", text: "At most one email per city and alert category every 24 hours, unless the alert was upgraded." },
+  "Not new": { full: "Not a new alert", text: "NWS re-issued an alert with nothing new (same level, no later end time), so no email was sent." },
+  Incident: { full: "Incident", text: "A job that failed for a city (or as a whole) in one or more runs in a row, until a run succeeded again." },
 } as const satisfies Record<string, GlossaryEntry>;
 
 export type GlossaryKey = keyof typeof GLOSSARY;
