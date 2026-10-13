@@ -151,7 +151,13 @@ export async function fetchAlerts(store, locations, run, notifier, publicAlerts 
     if (publicAlerts) {
       // Public subscriber emails never break the run (and never reach the private notifier's text path).
       try {
-        await publicAlerts(categoryChanges(newCategoryAlerts(docs, knownIds), prior), locations);
+        const fresh = newCategoryAlerts(docs, knownIds);
+        const publicChanges = categoryChanges(fresh, prior);
+        const summary = (await publicAlerts(publicChanges, locations)) ?? {};
+        // Counts for the Ops page (status.json): city + category messages sent or skipped. "Not new": NWS re-issues
+        // (new ids) that changed nothing for a city, so no email. No subscriber data is saved here.
+        const notNew = fresh.reduce((a, d) => a + d.location_ids.length, 0) - publicChanges.reduce((a, c) => a + c.cities.length, 0);
+        run.set?.({ public_alerts: { sent: summary.published ?? 0, cooldown: summary.cooldown ?? 0, not_new: notNew, failed: summary.failed ?? 0 } });
       } catch (err) {
         console.error(`[alerts:public] failed (${err?.name ?? "Error"}): ${err?.message ?? err}`);
       }

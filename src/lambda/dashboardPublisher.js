@@ -5,8 +5,12 @@
 //                   (Open-Meteo archive; the dashboard lays it over the bundled snapshot's daily files)
 //   forecasts.json  latest hourly forecast per model (NWS from Atlas, Open-Meteo models fetched here) + NWS day/night periods
 //   alerts.json     active NWS alerts (from Atlas, written by the NWS collector Lambda)
+//   status.json     every run, last: job health, freshness and incidents of the last 7 days for the Ops page, from
+//                   pipeline_runs (src/publish/opsStatus.js; this run's own entry is not finished yet, so the
+//                   publisher job shows its previous run)
 // Forecast accuracy stays in the bundled snapshot (it needs the local ClickHouse forecast history).
 // Every file passes the snapshot's FORBIDDEN check before upload, and uploads are capped per day (ledger in Atlas).
+// Each run is recorded in pipeline_runs (stage "publish", mode "dashboard").
 // The handler never throws, so Lambda doesn't retry (and send the same email three times).
 
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
@@ -22,6 +26,8 @@ import { archiveEndDay } from "../stage1/openMeteoHistory.js";
 import { coversLocation, fetchRunTimes, maxLeadHours } from "../stage1/openMeteoForecast.js";
 import { usAverage } from "../publish/usAverage.js";
 import { DAY_MS, apiTime, columns, compactForecast, dailyStats, dayMs, publicJson, toDay } from "../publish/snapshotFormat.js";
+import { WINDOW_DAYS, buildStatus, publicStatusJson } from "../publish/opsStatus.js";
+import { RunLog } from "../lib/runLog.js";
 import { getSecureParameter } from "./ssmParameter.js";
 
 export const PARTS = ["history", "forecasts", "alerts"];
@@ -41,7 +47,10 @@ export const FILES = {
   history: { name: "recent.json", cacheControl: "public, max-age=900, s-maxage=10800" },
   forecasts: { name: "forecasts.json", cacheControl: "public, max-age=300, s-maxage=1800" },
   alerts: { name: "alerts.json", cacheControl: "public, max-age=300, s-maxage=1800" },
+  status: { name: "status.json", cacheControl: "public, max-age=300, s-maxage=1800" },
 };
+// status.json has its own PUT ledger (8 runs / day + a few manual ones), so it never takes the other files' budget.
+const STATUS_MAX_PUTS_PER_DAY = 10;
 
 const floorHour = (date) => new Date(Math.floor(date.getTime() / HOUR_MS) * HOUR_MS);
 /** Weighted Open-Meteo calls: billed per 10 variables (× models) and per 14 days. */
@@ -181,11 +190,23 @@ export async function buildAlerts(store, { now }) {
   return { data: { format: FORMAT, generated_at: now.toISOString(), alerts }, errors: [] };
 }
 
+// ---- status.json --------------------------------------------------------------------------------------------------
+const RUN_FIELDS = { _id: 0, stage: 1, mode: 1, status: 1, started_at: 1, duration_ms: 1, errors: 1, public_alerts: 1,
+  history_as_of: 1, forecasts_generated_at: 1 };
+
+export async function buildOpsStatus(store, locations, { now, freshness }) {
+  const runs = await store.find(COLLECTIONS.pipelineRuns.name, { started_at: { $gte: new Date(now.getTime() - WINDOW_DAYS * DAY_MS) } },
+    { sort: { started_at: 1 }, projection: RUN_FIELDS });
+  return buildStatus({ runs, locations, now, freshness });
+}
+
 // ---- upload -------------------------------------------------------------------------------------------------------
 async function upload(s3, store, part, data, now) {
   const { name, cacheControl } = FILES[part];
-  const body = publicJson(name, data);   // throws on anything internal: nothing is uploaded
-  await new ApiBudget(store, "s3-dashboard", { perHour: Infinity, perDay: config.aws.dashboardMaxPutsPerDay }).reserve(1, now);
+  // Throws on anything internal: nothing is uploaded. status.json is also rebuilt from a whitelist first.
+  const body = part === "status" ? publicStatusJson(data) : publicJson(name, data);
+  const [ledger, perDay] = part === "status" ? ["s3-dashboard-status", STATUS_MAX_PUTS_PER_DAY] : ["s3-dashboard", config.aws.dashboardMaxPutsPerDay];
+  await new ApiBudget(store, ledger, { perHour: Infinity, perDay }).reserve(1, now);
   await s3.send(new PutObjectCommand({
     Bucket: config.aws.dashboardBucket,
     Key: `${config.aws.dashboardPrefix}${name}`,
@@ -226,10 +247,15 @@ export function createHandler({
     const warnings = [];
     let store = null;
     let s3 = null;
+    let run = null;
+    const freshness = {};   // what this run published, for status.json and the run record
     try {
       mongoUri ??= await getParameter(config.aws.mongoUriParam);
       store = makeStore(mongoUri);
       await store.connect();
+      // Best effort: a failing run record never stops the publishing.
+      run = await new RunLog(store, { stage: "publish", mode: "dashboard" }).start()
+        .catch((err) => { console.warn(`[dashboard] run record: ${redact(err.message)}`); return null; });
       s3 = makeS3();
       const locations = await store.find(COLLECTIONS.locations.name, {}, { sort: { id: 1 } });
       if (!locations.length) throw new Error("no locations in the store");
@@ -244,20 +270,38 @@ export function createHandler({
           const { data, errors } = await builders[part]();
           warnings.push(...errors.map((e) => `${part}: ${e}`));
           uploaded.push(await upload(s3, store, part, data, now));
+          if (part === "history") freshness.historyThrough = data.data_as_of;
+          if (part === "forecasts") freshness.forecastUpdatedAt = data.generated_at;
         } catch (err) {
           failed.push(`${part}: ${redact(err.message)}`);
         }
       }
+      try {   // last, so it reports this run's files
+        uploaded.push(await upload(s3, store, "status", await buildOpsStatus(store, locations, { now, freshness }), now));
+      } catch (err) {
+        failed.push(`status: ${redact(err.message)}`);
+      }
     } catch (err) {
       mongoUri = null;   // re-read next time (the parameter may have been rotated)
       failed.push(redact(err?.message ?? err));
+    }
+    // status.json alone doesn't make a run partial: it failed if none of the data files went up.
+    const status = failed.length ? (uploaded.some((u) => u.name !== FILES.status.name) ? "partial" : "failed") : "success";
+    try {
+      if (run) {
+        run.set({ parts, uploaded: uploaded.map((u) => u.name), warning_count: warnings.length,
+          history_as_of: freshness.historyThrough ?? null, forecasts_generated_at: freshness.forecastUpdatedAt ? new Date(freshness.forecastUpdatedAt) : null });
+        const [first, ...rest] = failed;
+        for (const f of status === "failed" ? rest : failed) run.error(null, new Error(f));
+        await run.finish(status === "failed" ? new Error(first) : undefined)
+          .catch((err) => console.warn(`[dashboard] run record: ${redact(err.message)}`));
+      }
     } finally {
       await store?.close().catch((err) => console.warn(`[dashboard] close: ${redact(err.message)}`));
       s3?.destroy?.();
     }
     for (const u of uploaded) console.log(`[dashboard] ${config.aws.dashboardPrefix}${u.name}: ${u.kb} KB`);
     for (const w of warnings.slice(0, 20)) console.warn(`[dashboard] ${w}`);
-    const status = failed.length ? (uploaded.length ? "partial" : "failed") : "success";
     if (failed.length) {
       console.error(`[dashboard] ${status}: ${failed.join("; ")}`);
       await notifier.notify({ level: status === "failed" ? "error" : "warn", title: `Lambda dashboard publisher ${status}`, message: failed.join("\n") });

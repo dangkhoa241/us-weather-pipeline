@@ -16,7 +16,7 @@ const LOCATIONS = [
 const at = (iso) => new Date(iso);
 
 /** In-memory stand-in for the Atlas RawStore: just the calls the publisher makes. */
-function fakeStore({ alerts = [], snapshots = [] } = {}) {
+function fakeStore({ alerts = [], snapshots = [], runs = [] } = {}) {
   const usage = new Map();
   const matches = (doc, filter) => Object.entries(filter).every(([k, v]) => {
     if (k === "$or") return v.some((f) => matches(doc, f));
@@ -25,9 +25,12 @@ function fakeStore({ alerts = [], snapshots = [] } = {}) {
     }
     return v instanceof Date ? doc[k]?.getTime() === v.getTime() : (doc[k] ?? null) === v;
   });
-  const data = { locations: LOCATIONS, alerts, forecast_snapshots: snapshots };
+  const data = { locations: LOCATIONS, alerts, forecast_snapshots: snapshots, pipeline_runs: [...runs] };
   return {
     usage,
+    data,
+    insertOne: vi.fn(async (name, doc) => { (data[name] ??= []).push({ ...doc }); }),
+    updateOne: vi.fn(async (name, filter, set) => { Object.assign(data[name].find((d) => matches(d, filter)), set); }),
     connect: vi.fn(async () => {}),
     close: vi.fn(async () => {}),
     find: vi.fn(async (name, filter = {}, { sort } = {}) => {
@@ -152,7 +155,7 @@ describe("dashboard publisher handler", () => {
   it("uploads forecasts.json and alerts.json by default, private-bucket style (SSE-S3, cache headers, JSON)", async () => {
     const { handler, send, body } = setup({ store: fakeStore({ snapshots: [...nwsSnapshots("chicago-il"), ...nwsSnapshots("honolulu-hi")] }) });
     const out = await handler({});
-    expect(out).toMatchObject({ status: "success", uploaded: ["forecasts.json", "alerts.json"], failed: 0 });
+    expect(out).toMatchObject({ status: "success", uploaded: ["forecasts.json", "alerts.json", "status.json"], failed: 0 });
     const inputs = send.mock.calls.map(([c]) => { expect(c).toBeInstanceOf(PutObjectCommand); return c.input; });
     expect(inputs[0]).toMatchObject({ Bucket: "weather-pipeline-raw-123456789012", Key: "dashboard/forecasts.json",
       ContentType: "application/json; charset=utf-8", CacheControl: FILES.forecasts.cacheControl, ServerSideEncryption: "AES256" });
@@ -173,7 +176,7 @@ describe("dashboard publisher handler", () => {
     // A clock years away from today: if the code read the real date, the window (and these dates) would differ.
     const { handler, getJson, body } = setup({ clock: () => new Date("2031-03-15T06:35:00Z") });
     const out = await handler({ parts: ["history"] });
-    expect(out.uploaded).toEqual(["recent.json"]);
+    expect(out.uploaded).toEqual(["recent.json", "status.json"]);
     // archive lag 5 days → ends 2031-03-10; DASHBOARD_RECENT_DAYS=3 → starts 2031-03-08
     const archive = getJson.mock.calls.map(([url]) => new URL(url)).filter((u) => u.hostname.startsWith("archive"));
     expect(archive.map((u) => [u.searchParams.get("start_date"), u.searchParams.get("end_date")]))
@@ -184,16 +187,16 @@ describe("dashboard publisher handler", () => {
   it("publishes recent.json only when asked", async () => {
     const { handler, body } = setup();
     const out = await handler({ parts: ["history"] });
-    expect(out.uploaded).toEqual(["recent.json"]);
+    expect(out.uploaded).toEqual(["recent.json", "status.json"]);
     expect(body("recent.json")).toMatchObject({ format: 1, days: 3 });
   });
 
   it("stops at the daily PUT cap and says so", async () => {
     const { handler, send, notifier } = setup();
-    await handler({ parts: ["history", "forecasts", "alerts"] });   // 3 PUTs = the cap
+    await handler({ parts: ["history", "forecasts", "alerts"] });   // 3 PUTs = the cap (status.json has its own)
     const out = await handler({ parts: ["alerts"] });
-    expect(out.status).toBe("failed");
-    expect(send).toHaveBeenCalledTimes(3);
+    expect(out).toMatchObject({ status: "failed", uploaded: ["status.json"] });   // status.json alone: still failed
+    expect(send.mock.calls.map(([c]) => c.input.Key).filter((k) => k !== "dashboard/status.json")).toHaveLength(3);
     expect(notifier.notify).toHaveBeenLastCalledWith(expect.objectContaining({ level: "error", message: expect.stringMatching(/s3-dashboard daily budget/) }));
   });
 
@@ -201,11 +204,53 @@ describe("dashboard publisher handler", () => {
     const store = fakeStore({ alerts: [{ id: "x", event: "see mongodb+srv://u:p@host", expires: null, states: [], location_ids: [] }] });
     const { handler, send, notifier } = setup({ store });
     const out = await handler({ parts: ["history", "alerts"] });
-    expect(out).toMatchObject({ status: "partial", uploaded: ["recent.json"] });
-    expect(send.mock.calls.map(([c]) => c.input.Key)).toEqual(["dashboard/recent.json"]);
+    expect(out).toMatchObject({ status: "partial", uploaded: ["recent.json", "status.json"] });
+    expect(send.mock.calls.map(([c]) => c.input.Key)).toEqual(["dashboard/recent.json", "dashboard/status.json"]);
     const [event] = notifier.notify.mock.calls.at(-1);
     expect(event.level).toBe("warn");
     expect(event.message).not.toMatch(/u:p@host/);
+  });
+
+  it("publishes status.json last, from pipeline_runs and this run's files, and records its own run", async () => {
+    const runs = [
+      { stage: "stage1", mode: "forecast", status: "partial", started_at: at("2026-10-02T09:07:00Z"), duration_ms: 88_000,
+        errors: [{ location_id: "chicago-il", message: "periods: HTTP 500 for https://api.weather.gov/gridpoints/LOT/1,2" }] },
+      { stage: "stage1", mode: "alerts", status: "success", started_at: at("2026-10-02T11:23:00Z"), duration_ms: 8_000,
+        public_alerts: { sent: 1, cooldown: 2, not_new: 3, failed: 0 } },
+      { stage: "publish", mode: "dashboard", status: "success", started_at: at("2026-10-02T09:35:00Z"), duration_ms: 40_000,
+        history_as_of: "2026-09-26", forecasts_generated_at: at("2026-10-02T09:36:00Z") },
+    ];
+    const store = fakeStore({ runs, snapshots: nwsSnapshots("chicago-il") });
+    const { handler, send, body } = setup({ store });
+    const out = await handler({});
+    expect(out.uploaded.at(-1)).toBe("status.json");
+    expect(send.mock.calls.at(-1)[0].input).toMatchObject({ Key: "dashboard/status.json", CacheControl: FILES.status.cacheControl, ServerSideEncryption: "AES256" });
+    const status = body("status.json");
+    expect(status.generatedAt).toBe(NOW.toISOString());
+    expect(status.jobs.map((j) => [j.id, j.lastStatus, j.lastRunAt])).toEqual([
+      ["alerts", "ok", "2026-10-02T11:23:00.000Z"],
+      ["forecast", "partial", "2026-10-02T09:07:00.000Z"],
+      ["publisher", "ok", "2026-10-02T09:35:00.000Z"],   // the previous run: this one isn't finished yet
+    ]);
+    // forecasts from this run, history from the last run that published it
+    expect(status.freshness).toEqual({ historyThrough: "2026-09-26", forecastUpdatedAt: NOW.toISOString() });
+    expect(status.incidents.map((i) => i.text)).toEqual(["Forecast collector run: NWS error, not recovered yet"]);   // no city name in this fixture
+    expect(status.alerts7d).toEqual({ sent: 1, skippedCooldown: 2, skippedNotNew: 3, runsCounted: 1 });
+
+    const own = store.data.pipeline_runs.find((r) => r.etl_batch_id);
+    expect(own).toMatchObject({ stage: "publish", mode: "dashboard", status: "success", uploaded: ["forecasts.json", "alerts.json", "status.json"],
+      history_as_of: null, forecasts_generated_at: NOW });
+  });
+
+  it("still publishes status.json when every data file fails, and records the run as failed", async () => {
+    const store = fakeStore({ alerts: [{ id: "x", event: "see mongodb+srv://u:p@host", expires: null, states: [], location_ids: [] }] });
+    const { handler, body } = setup({ store });
+    const out = await handler({ parts: ["alerts"] });
+    expect(out).toMatchObject({ status: "failed", uploaded: ["status.json"] });
+    expect(body("status.json").jobs).toHaveLength(3);
+    const own = store.data.pipeline_runs.find((r) => r.etl_batch_id);
+    expect(own).toMatchObject({ status: "failed", error_count: 1 });
+    expect(JSON.stringify(own)).not.toContain("u:p@host");
   });
 
   it("rejects a bad event without touching AWS", async () => {
