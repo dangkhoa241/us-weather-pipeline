@@ -138,7 +138,7 @@ Cost follow-ups:
 - AWS (Free plan, $0): NWS collection on Lambda + EventBridge (~960 runs / month, ~2% of the free GB-s; forecast run
   106 requests → ~9,000 rows in ~88 s at 168 MB), SNS alerts, 30-day S3 archive (~33% of free PUTs, ≤ 40% by hard caps);
   one SAM stack, permissions boundary on every role, removed by `npm run aws:teardown`.
-- Tests: 317 Vitest tests (167 backend + 150 dashboard), no Docker needed, run in GitHub Actions CI; 23 automated checks on the static demo build.
+- Tests: 366 Vitest tests (203 backend + 163 dashboard), no Docker needed, run in GitHub Actions CI; 24 automated checks on the static demo build.
 
 ## Known limitations
 
@@ -179,6 +179,11 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
   with different attributes"): the user sees "check your inbox" but gets no email (logged as `subscribe_failed`).
   Re-signing up within 24 h is also silently skipped by the per-email cooldown (`email_cooldown`). Both are by design of
   the generic answer; for testing, use a `+alias` address.
+- Ops page: the alert-email counts start at the first alerts run after deploy ("Not recorded yet" before), and
+  the publisher card shows its previous completed run (status.json is written before its own run record finishes).
+  A Lambda killed by its timeout leaves its run as "running"; after 30 min the page counts it as failed ("timeout").
+  With live history but no live `status.json` (before deploy, or CloudFront down), the header badge's "history
+  through" (live) can be newer than the Ops page's bundled freshness. Incidents use a city's first error category.
 - `npm audit`: 1 high in a dev-only dependency (`source-map-js` via the test/build tools, also on `main`); production
   dependencies: 0.
 - NWS Lambda: a run that hits the 5 min timeout sends no SNS email (only the Lambda error in its logs). It doesn't seed
@@ -457,6 +462,14 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
   - [x] After a successful sign-up the dialog now shows a "check your inbox" screen (it used to stay on the form, so it
         looked as if nothing happened); the Lambda re-reads SSM after `invalid-input-secret` (committed; change set 3,
         sign-up function code only, not deployed yet)
+- [x] Pipeline Ops page, Stage 1 build (2026-10-13, branch `feature/pipeline-ops`, not deployed): `/ops` in the dashboard
+      (job cards with a text label next to each dot, freshness, incidents and alert-email counts of the last 7 days, the
+      Redis benchmark, stale banner after 6 h, Live / Snapshot label); the publisher writes `status.json` last in every
+      run from `pipeline_runs` (whitelist sanitizer + leak check, error text mapped to fixed categories only) and records
+      its own run (`stage: "publish"`); alerts runs save `public_alerts` counts (sent, cooldown, not new). No new AWS
+      service and no IAM change (the publisher already reads Atlas); `status.json` has its own PUT cap (10 / day):
+      +8 PUTs / day → S3 PUTs ~71% of the free 2,000 / month expected, ≤ 82% at all caps. Bundled fallback:
+      `npm run export:status`. CSP unchanged. 49 new tests (36 backend + 13 dashboard), 24/24 demo checks
 
 ## Cross-cutting
 

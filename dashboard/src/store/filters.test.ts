@@ -72,6 +72,7 @@ describe("pages and accuracy filters", () => {
   it("maps paths to pages (unknown paths → overview)", () => {
     expect(pageFromPath("/forecast")).toBe("forecast");
     expect(pageFromPath("/accuracy/")).toBe("accuracy");
+    expect(pageFromPath("/ops")).toBe("ops");
     expect(pageFromPath("/")).toBe("overview");
     expect(pageFromPath("/admin")).toBe("overview");
   });

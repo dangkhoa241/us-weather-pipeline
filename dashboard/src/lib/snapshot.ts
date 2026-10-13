@@ -56,7 +56,7 @@ const liveTimes = new Map<"forecasts" | "alerts", string>();
 let liveForecasts: Promise<z.infer<typeof forecastsSchema> | null> | null = null;
 
 /** A live file, or null if none is configured or it fails, takes longer than LIVE_TIMEOUT_MS or doesn't validate. */
-async function fetchLive<S extends z.ZodType>(name: string, schema: S): Promise<z.infer<S> | null> {
+export async function fetchLive<S extends z.ZodType>(name: string, schema: S): Promise<z.infer<S> | null> {
   if (!LIVE_URL) return null;
   try {
     const res = await fetch(`${LIVE_URL}/${name}`, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(LIVE_TIMEOUT_MS) });
