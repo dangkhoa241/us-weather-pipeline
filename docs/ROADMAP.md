@@ -138,7 +138,7 @@ Cost follow-ups:
 - AWS (Free plan, $0): NWS collection on Lambda + EventBridge (~960 runs / month, ~2% of the free GB-s; forecast run
   106 requests → ~9,000 rows in ~88 s at 168 MB), SNS alerts, 30-day S3 archive (~33% of free PUTs, ≤ 40% by hard caps);
   one SAM stack, permissions boundary on every role, removed by `npm run aws:teardown`.
-- Tests: 370 Vitest tests (205 backend + 165 dashboard), no Docker needed, run in GitHub Actions CI; 24 automated checks on the static demo build.
+- Tests: 398 Vitest tests (205 backend + 193 dashboard), no Docker needed, run in GitHub Actions CI; 26 automated checks on the static demo build.
 
 ## Known limitations
 
@@ -477,6 +477,15 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       service and no IAM change (the publisher already reads Atlas); `status.json` has its own PUT cap (10 / day):
       +8 PUTs / day → S3 PUTs ~71% of the free 2,000 / month expected, ≤ 82% at all caps. Bundled fallback:
       `npm run export:status`. CSP unchanged. 53 new tests (38 backend + 15 dashboard), 24/24 demo checks
+- [x] How it works page, Stage 2 build (2026-10-14, branch `feature/how-it-works`, frontend only, not merged):
+      `/how-it-works`, lazy-loaded (main chunk +0.9 KB; the page is its own ~25 KB chunk). SVG + React, no new
+      dependencies: Data flow (10 parts) and AWS (12 parts) views in lanes by where each part runs (External / AWS /
+      Local laptop) with stage columns; border patterns + text tags, not color alone; moving dots along the edges, static
+      arrows under prefers-reduced-motion; keyboard nodes (Tab, Enter/Space, Esc) opening a side panel (bottom sheet
+      on phones) with what / why / one sourced number and a constant repo doc link (`noopener noreferrer`); live
+      "last run" badges from status.json (snapshot-labelled, hidden when unavailable); plain-text summary; stacked
+      layout at phone width. Public-safe data file (service names only), checked by a leak-pattern test.
+      Glossary: ETL, CDN, Serverless function. 28 new dashboard tests, 2 new demo checks
 
 ## Cross-cutting
 
