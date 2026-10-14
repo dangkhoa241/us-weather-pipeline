@@ -57,8 +57,8 @@ numbers before merging the winner (the compare-3-and-review process from my earl
   - ClickHouse Cloud: trial only.
 - **Trade-off:** ClickHouse is self-hosted, so the warehouse is not reachable from the public site. That is why the
   public site reads static files (decision 6).
-- **Evidence:** **1.74 M** hourly observations (53 cities, from 2023-01-01) and **3.05 M** forecast snapshots are
-  loaded incrementally. Source: [README.md](../README.md), "By the numbers".
+- **Evidence:** as of 2026-10-09, **1.75 M** hourly observations (53 cities, from 2023-01-01) and **3.42 M** forecast
+  snapshots are loaded incrementally. Source: [README.md](../README.md), "By the numbers".
 
 ## 4. Redis cache: versioned cache-aside plus a small pre-warm list
 
@@ -169,8 +169,8 @@ numbers before merging the winner (the compare-3-and-review process from my earl
 - **Alternatives considered:** ranking every model from day one; hiding new models until they qualify.
 - **Trade-off:** NWS, the official forecast, isn't ranked yet. The head-to-head note shows how it compares without
   claiming a rank.
-- **Evidence:** NWS had **3** scored days at the snapshot; on the **362** city-hours both were scored on, ECMWF missed
-  by 1.55 °F and NWS by 1.96 °F, too small a sample to rank. Source: [ROADMAP.md](ROADMAP.md), resume numbers.
+- **Evidence:** as of 2026-10-09, NWS had **11** scored days, under the 30 needed. On the **3,222** city-hours both
+  were scored on, ECMWF missed by 1.58 °F and NWS by 1.93 °F. Source: [ROADMAP.md](ROADMAP.md), resume numbers.
 
 ---
 

@@ -32,7 +32,8 @@
     "test:dashboard": "npm --prefix dashboard test",
     "typecheck": "npm --prefix dashboard run typecheck",
     "export:snapshot": "node scripts/exportSnapshot.js",
-    "export:status": "node scripts/exportStatus.js"
+    "export:status": "node scripts/exportStatus.js",
+    "refresh:snapshot": "node scripts/refreshSnapshot.js"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1148.0",
