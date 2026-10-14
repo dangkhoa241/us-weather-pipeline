@@ -1,19 +1,20 @@
 // SVG flow diagram for the "How it works" page (lib/howItWorks.ts holds the data). Nodes are keyboard buttons
-// (Tab, Enter/Space); where each part runs is shown by lane, border pattern and a text tag, never by color alone.
+// (Tab, Enter/Space; selecting the open node again closes its panel, so does a click on empty diagram space); where
+// each part runs is shown by lane, border pattern and a text tag, never by color alone.
 // Dots move along the edges to show data flowing; with prefers-reduced-motion there are no dots, only static arrows.
-import { useId, useState, type KeyboardEvent } from "react";
+import { useId, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { NODES, WHERE, edgePath, type NodeId, type View } from "@/lib/howItWorks";
 
 export type NodeBadges = Partial<Record<NodeId, string>>;
 type Props = {
   view: View; desktop: boolean; reducedMotion: boolean; badges: NodeBadges;
-  selected: NodeId | null; onOpen: (id: NodeId) => void;
+  selected: NodeId | null; onOpen: (id: NodeId) => void; onBackground: () => void;
   nodeRef: (id: NodeId, el: SVGGElement | null) => void;
 };
 
 const STROKE: Record<string, string> = { aws: "stroke-foreground", local: "stroke-foreground/80", external: "stroke-muted-foreground" };
 
-export function FlowDiagram({ view, desktop, reducedMotion, badges, selected, onOpen, nodeRef }: Props) {
+export function FlowDiagram({ view, desktop, reducedMotion, badges, selected, onOpen, onBackground, nodeRef }: Props) {
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const [focused, setFocused] = useState<NodeId | null>(null);
   const layout = desktop ? view.desktop : view.mobile;
@@ -24,11 +25,16 @@ export function FlowDiagram({ view, desktop, reducedMotion, badges, selected, on
   const key = (id: NodeId) => (ev: KeyboardEvent) => {
     if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onOpen(id); }
   };
+  // A click anywhere in the diagram that isn't on a node (lanes, edges, labels, empty space).
+  const background = (ev: MouseEvent) => {
+    if (!(ev.target as Element).closest("[data-flow-node]")) onBackground();
+  };
 
   return (
     <svg viewBox={`0 0 ${layout.width} ${layout.height}`} className={`h-auto w-full ${desktop ? "" : "mx-auto max-w-[420px]"}`}
       role="group" aria-label={`${view.title} diagram: ${view.nodes.length} parts. Select one for details.`}
-      data-flow-view={view.id} data-flow-layout={desktop ? "desktop" : "mobile"} data-motion={reducedMotion ? "reduced" : "animated"}>
+      data-flow-view={view.id} data-flow-layout={desktop ? "desktop" : "mobile"} data-motion={reducedMotion ? "reduced" : "animated"}
+      onClick={background}>
       <defs>
         <marker id={`${uid}-arrow`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M0,0 L10,5 L0,10 z" className="fill-muted-foreground" />

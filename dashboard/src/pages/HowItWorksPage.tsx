@@ -101,6 +101,8 @@ export default function HowItWorksPage({ now: fixedNow }: { now?: number }) {
     setOpen(null);
     if (id) nodeEls.current.get(id)?.focus();
   };
+  // Selecting the node whose panel is open closes it (click, Enter or Space), like a disclosure button.
+  const toggle = (id: NodeId) => (id === open ? close() : setOpen(id));
   useEffect(() => {
     if (!open) return;
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
@@ -138,7 +140,7 @@ export default function HowItWorksPage({ now: fixedNow }: { now?: number }) {
             </ul>
           </div>
           <FlowDiagram view={view} desktop={desktop} reducedMotion={reducedMotion} badges={badges} selected={open}
-            onOpen={setOpen} nodeRef={(id, el) => { if (el) nodeEls.current.set(id, el); else nodeEls.current.delete(id); }} />
+            onOpen={toggle} onBackground={() => { if (open) close(); }} nodeRef={(id, el) => { if (el) nodeEls.current.set(id, el); else nodeEls.current.delete(id); }} />
           {!desktop && <p className="text-xs text-muted-foreground">On small screens only the main connections are drawn; each part's details list all of them.</p>}
         </CardContent>
       </Card>
