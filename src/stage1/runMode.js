@@ -10,6 +10,10 @@ import { backfillOpenMeteoRuns } from "./openMeteoBackfill.js";
 import { backfillBestMatchBaseline } from "./openMeteoBaseline.js";
 import { fetchAlerts } from "./nwsAlerts.js";
 import { syncFromAtlas } from "./atlasSync.js";
+import { fillForecastGaps, supersedeFilledSlots } from "./openMeteoGapFill.js";
+
+// Modes that don't loop over locations.
+const NO_LOCATIONS = new Set(["sync-atlas", "om-gap-supersede"]);
 
 export async function loadLocations(store, locationIds) {
   const filter = locationIds ? { id: { $in: locationIds } } : {};
@@ -30,6 +34,8 @@ export const JOBS = {
   "om-baseline": (store, locations, run, opts) => backfillBestMatchBaseline(store, locations, run, { days: opts.days }),
   alerts: (store, locations, run, opts) => fetchAlerts(store, locations, run, opts.notifier, opts.publicAlerts),
   "sync-atlas": (store, locations, run) => syncFromAtlas(store, run),
+  "om-gap-fill": (store, locations, run, opts) => fillForecastGaps(store, locations, run, { range: opts.range, dryRun: opts.dryRun, validate: opts.validate }),
+  "om-gap-supersede": async (store, locations, run) => run.add(0, { updated: await supersedeFilledSlots(store) }),
 };
 
 /** Run one mode with its own run log; returns the run summary. */
@@ -38,7 +44,7 @@ export async function runMode(mode, store, notifier, opts) {
   let summary;
   let locations = [];
   try {
-    locations = mode === "sync-atlas" ? [] : await loadLocations(store, opts.locationIds);
+    locations = NO_LOCATIONS.has(mode) ? [] : await loadLocations(store, opts.locationIds);
     await JOBS[mode](store, locations, run, { ...opts, notifier });
     summary = await run.finish();
   } catch (err) {

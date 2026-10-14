@@ -14,7 +14,9 @@ import { runMode } from "./src/stage1/runMode.js";
 import { runStage2 } from "./etlToClickHouse.js";
 import { runStage3 } from "./clickhouseToRedis.js";
 
-const STAGE1_MODES = ["sync-atlas", "history"];
+// om-gap-supersede: no API calls; excludes Previous Runs gap-fill rows whose slot now has a collected row (no double
+// counting in the accuracy views), right before Stage 2 loads them.
+const STAGE1_MODES = ["sync-atlas", "history", "om-gap-supersede"];
 
 /**
  * Run the pipeline once. `store` must be connected; the warehouse and cache are opened and closed here.
