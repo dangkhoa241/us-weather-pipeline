@@ -140,6 +140,47 @@ Cost follow-ups:
   one SAM stack, permissions boundary on every role, removed by `npm run aws:teardown`.
 - Tests: 398 Vitest tests (205 backend + 193 dashboard), no Docker needed, run in GitHub Actions CI; 26 automated checks on the static demo build.
 
+## Weekly refresh (at least every 7 days)
+
+**Why weekly:** Atlas keeps only **7 days** of NWS data (TTL), and only the laptop copies it into the local stack. If
+the laptop's Docker stack doesn't sync within 7 days, the oldest NWS forecasts and alerts are deleted from Atlas before
+they reach local MongoDB. (They stay in the 30-day S3 raw archive, but there is no restore script yet; see Known
+limitations.) The bundled snapshot also has to be re-exported at least every ~55 days, because `recent.json` covers 60.
+
+1. **Start the stack.** Open Docker Desktop and wait until `docker info` answers. Then run `docker compose up -d` and
+   check `docker compose ps`: mongo, clickhouse and redis must show `healthy`. The fetcher also starts; at startup it
+   warns if the last Atlas sync is old ("last successful Atlas sync … days ago").
+2. **Refresh everything:** `npm run refresh:snapshot`. It runs, in order, and stops at the first failure with the step's
+   name:
+   1. a Docker check;
+   2. `pipeline.js` (sync-atlas → incremental history → ETL to ClickHouse → Redis cache);
+   3. the API, started if needed;
+   4. `export:snapshot`;
+   5. `export:status`;
+   6. `build:snapshot`;
+   7. `check:demo`.
+
+   At the end it prints the new "data as of" dates. It never commits or pushes.
+3. **Confirm the sync finished.** In the output, each collection gets a line such as
+   `[sync-atlas] forecast_snapshots: N documents copied (up to <time>)`, followed by
+   `[pipeline] success … stage1:sync-atlas:success → …`. The "up to" times should be within the last hour. If the sync
+   fails, the run stops at step 2.
+4. **Review:** `git status` should show a new `dashboard/public/data/snapshot-<date>/`, the old one deleted, and an
+   updated `manifest.json` and `status.json`.
+5. **Commit and push:** run `npm run check:secrets`, then commit and push to main. Vercel redeploys the demo from main.
+
+**How long:** about **11 minutes**, measured on 2026-10-14 after an 8-day gap:
+
+| Step | Time |
+|---|---|
+| Pipeline (77.7 s of it the sync, which copied 338,230 forecast snapshots and 5,402 alerts) | 2 min 12 s |
+| `export:snapshot` (1,064 API calls) | 8 min 6 s |
+| `check:demo` | 24.5 s |
+| `build:snapshot` | 12.3 s |
+| the rest | a few seconds |
+
+A weekly run copies less from Atlas; the snapshot export takes about the same time every week.
+
 ## Known limitations
 
 Accepted for now (personal project: good enough beats perfect). Revisit only if they break something visible.
@@ -189,6 +230,10 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
   day fails its data uploads with "budget reached" (a failed run, an incident on /ops and an error email); only
   `status.json` (own cap of 10 / day) still goes up. Test by hand early in the UTC day, or raise the cap (~+30 PUTs /
   month per extra run, well inside the free 2,000) if manual runs become routine.
+- **NWS gap in the local data, 2026-10-06 03:07 → 2026-10-07 09:23 UTC:** the laptop's stack was off for 8 days
+  (last sync 2026-10-06 02:35 UTC), so Atlas deleted that window before the 2026-10-14 sync. Missing locally: 11
+  forecast runs and 31 alert runs. The S3 raw archive still holds all 11 forecast runs and 11 alert snapshots (alerts
+  are archived once per 3-hour slot) until about 2026-11-05 (30-day lifecycle). A restore script doesn't exist yet.
 - `npm audit`: 1 high in a dev-only dependency (`source-map-js` via the test/build tools, also on `main`); production
   dependencies: 0.
 - NWS Lambda: a run that hits the 5 min timeout sends no SNS email (only the Lambda error in its logs). It doesn't seed
