@@ -20,7 +20,7 @@ export type FlowNode = {
   id: string; label: string; sub: string; where: Where;
   what: string; why: string; note?: string;
   number?: { value: string; source: string };
-  doc?: string;            // repo path of the matching doc
+  doc: string;             // repo path of the matching component doc (docs/architecture/)
   badge?: Badge;           // live "last run" from status.json
 };
 
@@ -30,19 +30,21 @@ const nodes = {
     what: "The US National Weather Service: official 7-day forecasts and active alerts for the tracked cities.",
     why: "Free and official, no API key (only a User-Agent with a contact).",
     number: { value: "53 cities", source: "README.md" },
+    doc: "docs/architecture/nws-collector.md",
   },
   openmeteo: {
     id: "openmeteo", label: "Open-Meteo", sub: "history + 4 models", where: "external",
     what: "Hourly history from its archive, and forecasts from four weather models (ECMWF, GFS, ICON, HRRR).",
     why: "Free for non-commercial use, and it keeps past model runs, which scoring forecasts needs.",
     number: { value: "2,000 / hour and 6,000 / day: our call budget, kept under Open-Meteo's free limits", source: "docs/ROADMAP.md" },
+    doc: "docs/architecture/ingestion.md",
   },
   collector: {
     id: "collector", label: "NWS collector", sub: "serverless function", where: "aws", badge: "collector",
     what: "Runs on a schedule (alerts every hour, forecasts every 3 hours), saves NWS data to the Atlas buffer and a raw copy to S3, and emails alerts.",
     why: "A {Serverless function} inside the free tier, so collection keeps going when the laptop is off.",
     number: { value: "about 1.5 min per forecast run", source: "README.md" },
-    doc: "docs/SETUP_AWS.md",
+    doc: "docs/architecture/nws-collector.md",
   },
   atlas: {
     id: "atlas", label: "MongoDB Atlas", sub: "7-day buffer", where: "external",
@@ -50,47 +52,49 @@ const nodes = {
     why: "Free tier, and the same database driver as the local MongoDB.",
     note: "The sync runs when the laptop is on. Atlas keeps 7 days, so the laptop can be off for up to a week without losing NWS data.",
     number: { value: "7 days kept", source: "docs/ROADMAP.md" },
-    doc: "docs/SETUP_CLOUD_COLLECTION.md",
+    doc: "docs/architecture/nws-collector.md",
   },
   raw: {
     id: "raw", label: "MongoDB (raw)", sub: "Stage 1 fetcher", where: "local",
     what: "The fetcher saves Open-Meteo responses and the synced NWS data as raw documents, each with a unique key.",
     why: "Flexible raw copies, and re-running a fetch updates rows instead of adding duplicates.",
     number: { value: "3.42 M forecast snapshots", source: "README.md" },
+    doc: "docs/architecture/ingestion.md",
   },
   clickhouse: {
     id: "clickhouse", label: "ClickHouse", sub: "Stage 2 warehouse", where: "local",
     what: "{ETL} loads only the new raw rows into warehouse tables, with daily and monthly rollups in each city's local time.",
     why: "A columnar database: aggregates over years of hourly data stay fast.",
     number: { value: "1.75 M hourly rows", source: "README.md" },
+    doc: "docs/architecture/warehouse-etl.md",
   },
   redis: {
     id: "redis", label: "Redis", sub: "Stage 3 cache", where: "local",
     what: "Keeps the answers to the dashboard's queries, versioned so a new data load never serves stale answers.",
     why: "Repeated dashboard queries come from memory instead of the warehouse.",
     number: { value: "warm {p95} 35.4 → 2.9 ms", source: "docs/analysis/caching.md" },
-    doc: "docs/analysis/caching.md",
+    doc: "docs/architecture/cache.md",
   },
   api: {
     id: "api", label: "Hono API", sub: "Stage 4", where: "local",
     what: "A REST API with OpenAPI docs; it reads the cache and falls back to ClickHouse on a miss.",
     why: "Of the 3 frameworks compared, the lowest memory use and the smallest dependency tree.",
     number: { value: "{p95} 12.7 ms under load", source: "docs/analysis/api-layer.md" },
-    doc: "docs/analysis/api-layer.md",
+    doc: "docs/architecture/api.md",
   },
   publisher: {
     id: "publisher", label: "Publisher", sub: "S3 + CloudFront", where: "aws", badge: "publisher",
     what: "A {Serverless function} writes recent history, forecasts, alerts and pipeline status as JSON files to S3; CloudFront, a {CDN}, serves them.",
     why: "Small attack surface: static files only, no code runs per page view.",
     number: { value: "8 runs a day", source: "infra/template.yaml" },
-    doc: "docs/analysis/live-dashboard.md",
+    doc: "docs/architecture/live-publishing.md",
   },
   dashboard: {
     id: "dashboard", label: "Dashboard", sub: "React on Vercel", where: "external",
     what: "This site: a data snapshot bundled with each deploy, with the live files from CloudFront laid over it.",
     why: "Free static hosting; still works if live data is down (bundled snapshot fallback).",
     number: { value: "665 KB gzipped snapshot", source: "README.md" },
-    doc: "docs/DEPLOY_VERCEL.md",
+    doc: "docs/architecture/dashboard.md",
   },
   // AWS view only
   eventbridge: {
@@ -98,59 +102,62 @@ const nodes = {
     what: "Starts the functions on time: alerts every hour, forecasts every 3 hours, the publisher every 3 hours (history once a day).",
     why: "Scheduled rules cost nothing, and running at most hourly keeps usage far below the free limits.",
     number: { value: "4 schedule rules", source: "infra/template.yaml" },
+    doc: "docs/architecture/nws-collector.md",
   },
   awsPublisher: {
     id: "awsPublisher", label: "Publisher", sub: "serverless function", where: "aws", badge: "publisher",
     what: "Builds the live JSON files from Atlas and Open-Meteo, checks that nothing internal is in them, and writes them to S3.",
     why: "Static files instead of an API: no code runs per page view.",
     number: { value: "8 runs a day", source: "infra/template.yaml" },
-    doc: "docs/analysis/live-dashboard.md",
+    doc: "docs/architecture/live-publishing.md",
   },
   s3: {
     id: "s3", label: "S3", sub: "archive + live files", where: "aws",
     what: "Holds a 30-day raw archive of the API responses and the dashboard's live JSON files; the bucket stays private.",
     why: "Durable storage at no cost at this size; a lifecycle rule deletes old archive files.",
     number: { value: "30-day expiry", source: "infra/template.yaml" },
-    doc: "docs/SETUP_AWS.md",
+    doc: "docs/architecture/live-publishing.md",
   },
   cloudfront: {
     id: "cloudfront", label: "CloudFront", sub: "CDN", where: "aws",
     what: "A {CDN} that serves only the live files folder of the private bucket.",
     why: "Small attack surface: static files only, no code runs per page view.",
     number: { value: "about 3% of the free requests expected", source: "docs/analysis/live-dashboard.md" },
-    doc: "docs/analysis/live-dashboard.md",
+    doc: "docs/architecture/live-publishing.md",
   },
   snsOwner: {
     id: "snsOwner", label: "SNS (owner)", sub: "pipeline emails", where: "aws",
     what: "Emails the owner about failed runs and new heat alerts.",
     why: "Free email delivery from the same account, with no mail server to run.",
     number: { value: "under 150 emails a month", source: "README.md" },
+    doc: "docs/architecture/alerts-and-signups.md",
   },
   snsPublic: {
     id: "snsPublic", label: "SNS (subscribers)", sub: "alert emails", where: "aws",
     what: "Sends subscriber alert emails, one message per city and alert category; filters pick the recipients.",
     why: "A separate topic, so pipeline emails and subscriber emails never mix.",
     number: { value: "hard cap of 900 emails a month", source: "docs/analysis/email-signups.md" },
-    doc: "docs/analysis/email-signups.md",
+    doc: "docs/architecture/alerts-and-signups.md",
   },
   signup: {
     id: "signup", label: "Sign-up", sub: "function + URL", where: "aws",
     what: "Checks the form, the bot check and the limits, then adds an email subscription that the visitor confirms by email.",
     why: "A function URL instead of an API gateway: one small public endpoint.",
     number: { value: "128 MB, 8 s timeout", source: "infra/template.yaml" },
-    doc: "docs/analysis/email-signups.md",
+    doc: "docs/architecture/alerts-and-signups.md",
   },
   dynamodb: {
     id: "dynamodb", label: "DynamoDB", sub: "limits + budget", where: "aws",
     what: "Counters for rate limits, the monthly email budget and cooldowns; old entries expire on their own.",
     why: "Always-free fixed capacity: at worst it slows down, it is never billed.",
     number: { value: "1 read and 1 write capacity unit", source: "infra/template.yaml" },
+    doc: "docs/architecture/alerts-and-signups.md",
   },
   turnstile: {
     id: "turnstile", label: "Turnstile", sub: "bot check", where: "external",
     what: "Cloudflare's bot check on the sign-up form; the sign-up function verifies each answer on the server.",
     why: "Free, and it stops scripted sign-ups before any email is sent.",
-    doc: "docs/analysis/email-signups.md",
+    doc: "docs/architecture/alerts-and-signups.md",
   },
 } satisfies Record<string, FlowNode>;
 export type NodeId = keyof typeof nodes;
@@ -308,6 +315,6 @@ export const nodeSchema = z.object({
   where: z.enum(["external", "aws", "local"]),
   what: z.string().min(20).max(200), why: z.string().min(20).max(140), note: z.string().max(200).optional(),
   number: z.object({ value: z.string().min(1).max(100), source: z.string().regex(/^[A-Za-z0-9_./-]+\.(md|yaml)$/) }).optional(),
-  doc: z.string().regex(/^docs\/[A-Za-z0-9_./-]+\.md$/).optional(),
+  doc: z.string().regex(/^docs\/architecture\/[a-z0-9-]+\.md$/),
   badge: z.enum(["collector", "publisher"]).optional(),
 }).strict();

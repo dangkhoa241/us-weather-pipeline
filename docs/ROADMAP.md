@@ -139,7 +139,7 @@ Cost follow-ups:
 - AWS (Free plan, $0): NWS collection on Lambda + EventBridge (~960 runs / month, ~2% of the free GB-s; forecast run
   106 requests → ~9,000 rows in ~88 s at 168 MB), SNS alerts, 30-day S3 archive (~33% of free PUTs, ≤ 40% by hard caps);
   one SAM stack, permissions boundary on every role, removed by `npm run aws:teardown`.
-- Tests: 398 Vitest tests (205 backend + 193 dashboard), no Docker needed, run in GitHub Actions CI; 26 automated checks on the static demo build.
+- Tests: 446 Vitest tests (247 backend + 199 dashboard), no Docker needed, run in GitHub Actions CI; 26 automated checks on the static demo build.
 
 ## Weekly refresh (at least every 7 days)
 
@@ -533,6 +533,14 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       "last run" badges from status.json (snapshot-labelled, hidden when unavailable); plain-text summary; stacked
       layout at phone width. Public-safe data file (service names only), checked by a leak-pattern test.
       Glossary: ETL, CDN, Serverless function. 28 new dashboard tests, 2 new demo checks
+- [x] How it works fixes + component docs (2026-10-14, branch `fix/how-it-works-docs`, not merged): the open node (click,
+      Enter, Space) and a click on empty diagram space close the panel, on desktop and the phone sheet (focus stays on
+      the node; Esc unchanged). `docs/architecture/`: 9 engineering docs + index (purpose, requirements, design,
+      alternatives linked to DESIGN_DECISIONS.md, failure handling, security, sourced numbers, where in the code); every
+      node's "Read more" links one of them (none links a setup guide). SETUP_AWS.md, SETUP_CLOUD_COLLECTION.md and
+      DEPLOY_VERCEL.md reorganized as rebuild guides (Objective … Troubleshooting; step numbers kept), out-of-date facts
+      fixed. New root test checks each doc's sections and code paths and every relative link and anchor in docs/.
+      48 new tests (42 backend + 6 dashboard)
 
 ## Cross-cutting
 
@@ -540,7 +548,7 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       parent run with steps in `pipeline_runs`, failures sent to the Notifier
 - [x] Heat-wave alerts + pipeline-failure alerts via Notifier (SNS, Stage 6a)
 - [ ] Docker Compose: add API service (Wed)
-- [x] Unit tests: Vitest, 398 tests (205 backend + 193 dashboard; `npm test`, `npm run test:dashboard`)
+- [x] Unit tests: Vitest, 446 tests (247 backend + 199 dashboard; `npm test`, `npm run test:dashboard`)
 - [ ] Testcontainers integration tests (Sat) *(cut first if short on time)*
 - [x] GitHub Actions CI (`.github/workflows/ci.yml`)
 - [x] README with Mermaid architecture diagrams (data flow + AWS)

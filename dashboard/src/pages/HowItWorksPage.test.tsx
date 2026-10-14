@@ -57,7 +57,7 @@ describe("HowItWorksPage", () => {
     expect(panel).toHaveTextContent("source: docs/analysis/caching.md");
     expect(panel).toHaveTextContent("Gets data fromClickHouse");
     const link = within(panel).getByRole("link", { name: /Read more/ });
-    expect(link).toHaveAttribute("href", "https://github.com/dangkhoa241/us-weather-pipeline/blob/main/docs/analysis/caching.md");
+    expect(link).toHaveAttribute("href", "https://github.com/dangkhoa241/us-weather-pipeline/blob/main/docs/architecture/cache.md");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
     expect(link).toHaveAttribute("target", "_blank");
     expect(within(panel).getByRole("button", { name: "Close details" })).toHaveFocus();
@@ -79,6 +79,70 @@ describe("HowItWorksPage", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     await user.click(node("api"));
     expect(screen.getByRole("dialog", { name: /Hono API/ })).toBeInTheDocument();
+  });
+
+  it.each([["desktop side panel", true], ["phone bottom sheet", false]])(
+    "%s: clicking the open part, or pressing Enter on it, closes the panel and keeps focus on the part", async (_, isDesktop) => {
+      media.desktop = isDesktop;
+      const user = userEvent.setup();
+      show();
+      await user.click(node("redis"));
+      expect(screen.getByRole("dialog", { name: /Redis/ })).toBeInTheDocument();
+      await user.click(node("redis"));
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(node("redis")).toHaveFocus();
+      expect(node("redis")).toHaveAttribute("aria-expanded", "false");
+
+      node("redis").focus();
+      await user.keyboard("{Enter}");
+      expect(screen.getByRole("dialog", { name: /Redis/ })).toBeInTheDocument();
+      node("redis").focus();
+      await user.keyboard("{Enter}");
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(node("redis")).toHaveFocus();
+
+      // Space toggles too; another part switches the panel instead of closing it.
+      await user.keyboard(" ");
+      expect(screen.getByRole("dialog", { name: /Redis/ })).toBeInTheDocument();
+      await user.click(node("api"));
+      expect(screen.getByRole("dialog", { name: /Hono API/ })).toBeInTheDocument();
+      node("api").focus();
+      await user.keyboard(" ");
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+  it.each([["desktop side panel", true], ["phone bottom sheet", false]])(
+    "%s: a click on empty diagram space or an edge closes the panel and returns focus; Escape still works", async (_, isDesktop) => {
+      media.desktop = isDesktop;
+      const user = userEvent.setup();
+      show();
+      const svg = document.querySelector("[data-flow-view]") as SVGSVGElement;
+      await user.click(node("atlas"));
+      await user.click(svg);
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(node("atlas")).toHaveFocus();
+
+      await user.click(node("atlas"));
+      await user.click(svg.querySelector("[data-flow-edge]")!);
+      expect(screen.queryByRole("dialog")).toBeNull();
+
+      await user.click(node("atlas"));
+      await user.keyboard("{Escape}");
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(node("atlas")).toHaveFocus();
+
+      // With nothing open, a background click does nothing (no error, focus not moved to a node).
+      await user.click(svg);
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+  it("a click inside the open panel does not close it", async () => {
+    const user = userEvent.setup();
+    show();
+    await user.click(node("redis"));
+    const panel = screen.getByRole("dialog", { name: /Redis/ });
+    await user.click(within(panel).getByText("What it does"));
+    expect(screen.getByRole("dialog", { name: /Redis/ })).toBeInTheDocument();
   });
 
   it("the AWS view shows its 12 parts and closes an open panel", async () => {
