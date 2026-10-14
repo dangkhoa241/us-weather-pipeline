@@ -139,33 +139,49 @@ Cost follow-ups:
 - AWS (Free plan, $0): NWS collection on Lambda + EventBridge (~960 runs / month, ~2% of the free GB-s; forecast run
   106 requests → ~9,000 rows in ~88 s at 168 MB), SNS alerts, 30-day S3 archive (~33% of free PUTs, ≤ 40% by hard caps);
   one SAM stack, permissions boundary on every role, removed by `npm run aws:teardown`.
-- Tests: 446 Vitest tests (247 backend + 199 dashboard), no Docker needed, run in GitHub Actions CI; 26 automated checks on the static demo build.
+- Tests: 468 Vitest tests (269 backend + 199 dashboard), no Docker needed, run in GitHub Actions CI; 26 automated checks on the static demo build.
 
 ## Weekly refresh (at least every 7 days)
 
-**Why weekly:** Atlas keeps only **7 days** of NWS data (TTL), and only the laptop copies it into the local stack. If
-the laptop's Docker stack doesn't sync within 7 days, the oldest NWS forecasts and alerts are deleted from Atlas before
-they reach local MongoDB. (They stay in the 30-day S3 raw archive, but there is no restore script yet; see Known
-limitations.) The bundled snapshot also has to be re-exported at least every ~55 days, because `recent.json` covers 60.
+**Why weekly:** Atlas keeps only **7 days** of NWS data (TTL), and only the laptop copies it into the local stack. A
+weekly sync needs no extra step. If the laptop misses that window, the NWS forecasts and alerts it didn't sync are
+still in the 30-day S3 raw archive: `npm run restore:nws` brings them back (all forecast runs; alerts from the 3-hourly
+archived slots), so the **NWS safety window is 30 days**. The bundled snapshot also has to be re-exported at least
+every ~55 days, because `recent.json` covers 60.
+
+**Accuracy coverage (on hold).** Model-forecast accuracy depends on the Single Runs backfill, which needs the Docker
+stack on for hours a day until it catches up. Step 2 of the refresh can fill every empty accuracy slot of the last 90
+days from Open-Meteo's Previous Runs API instead (`om-gap-fill`, one request per model and city, inside the Open-Meteo
+budget), so that the laptop would no longer need to run daily for accuracy. It writes only after a `--validate` run has
+passed for every model, and the 2026-10-14 validation did not (ECMWF −0.21 °F, HRRR −0.13 °F, gate 0.1 °F; see
+`docs/analysis/previous-runs-validation.md`), so for now the step fills nothing and the laptop still needs to run for
+the backfill. When it fills, the backfill's rows take precedence over filled ones (`om-gap-supersede`).
 
 1. **Start the stack.** Open Docker Desktop and wait until `docker info` answers. Then run `docker compose up -d` and
    check `docker compose ps`: mongo, clickhouse and redis must show `healthy`. The fetcher also starts; at startup it
    warns if the last Atlas sync is old ("last successful Atlas sync … days ago").
+   **If the last sync is more than 7 days old**, restore from the archive before step 2, from the day of the last sync
+   (printed by the warning) to today: `npm run restore:nws -- --from <last sync day> --to <today>` (dry run), then the
+   same with `--apply`. It only inserts what is missing locally, so the overlap with what Atlas still holds is harmless.
 2. **Refresh everything:** `npm run refresh:snapshot`. It runs, in order, and stops at the first failure with the step's
    name:
    1. a Docker check;
-   2. `pipeline.js` (sync-atlas → incremental history → ETL to ClickHouse → Redis cache);
-   3. the API, started if needed;
-   4. `export:snapshot`;
-   5. `export:status`;
-   6. `build:snapshot`;
-   7. `check:demo`.
+   2. `om-gap-fill` (Previous Runs into empty accuracy slots, only after a passing validation; a partial fill only
+      warns, and stopping at the budget is not a failure: the rest is filled next week);
+   3. `pipeline.js` (sync-atlas → incremental history → supersede pass → ETL to ClickHouse → Redis cache);
+   4. the API, started if needed;
+   5. `export:snapshot`;
+   6. `export:status`;
+   7. `build:snapshot`;
+   8. `check:demo`.
 
    At the end it prints the new "data as of" dates. It never commits or pushes.
 3. **Confirm the sync finished.** In the output, each collection gets a line such as
    `[sync-atlas] forecast_snapshots: N documents copied (up to <time>)`, followed by
    `[pipeline] success … stage1:sync-atlas:success → …`. The "up to" times should be within the last hour. If the sync
-   fails, the run stops at step 2.
+   fails, the run stops at step 3. The gap fill prints its requests and weighted calls
+   (`[om-gap-fill] N requests, M weighted calls`) and a lead-day-1 MAE comparison; a model more than 0.1 °F apart is
+   flagged with a WARNING (check `docs/analysis/previous-runs-validation.md` before publishing).
 4. **Review:** `git status` should show a new `dashboard/public/data/snapshot-<date>/`, the old one deleted, and an
    updated `manifest.json` and `status.json`.
 5. **Commit and push:** run `npm run check:secrets`, then commit and push to main. Vercel redeploys the demo from main.
@@ -231,10 +247,26 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
   day fails its data uploads with "budget reached" (a failed run, an incident on /ops and an error email); only
   `status.json` (own cap of 10 / day) still goes up. Test by hand early in the UTC day, or raise the cap (~+30 PUTs /
   month per extra run, well inside the free 2,000) if manual runs become routine.
-- **NWS gap in the local data, 2026-10-06 03:07 → 2026-10-07 09:23 UTC:** the laptop's stack was off for 8 days
-  (last sync 2026-10-06 02:35 UTC), so Atlas deleted that window before the 2026-10-14 sync. Missing locally: 11
-  forecast runs and 31 alert runs. The S3 raw archive still holds all 11 forecast runs and 11 alert snapshots (alerts
-  are archived once per 3-hour slot) until about 2026-11-05 (30-day lifecycle). A restore script doesn't exist yet.
+- **NWS gap 2026-10-06 03:07 → 2026-10-07 09:23 UTC (restored 2026-10-14):** the laptop's stack was off for 8 days
+  (last sync 2026-10-06 02:35 UTC), so Atlas deleted that window before the 2026-10-14 sync. `restore:nws` brought
+  back all 11 forecast runs from the S3 raw archive (59,431 forecast documents) and the 11 archived alert slots (184
+  alerts, 27 of them for tracked cities). Still missing: alerts that started and ended between two archived 3-hour
+  slots. Their number can't be known (NWS `/alerts` only goes back 7 days); in the reference week 10-07 → 10-13, 18%
+  of alert ids (894 of 4,934; 61 of 254 for tracked cities) were seen only between slots, so roughly 70 alerts, about
+  10 for tracked cities, are probably lost. Restored documents carry `restored_from: "s3-archive"`.
+- `restore:nws`: reads the archive with the deploy profile (`weather-dev`, `~/.aws`) because the runtime user may only
+  write to the bucket. Restored alerts keep the latest archived version of each alert id; alerts that were already
+  stored are not updated (insert-only), so their `last_seen_at` can stay earlier than the restored slots.
+- Previous Runs gap fill (not applied yet, see the validation): its "day 1" scores 0.08–0.21 °F better than our
+  lead day 1 (24–47 h), probably a shorter lead; the fill stays off until a validation passes. Temperature only (other values stay null on filled rows); `issued_at` is approximate
+  (target − N days) and `lead_hours` is null, so filled rows count by lead day only and are left out of the biggest
+  misses (as for best_match). A slot's Previous Runs value comes from one run, a collected slot from up to 4 runs, so a
+  filled day weighs less in the pair count than a collected day. Lead day 7 of the 4 models comes only from Previous
+  Runs (the backfill and live forecasts fetch 7 days, lead days 0–6). A slot whose Previous Runs value is null is
+  requested again every week. The supersede pass runs inside `pipeline.js`, before its ETL; a standalone
+  `npm run etl:clickhouse` skips it, so a slot the backfill wrote since the last pipeline run can be scored twice in the
+  local ClickHouse until the next pipeline run. The Docker fetcher runs the pass only once it is rebuilt
+  (`docker compose up -d --build fetcher`).
 - `npm audit`: 1 high in a dev-only dependency (`source-map-js` via the test/build tools, also on `main`); production
   dependencies: 0.
 - NWS Lambda: a run that hits the 5 min timeout sends no SNS email (only the Lambda error in its logs). It doesn't seed
@@ -242,7 +274,7 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
   arrive twice if alerts are run locally by hand (`npm run fetch` / `fetch:watch` outside Docker), because Atlas and the
   local store each see the alert as new. The Docker fetcher has alerts off.
 - S3 raw archive: NWS alerts are kept once per 3-hour UTC slot (00, 03, … UTC; fetched hourly), so a failed run at
-  those hours leaves a 3-hour gap; `om-backfill` is not
+  those hours leaves a 3-hour gap (and a restore can't bring back alerts seen only between slots); `om-backfill` is not
   archived; a run's responses for one source stop being archived past 32 MB (only a big history catch-up); skipped
   or failed uploads are logged, not retried.
 - `best_match` baseline: `issued_at` is approximate (target − N days) and `lead_hours` is null; compare it by lead day only.
@@ -321,6 +353,13 @@ Security (low; from the security review of Stages 1–2, compose and workflows):
       `lead_days` exact, `issued_at` approximate, `lead_hours` null); live best_match collection stopped
 - [x] NWS collection in the cloud: GitHub Actions (forecasts every 3 h, alerts hourly) → MongoDB Atlas M0 with a 14-day TTL;
       `sync-atlas` copies it to local Mongo at watcher startup and daily; warning + `sync_stale` run if the last sync is > 7 days old
+- [x] `restore:nws`: NWS forecasts and alerts of a window from the 30-day S3 raw archive (collector transforms reused,
+      insert-only, dry run unless `--apply`); restored the 2026-10-06 03:07 → 10-07 09:23 gap (2026-10-14)
+- [x] `om-gap-fill`: empty (model, city, target hour, lead day 1–7) slots of the 4 backfilled models from the Previous
+      Runs API, insert-only, `fetch_method: previous_runs`; `--dry-run` / `--validate`; step 2 of `refresh:snapshot`;
+      `om-gap-supersede` in the pipeline excludes a filled row once a collected row lands in its slot (2026-10-14)
+- [ ] Fill the 2026-07-12 → 10-09 accuracy gaps: **on hold**, the validation is over 0.1 °F for ECMWF (−0.21) and HRRR
+      (−0.13); decide the lead definition first (`docs/analysis/previous-runs-validation.md`)
 - [x] **Start collecting forecasts today** (accuracy data needed by Friday): `fetcher` service in Docker Compose
       (`restart: unless-stopped`); on start it warns and records a `gap_detected` run if the newest snapshot is > 6 h old
 
@@ -548,7 +587,7 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       parent run with steps in `pipeline_runs`, failures sent to the Notifier
 - [x] Heat-wave alerts + pipeline-failure alerts via Notifier (SNS, Stage 6a)
 - [ ] Docker Compose: add API service (Wed)
-- [x] Unit tests: Vitest, 446 tests (247 backend + 199 dashboard; `npm test`, `npm run test:dashboard`)
+- [x] Unit tests: Vitest, 468 tests (269 backend + 199 dashboard; `npm test`, `npm run test:dashboard`)
 - [ ] Testcontainers integration tests (Sat) *(cut first if short on time)*
 - [x] GitHub Actions CI (`.github/workflows/ci.yml`)
 - [x] README with Mermaid architecture diagrams (data flow + AWS)
