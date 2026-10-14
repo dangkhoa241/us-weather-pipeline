@@ -57,7 +57,7 @@ describe("HowItWorksPage", () => {
     expect(panel).toHaveTextContent("source: docs/analysis/caching.md");
     expect(panel).toHaveTextContent("Gets data fromClickHouse");
     const link = within(panel).getByRole("link", { name: /Read more/ });
-    expect(link).toHaveAttribute("href", "https://github.com/dangkhoa241/us-weather-pipeline/blob/main/docs/analysis/caching.md");
+    expect(link).toHaveAttribute("href", "https://github.com/dangkhoa241/us-weather-pipeline/blob/main/docs/architecture/cache.md");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
     expect(link).toHaveAttribute("target", "_blank");
     expect(within(panel).getByRole("button", { name: "Close details" })).toHaveFocus();

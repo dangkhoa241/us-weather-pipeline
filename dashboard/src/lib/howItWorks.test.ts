@@ -55,12 +55,24 @@ describe("How it works data", () => {
   it("every number names a source file and every doc link points to a file that exists in the repo", () => {
     for (const n of Object.values(NODES)) {
       if (n.number) expect(inRepo(n.number.source), `${n.id}: ${n.number.source}`).toBe(true);
-      if (n.doc) {
-        expect(inRepo(n.doc), `${n.id}: ${n.doc}`).toBe(true);
-        expect(repoLink(n.doc)).toBe(`${REPO_URL}${n.doc}`);
-      }
+      expect(inRepo(n.doc), `${n.id}: ${n.doc}`).toBe(true);
+      expect(repoLink(n.doc)).toBe(`${REPO_URL}${n.doc}`);
     }
     expect(REPO_URL).toBe("https://github.com/dangkhoa241/us-weather-pipeline/blob/main/");
+  });
+
+  it("every node's Read more link is a component doc in docs/architecture/ (never a setup guide), and every component doc is linked", () => {
+    for (const n of Object.values(NODES)) {
+      expect(n.doc, n.id).toMatch(/^docs\/architecture\/[a-z0-9-]+\.md$/);
+      expect(n.doc, n.id).not.toMatch(/SETUP_|DEPLOY_/);
+      expect(inRepo(n.doc), `${n.id}: ${n.doc}`).toBe(true);
+    }
+    // The index README and the cross-cutting security doc have no node of their own; tests/architectureDocs.test.js
+    // checks every doc's sections and links.
+    const linked = new Set(Object.values(NODES).map((n) => n.doc));
+    const components = [...REPO_FILES].filter((f) => /^docs\/architecture\/[a-z0-9-]+\.md$/.test(f) && f !== "docs/architecture/security.md");
+    expect(components.length).toBeGreaterThanOrEqual(6);
+    for (const doc of components) expect(linked.has(doc), doc).toBe(true);
   });
 
   it("edge paths start and end on the node borders", () => {
