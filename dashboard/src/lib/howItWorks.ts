@@ -56,13 +56,13 @@ const nodes = {
     id: "raw", label: "MongoDB (raw)", sub: "Stage 1 fetcher", where: "local",
     what: "The fetcher saves Open-Meteo responses and the synced NWS data as raw documents, each with a unique key.",
     why: "Flexible raw copies, and re-running a fetch updates rows instead of adding duplicates.",
-    number: { value: "3.05 M forecast snapshots", source: "README.md" },
+    number: { value: "3.42 M forecast snapshots", source: "README.md" },
   },
   clickhouse: {
     id: "clickhouse", label: "ClickHouse", sub: "Stage 2 warehouse", where: "local",
     what: "{ETL} loads only the new raw rows into warehouse tables, with daily and monthly rollups in each city's local time.",
     why: "A columnar database: aggregates over years of hourly data stay fast.",
-    number: { value: "1.74 M hourly rows", source: "README.md" },
+    number: { value: "1.75 M hourly rows", source: "README.md" },
   },
   redis: {
     id: "redis", label: "Redis", sub: "Stage 3 cache", where: "local",
@@ -89,7 +89,7 @@ const nodes = {
     id: "dashboard", label: "Dashboard", sub: "React on Vercel", where: "external",
     what: "This site: a data snapshot bundled with each deploy, with the live files from CloudFront laid over it.",
     why: "Free static hosting; still works if live data is down (bundled snapshot fallback).",
-    number: { value: "557 KB gzipped snapshot", source: "README.md" },
+    number: { value: "665 KB gzipped snapshot", source: "README.md" },
     doc: "docs/DEPLOY_VERCEL.md",
   },
   // AWS view only
