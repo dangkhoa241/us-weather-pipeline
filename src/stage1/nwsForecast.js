@@ -10,7 +10,7 @@ const RUNS = COLLECTIONS.pipelineRuns.name;
 const HOUR_MS = 3_600_000;
 
 // kind → location field holding the NWS URL (resolved by the locations seed)
-const KINDS = {
+export const KINDS = {
   hourly: "nws_forecast_hourly_url",   // 1-hour periods, ~7 days
   periods: "nws_forecast_url",         // 12-hour day/night periods, 7 days
 };
@@ -33,7 +33,8 @@ function tempC(period) {
   return round1(period.temperatureUnit === "F" ? ((value - 32) * 5) / 9 : value);
 }
 
-function toSnapshot(location, kind, issuedAt, generatedAt, period, meta) {
+/** One NWS forecast period → one `forecast_snapshots` document (also used by the S3 archive restore). */
+export function toSnapshot(location, kind, issuedAt, generatedAt, period, meta) {
   const target = new Date(period.startTime);
   const leadHours = Math.round((target - issuedAt) / HOUR_MS);
   const wind = parseWind(period.windSpeed);

@@ -123,7 +123,7 @@ export const config = Object.freeze({
   // from the files in AWS_SHARED_CREDENTIALS_FILE / AWS_CONFIG_FILE (default ~/.aws); it reads those variables itself.
   aws: {
     profile: env.AWS_PROFILE || null,                 // runtime (publish/write only): weather-runtime
-    deployProfile: env.AWS_DEPLOY_PROFILE || "weather-dev", // SAM deploys only (scripts/aws.js)
+    deployProfile: env.AWS_DEPLOY_PROFILE || "weather-dev", // SAM deploys (scripts/aws.js); S3 archive reads (restore:nws)
     region: env.AWS_REGION || "us-east-2",
     snsTopicArn: env.SNS_TOPIC_ARN || null,       // output of the weather-pipeline stack (NOTIFIER=sns)
     snsMinLevel: env.SNS_MIN_LEVEL || "warn",      // info | warn | error: lowest level that is emailed

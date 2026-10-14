@@ -32,6 +32,13 @@ export class RawStore {
    */
   async upsertMany(collection, docs, keyFields) { throw new Error("RawStore.upsertMany not implemented"); }
 
+  /**
+   * Insert only the documents whose natural key is not stored yet; existing documents are left exactly as they are
+   * (restores and gap fills must never overwrite collected data). Running it twice changes nothing.
+   * @returns {Promise<{ inserted: number, unchanged: number }>}
+   */
+  async insertMissing(collection, docs, keyFields) { throw new Error("RawStore.insertMissing not implemented"); }
+
   /** Insert one document (e.g. a run log entry). */
   async insertOne(collection, doc) { throw new Error("RawStore.insertOne not implemented"); }
 
@@ -44,6 +51,12 @@ export class RawStore {
 
   /** Update one document matched by `filter` with the given fields. */
   async updateOne(collection, filter, fields) { throw new Error("RawStore.updateOne not implemented"); }
+
+  /**
+   * Set the given fields on every document matched by `filter`.
+   * @returns {Promise<number>} documents changed
+   */
+  async updateMany(collection, filter, fields) { throw new Error("RawStore.updateMany not implemented"); }
 
   /**
    * Find documents.

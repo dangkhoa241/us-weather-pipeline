@@ -12,11 +12,23 @@ const ACTIVE_URL = "https://api.weather.gov/alerts/active";
 const toDate = (value) => (value ? new Date(value) : null);
 const zoneId = (url) => url.split("/").pop();
 
-function toAlert(feature, locationsByZone, meta) {
+/** Forecast zone / county code → ids of the tracked locations in it. */
+export function locationsByZone(locations) {
+  const byZone = new Map();
+  for (const l of locations) {
+    for (const zone of [l.nws_forecast_zone, l.nws_county].filter(Boolean)) {
+      byZone.set(zone, [...(byZone.get(zone) ?? []), l.id]);
+    }
+  }
+  return byZone;
+}
+
+/** One NWS alert feature → one `alerts` document (also used by the S3 archive restore). */
+export function toAlert(feature, byZone, meta) {
   const p = feature.properties;
   const zones = (p.affectedZones ?? []).map(zoneId);
   const ugc = p.geocode?.UGC ?? zones;
-  const locationIds = [...new Set(zones.flatMap((z) => locationsByZone.get(z) ?? []))];
+  const locationIds = [...new Set(zones.flatMap((z) => byZone.get(z) ?? []))];
   return {
     id: p.id ?? feature.id,
     event: p.event,
@@ -117,12 +129,7 @@ export function heatAlertEvent(changes) {
  */
 export async function fetchAlerts(store, locations, run, notifier, publicAlerts = null) {
   const states = [...new Set(locations.map((l) => l.state))].sort();
-  const locationsByZone = new Map();
-  for (const l of locations) {
-    for (const zone of [l.nws_forecast_zone, l.nws_county].filter(Boolean)) {
-      locationsByZone.set(zone, [...(locationsByZone.get(zone) ?? []), l.id]);
-    }
-  }
+  const byZone = locationsByZone(locations);
 
   try {
     const fetchedAt = new Date();
@@ -131,7 +138,7 @@ export async function fetchAlerts(store, locations, run, notifier, publicAlerts 
     store.addRawResponse("nws-alerts", url, data);
     const sourceTimestamp = toDate(data.updated) ?? fetchedAt;
     const meta = { etl_batch_id: run.etlBatchId, source_timestamp: sourceTimestamp, fetched_at: fetchedAt };
-    const docs = (data.features ?? []).map((f) => toAlert(f, locationsByZone, meta));
+    const docs = (data.features ?? []).map((f) => toAlert(f, byZone, meta));
     // Emailable alerts for tracked cities (heat; with public alerts also every category), compared with what was stored
     // before this run (read before the upsert): the cities' alerts that could still be in effect when the earliest
     // new one was sent.
