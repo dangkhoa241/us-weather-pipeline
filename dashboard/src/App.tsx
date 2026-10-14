@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { DataBadge } from "@/components/DataBadge";
 import { NavTabs } from "@/components/NavTabs";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -7,6 +8,10 @@ import { OverviewPage } from "@/pages/OverviewPage";
 import { ForecastPage } from "@/pages/ForecastPage";
 import { AccuracyPage } from "@/pages/AccuracyPage";
 import { OpsPage } from "@/pages/OpsPage";
+import { Skeleton } from "@/components/ui/skeleton";
+
+// Loaded on first visit only: the diagram and its data stay out of the main bundle.
+const HowItWorksPage = lazy(() => import("@/pages/HowItWorksPage"));
 
 export default function App() {
   const page = useFilters((s) => s.page);
@@ -24,7 +29,8 @@ export default function App() {
         </div>
       </header>
       <main className="flex flex-col gap-5" data-page={page}>
-        {page === "forecast" ? <ForecastPage /> : page === "accuracy" ? <AccuracyPage /> : page === "ops" ? <OpsPage /> : <OverviewPage />}
+        {page === "forecast" ? <ForecastPage /> : page === "accuracy" ? <AccuracyPage /> : page === "ops" ? <OpsPage />
+          : page === "how" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><HowItWorksPage /></Suspense> : <OverviewPage />}
       </main>
     </div>
   );
