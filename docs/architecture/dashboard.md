@@ -22,8 +22,8 @@ data is down.
 - **Snapshot build.** `npm run build:snapshot` (`vite build --mode snapshot`) makes the app read
   `dashboard/public/data/` instead of `/api`. `npm run export:snapshot` writes that folder from the local API: a
   versioned `snapshot-<…>/` folder plus `manifest.json`, replacing the previous snapshot, and fails above 5 MB.
-  `npm run refresh:snapshot` chains the whole refresh (accuracy gap fill, pipeline, API, export, status, build, demo
-  checks) and never commits.
+  `npm run refresh:snapshot` chains the whole refresh (pipeline, API, export, status, build, demo checks) and never
+  commits.
 - **Live overlay.** The app loads the bundled snapshot first, then fetches each live file from CloudFront with a 4 s
   timeout and validates it with Zod. The last 60 days of `recent.json` replace the bundled daily files; forecasts,
   alerts and status come from their live files. Each page says whether it shows live data or the snapshot.

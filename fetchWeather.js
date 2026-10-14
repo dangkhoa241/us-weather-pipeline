@@ -27,7 +27,8 @@ Modes (default: all):
                (lead_days exact, issued_at approximate); last ${config.stage1.omBackfillDays} days, resumes per location
   om-forecast  latest Open-Meteo forecasts, one per model (every 6 h, after the model runs):
                ${config.stage1.openMeteoForecastModels.join(", ")}
-  om-gap-fill  fill empty accuracy slots (model, city, target hour, lead day 1..7) from the Previous Runs API:
+  om-gap-fill  NOT USED (failed validation, docs/analysis/previous-runs-validation.md); by hand only:
+               fill empty accuracy slots (model, city, target hour, lead day 1..7) from the Previous Runs API:
                ${config.stage1.omBackfillModels.join(", ")}; insert-only, never where a collected row exists;
                default target days: last ${config.stage1.omBackfillDays} days up to yesterday (--from/--to to change)
   alerts       NWS active alerts for tracked states → alerts

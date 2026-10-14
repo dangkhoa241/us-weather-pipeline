@@ -2,32 +2,24 @@
 // The weekly refresh in one command: local stack → bundled dashboard snapshot (docs/ROADMAP.md, "Weekly refresh").
 // Steps, in order; the first failure stops the run with the step's name and exit code:
 //   1. Docker services MongoDB, ClickHouse and Redis are running
-//   2. om-gap-fill             empty model-forecast accuracy slots of the last 90 days from Open-Meteo Previous Runs
-//                              (insert-only, inside the Open-Meteo budget, only after a passing --validate run;
-//                              a partial fill only warns)
-//   3. node pipeline.js        Stage 1 catch-up (sync-atlas, incremental history) → Stage 2 ETL → Stage 3 cache
-//   4. the API on 127.0.0.1    reused if it already answers, else started here and stopped at the end
-//   5. export:snapshot         dashboard/public/data/<snapshot>/ + manifest.json (from the API)
-//   6. export:status           dashboard/public/data/status.json (from Atlas)
-//   7. build:snapshot          the static demo build
-//   8. check:demo              the 26 demo-build checks
+//   2. node pipeline.js        Stage 1 catch-up (sync-atlas, incremental history) → Stage 2 ETL → Stage 3 cache
+//   3. the API on 127.0.0.1    reused if it already answers, else started here and stopped at the end
+//   4. export:snapshot         dashboard/public/data/<snapshot>/ + manifest.json (from the API)
+//   5. export:status           dashboard/public/data/status.json (from Atlas)
+//   6. build:snapshot          the static demo build
+//   7. check:demo              the 26 demo-build checks
 // At the end it prints the new "data as of" dates. It never commits or pushes: review the diff, then commit.
 // Usage: npm run refresh:snapshot
 
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { config } from "../src/config.js";
-import { ensureCollections } from "../src/collections.js";
-import { createRawStore } from "../src/adapters/rawStore/index.js";
-import { createNotifier } from "../src/adapters/notifier/index.js";
-import { runMode } from "../src/stage1/runMode.js";
 
 const ROOT = new URL("../", import.meta.url);
 const DATA = new URL("dashboard/public/data/", ROOT);
 const API = `http://${config.host === "0.0.0.0" ? "127.0.0.1" : config.host}:${config.port}/api/v1`;
 const REQUIRED_SERVICES = ["mongo", "clickhouse", "redis"];
 const API_START_TIMEOUT_MS = 60_000;
-const STEPS = 8;
 
 // npm itself, run by the current Node (no shell): set when this script runs through `npm run`.
 const NPM = process.env.npm_execpath;
@@ -50,32 +42,18 @@ function exec(cmd, args, { capture = false } = {}) {
 }
 
 async function step(n, name, fn) {
-  console.log(`\n[refresh] ${n}/${STEPS} ${name}`);
+  console.log(`\n[refresh] ${n}/7 ${name}`);
   const t0 = Date.now();
   try {
     await fn();
   } catch (err) {
     timings.push({ step: `${n}. ${name}`, result: "FAILED", time: fmt(Date.now() - t0) });
     console.table(timings);
-    console.error(`\n[refresh] FAILED at step ${n}/${STEPS} (${name}): ${err.message}`);
+    console.error(`\n[refresh] FAILED at step ${n}/7 (${name}): ${err.message}`);
     console.error("[refresh] Stopped. Nothing was committed or pushed; fix the step above and run npm run refresh:snapshot again.");
     throw err;
   }
   timings.push({ step: `${n}. ${name}`, result: "ok", time: fmt(Date.now() - t0) });
-}
-
-/** Stage 1 om-gap-fill in this process. A failed run stops the refresh; partial (some requests failed) only warns. */
-async function gapFill() {
-  const store = createRawStore();
-  try {
-    await store.connect();
-    await ensureCollections(store);
-    const summary = await runMode("om-gap-fill", store, createNotifier(), { range: {} });
-    if (summary.status === "failed") throw new StepFailed(`om-gap-fill failed (batch ${summary.etl_batch_id})`);
-    if (summary.status === "partial") console.warn(`[refresh] om-gap-fill partial: ${summary.error_count} request(s) failed; their slots are retried next week`);
-  } finally {
-    await store.close();
-  }
 }
 
 const apiUp = () => fetch(`${API}/health`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok).catch(() => false);
@@ -89,9 +67,8 @@ try {
     if (missing.length) throw new StepFailed(`not running: ${missing.join(", ")} (start Docker Desktop, then: docker compose up -d)`);
     console.log(`[refresh] running: ${running.join(", ")}`);
   });
-  await step(2, "om-gap-fill: Previous Runs into empty accuracy slots", gapFill);
-  await step(3, "pipeline: sync-atlas + history → ETL → cache", () => exec(process.execPath, ["pipeline.js"]));
-  await step(4, "API up", async () => {
+  await step(2, "pipeline: sync-atlas + history → ETL → cache", () => exec(process.execPath, ["pipeline.js"]));
+  await step(3, "API up", async () => {
     if (await apiUp()) { console.log(`[refresh] reusing the API already answering at ${API}`); return; }
     api = spawn(process.execPath, ["backend/server.js"], { cwd: ROOT, stdio: ["ignore", "ignore", "inherit"], windowsHide: true });
     api.on("exit", (code) => { if (code && api) console.error(`[refresh] API exited with code ${code}`); });
@@ -102,10 +79,10 @@ try {
     }
     console.log(`[refresh] API started at ${API}`);
   });
-  await step(5, "export:snapshot", () => exec(process.execPath, ["scripts/exportSnapshot.js"]));
-  await step(6, "export:status", () => exec(process.execPath, ["scripts/exportStatus.js"]));
-  await step(7, "build:snapshot", () => exec(...npmArgs("--prefix", "dashboard", "run", "build:snapshot")));
-  await step(8, "check:demo", () => exec(...npmArgs("--prefix", "dashboard", "run", "check:demo")));
+  await step(4, "export:snapshot", () => exec(process.execPath, ["scripts/exportSnapshot.js"]));
+  await step(5, "export:status", () => exec(process.execPath, ["scripts/exportStatus.js"]));
+  await step(6, "build:snapshot", () => exec(...npmArgs("--prefix", "dashboard", "run", "build:snapshot")));
+  await step(7, "check:demo", () => exec(...npmArgs("--prefix", "dashboard", "run", "check:demo")));
 
   const manifest = JSON.parse(readFileSync(new URL("manifest.json", DATA), "utf8"));
   const status = JSON.parse(readFileSync(new URL("status.json", DATA), "utf8"));

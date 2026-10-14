@@ -1,5 +1,7 @@
 // src/stage1/openMeteoGapFill.js
 // Fill accuracy gaps of the model forecasts from Open-Meteo's Previous Runs API → `forecast_snapshots`.
+// NOT USED: a documented experiment that failed validation on 2026-10-14 (ECMWF −0.21 °F, HRRR −0.13 °F; gate 0.1 °F,
+// docs/analysis/previous-runs-validation.md). Run by hand only (fetchWeather.js om-gap-fill); not in any schedule.
 // A slot is (model, city, target hour, lead day N = 1..7). Only slots with no row at all (live om-forecast or the
 // Single Runs backfill) are filled, insert-only, with the value the model forecast N days before the target hour.
 // Like the best_match baseline: lead_days is exact, issued_at = target − N days is approximate, lead_hours is null,

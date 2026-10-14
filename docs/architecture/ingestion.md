@@ -7,8 +7,7 @@ Rebuild steps: the "Run it locally" section of the [README](../../README.md#run-
 
 Bring raw weather data into one local MongoDB raw store, from which every later stage reads:
 - Open-Meteo hourly history (archive API);
-- Open-Meteo forecasts from several weather models, live and backfilled, for accuracy scoring, with the remaining
-  gaps filled from the Previous Runs API;
+- Open-Meteo forecasts from several weather models, live and backfilled, for accuracy scoring;
 - NWS forecasts and alerts, collected on AWS by the [NWS collector](nws-collector.md) and copied home from Atlas.
 
 ## Requirements
@@ -32,12 +31,11 @@ Bring raw weather data into one local MongoDB raw store, from which every later 
   | `om-forecast` | latest Open-Meteo forecast per model → `forecast_snapshots` | `40 2,8,14,20 * * *` (every 6 h) |
   | `om-backfill` | past model runs from the Single Runs API → `forecast_snapshots` (last 90 days, resumable per model and city) | `15 * * * *` |
   | `om-baseline` | best_match baseline from the Previous Runs API → `forecast_snapshots` | `45 6 * * *` |
-  | `om-gap-fill` | empty accuracy slots of the 4 backfilled models from the Previous Runs API → `forecast_snapshots` (insert-only) | step 2 of `refresh:snapshot` (weekly) |
-  | `om-gap-supersede` | no API calls: excludes gap-fill rows whose slot has since received a collected row | inside the pipeline run |
+  | `om-gap-fill` | not used (failed validation): empty accuracy slots from the Previous Runs API → `forecast_snapshots` | by hand only |
   | `sync-atlas` | NWS data from Atlas → `forecast_snapshots`, `alerts`, `pipeline_runs` | inside the pipeline run |
   | `forecast`, `alerts` | NWS → `forecast_snapshots`, `alerts` | `"off"` in `docker-compose.yml`: the Lambda collects them |
 
-- **Pipeline run.** In `--watch`, `sync-atlas`, `history` and `om-gap-supersede` run as Stage 1 of `pipeline.js`, followed by Stage 2
+- **Pipeline run.** In `--watch`, `sync-atlas` and `history` run as Stage 1 of `pipeline.js`, followed by Stage 2
   (ETL) and Stage 3 (cache refresh), on `PIPELINE_CRON` (default `50 */3 * * *`). A failed stage stops the run; a
   partial Stage 1 mode is a warning and the run continues.
 - **Startup.** The watcher runs every scheduled job once at startup, forecasts first (a missed forecast snapshot is lost
@@ -49,18 +47,12 @@ Bring raw weather data into one local MongoDB raw store, from which every later 
   reserve the cost before each request and stop cleanly at the budget, then resume on their next run. The defaults are
   2,000 an hour and 6,000 a day, under Open-Meteo's 5,000 and 10,000. The backfill may use at most 75% of the budget,
   so live forecasts always have room.
-- **Accuracy gap fill.** A slot is (model, city, target hour, lead day 1–7). The Single Runs backfill fills slots run by
-  run and needs the laptop on for weeks to catch up; `om-gap-fill` fills only the slots that have no row at all with the
-  value the model forecast N days earlier (Previous Runs API), temperature only, one request per model and city
-  covering the days with gaps (7 lead-day variables per 14 days = 1 weighted call). The rows are marked
-  `fetch_method: "previous_runs"` and `issued_at_basis: "previous_runs_lead_day"` (issued_at = target − N days is
-  approximate, `lead_hours` is null), like the best_match baseline. Writes are insert-only, so collected rows are never
-  overwritten. When the backfill later writes a slot that was filled, `om-gap-supersede` sets `exclude_from_accuracy`
-  on the filled row before Stage 2 loads it, so a slot is never scored from both sources. `--dry-run` plans the
-  requests without calling the API; `--validate` compares lead-day-1 MAE of collected rows and Previous Runs on the
-  same city-hours, and a fill writes only after the latest validation passed (within 0.1 °F) for every model. The
-  2026-10-14 validation did not (ECMWF −0.21 °F, HRRR −0.13 °F), so nothing is filled yet (see
-  [docs/analysis/previous-runs-validation.md](../analysis/previous-runs-validation.md)).
+- **Accuracy coverage.** Model accuracy comes from the Single Runs backfill, run by run, oldest first, so it needs the
+  stack on until it catches up. Filling the empty slots from the Previous Runs API instead (`om-gap-fill`: insert-only,
+  `--dry-run`, `--validate`, and a gate that writes only after a validation passed for every model) was tried and is
+  not used: Previous Runs "day 1" scored 0.21 °F better for ECMWF and 0.13 °F for HRRR than our lead day 1, above the
+  0.1 °F gate (see [docs/analysis/previous-runs-validation.md](../analysis/previous-runs-validation.md)). It is in no
+  schedule and runs only by hand.
 - **Raw store adapter.** Pipeline code uses the `RawStore` interface (`src/adapters/rawStore/`), and `RAW_STORE=mongo`
   picks MongoDB. `ensureCollections()` creates the unique keys and indexes; a TTL index is added only when
   `RAW_RETENTION_DAYS` is above 0 (it is 0 locally, so the local raw store keeps everything).
@@ -81,11 +73,7 @@ Bring raw weather data into one local MongoDB raw store, from which every later 
 - One failed city is recorded in the run's errors and the run is `partial`; the other cities still load.
 - A run that is not `success` sends a `warn` or `error` through the `Notifier` (console locally, SNS when
   `NOTIFIER=sns`).
-- At the Open-Meteo budget, `BudgetExceeded` stops the job cleanly; the next run resumes from its watermark. The gap
-  fill has no watermark: its next run plans again from the slots that are still empty. Like the backfill it may use at
-  most 75% of the budget, so live forecasts keep room.
-- A failed gap-fill request is a city error (run `partial`); `refresh:snapshot` only warns and goes on, and the slots are
-  retried the next week. A Previous Runs value that is null is not stored, so that slot is requested again next time.
+- At the Open-Meteo budget, `BudgetExceeded` stops the job cleanly; the next run resumes from its watermark.
 - A failed S3 archive upload logs a warning and the pipeline goes on. Past the daily PUT cap, uploads are skipped and
   logged.
 - The watcher shuts down cleanly on SIGINT/SIGTERM and closes the store.
@@ -106,7 +94,8 @@ Bring raw weather data into one local MongoDB raw store, from which every later 
 | Local Docker disk ~32 MB a day (≈ 12 GB a year), mostly forecast snapshots | [ROADMAP.md](../ROADMAP.md), free-tier table |
 | 1.75 M hourly observations and 3.42 M forecast snapshots loaded (as of 2026-10-09) | [README.md](../../README.md), "By the numbers" |
 | Local fetcher S3 archive: ~6 PUTs a day expected, cap 10 a day | [SETUP_AWS.md](../SETUP_AWS.md), S3 PUT budget table |
-| Gap fill of 2026-07-12 → 10-09 (planned, on hold): 210 requests, ~1,315 weighted calls; validation 379 calls, ECMWF −0.21 °F, HRRR −0.13 °F, ICON −0.09 °F, GFS −0.08 °F | [docs/analysis/previous-runs-validation.md](../analysis/previous-runs-validation.md) |
+| Single Runs backfill left on 2026-10-14: 64,689 runs (calls) for the 90-day window, ~3-4 weeks of daily running; Single Runs keeps runs back to 2026-04-02 | [ROADMAP.md](../ROADMAP.md), Weekly refresh |
+| Previous Runs validation (not used): 379 calls; ECMWF -0.21 °F, HRRR -0.13 °F, ICON -0.09 °F, GFS -0.08 °F | [docs/analysis/previous-runs-validation.md](../analysis/previous-runs-validation.md) |
 
 ## Where in the code
 
@@ -116,8 +105,7 @@ Bring raw weather data into one local MongoDB raw store, from which every later 
 | Stage 1 → 2 → 3 orchestration | `pipeline.js` |
 | Mode runner and run log | `src/stage1/runMode.js`, `src/lib/runLog.js` |
 | Open-Meteo jobs | `src/stage1/openMeteoHistory.js`, `openMeteoForecast.js`, `openMeteoBackfill.js`, `openMeteoBaseline.js` |
-| Accuracy gap fill and supersede pass | `src/stage1/openMeteoGapFill.js` |
-| Weekly refresh (gap fill before the pipeline) | `scripts/refreshSnapshot.js` |
+| Previous Runs gap fill experiment (not used) | `src/stage1/openMeteoGapFill.js` |
 | Atlas sync, forecast-gap check | `src/stage1/atlasSync.js`, `src/stage1/forecastGap.js` |
 | HTTP and API budget | `src/lib/http.js`, `src/lib/apiBudget.js` |
 | Collections and keys | `src/collections.js` |

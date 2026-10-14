@@ -149,13 +149,14 @@ still in the 30-day S3 raw archive: `npm run restore:nws` brings them back (all 
 archived slots), so the **NWS safety window is 30 days**. The bundled snapshot also has to be re-exported at least
 every ~55 days, because `recent.json` covers 60.
 
-**Accuracy coverage (on hold).** Model-forecast accuracy depends on the Single Runs backfill, which needs the Docker
-stack on for hours a day until it catches up. Step 2 of the refresh can fill every empty accuracy slot of the last 90
-days from Open-Meteo's Previous Runs API instead (`om-gap-fill`, one request per model and city, inside the Open-Meteo
-budget), so that the laptop would no longer need to run daily for accuracy. It writes only after a `--validate` run has
-passed for every model, and the 2026-10-14 validation did not (ECMWF −0.21 °F, HRRR −0.13 °F, gate 0.1 °F; see
-`docs/analysis/previous-runs-validation.md`), so for now the step fills nothing and the laptop still needs to run for
-the backfill. When it fills, the backfill's rows take precedence over filled ones (`om-gap-supersede`).
+**Accuracy coverage needs the Docker stack on.** Model-forecast accuracy comes from the Single Runs backfill
+(`om-backfill`), which runs only while the stack is on. On 2026-10-14 it had 64,689 runs (= weighted calls) left for
+the 90-day window; with the backfill getting ~3,100 calls a day after the live forecasts (stack on at least 3 h a day),
+that is about **3-4 weeks of daily running**. Single Runs keeps runs back to 2026-04-02 (checked 2026-10-14), far past
+the window, so no day becomes unreachable in the API; but the backfill works oldest first, so the oldest unfilled days
+(from 2026-07-16) leave the moving 90-day window before it reaches them, and the last 30 days fill in last. Filling the
+gaps from the Previous Runs API was tried and is not used: it failed validation
+(`docs/analysis/previous-runs-validation.md`).
 
 1. **Start the stack.** Open Docker Desktop and wait until `docker info` answers. Then run `docker compose up -d` and
    check `docker compose ps`: mongo, clickhouse and redis must show `healthy`. The fetcher also starts; at startup it
@@ -166,22 +167,18 @@ the backfill. When it fills, the backfill's rows take precedence over filled one
 2. **Refresh everything:** `npm run refresh:snapshot`. It runs, in order, and stops at the first failure with the step's
    name:
    1. a Docker check;
-   2. `om-gap-fill` (Previous Runs into empty accuracy slots, only after a passing validation; a partial fill only
-      warns, and stopping at the budget is not a failure: the rest is filled next week);
-   3. `pipeline.js` (sync-atlas → incremental history → supersede pass → ETL to ClickHouse → Redis cache);
-   4. the API, started if needed;
-   5. `export:snapshot`;
-   6. `export:status`;
-   7. `build:snapshot`;
-   8. `check:demo`.
+   2. `pipeline.js` (sync-atlas → incremental history → ETL to ClickHouse → Redis cache);
+   3. the API, started if needed;
+   4. `export:snapshot`;
+   5. `export:status`;
+   6. `build:snapshot`;
+   7. `check:demo`.
 
    At the end it prints the new "data as of" dates. It never commits or pushes.
 3. **Confirm the sync finished.** In the output, each collection gets a line such as
    `[sync-atlas] forecast_snapshots: N documents copied (up to <time>)`, followed by
    `[pipeline] success … stage1:sync-atlas:success → …`. The "up to" times should be within the last hour. If the sync
-   fails, the run stops at step 3. The gap fill prints its requests and weighted calls
-   (`[om-gap-fill] N requests, M weighted calls`) and a lead-day-1 MAE comparison; a model more than 0.1 °F apart is
-   flagged with a WARNING (check `docs/analysis/previous-runs-validation.md` before publishing).
+   fails, the run stops at step 2.
 4. **Review:** `git status` should show a new `dashboard/public/data/snapshot-<date>/`, the old one deleted, and an
    updated `manifest.json` and `status.json`.
 5. **Commit and push:** run `npm run check:secrets`, then commit and push to main. Vercel redeploys the demo from main.
@@ -257,16 +254,11 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
 - `restore:nws`: reads the archive with the deploy profile (`weather-dev`, `~/.aws`) because the runtime user may only
   write to the bucket. Restored alerts keep the latest archived version of each alert id; alerts that were already
   stored are not updated (insert-only), so their `last_seen_at` can stay earlier than the restored slots.
-- Previous Runs gap fill (not applied yet, see the validation): its "day 1" scores 0.08–0.21 °F better than our
-  lead day 1 (24–47 h), probably a shorter lead; the fill stays off until a validation passes. Temperature only (other values stay null on filled rows); `issued_at` is approximate
-  (target − N days) and `lead_hours` is null, so filled rows count by lead day only and are left out of the biggest
-  misses (as for best_match). A slot's Previous Runs value comes from one run, a collected slot from up to 4 runs, so a
-  filled day weighs less in the pair count than a collected day. Lead day 7 of the 4 models comes only from Previous
-  Runs (the backfill and live forecasts fetch 7 days, lead days 0–6). A slot whose Previous Runs value is null is
-  requested again every week. The supersede pass runs inside `pipeline.js`, before its ETL; a standalone
-  `npm run etl:clickhouse` skips it, so a slot the backfill wrote since the last pipeline run can be scored twice in the
-  local ClickHouse until the next pipeline run. The Docker fetcher runs the pass only once it is rebuilt
-  (`docker compose up -d --build fetcher`).
+- Previous Runs gap fill: not used, it failed validation (ECMWF -0.21 °F, HRRR -0.13 °F against a 0.1 °F gate). Its
+  "day 1" is probably a shorter lead than our 24-47 h. The code stays as a documented experiment; `om-gap-fill` writes
+  nothing unless a `--validate` run passes for every model.
+- Accuracy coverage depends on the Single Runs backfill and so on the Docker stack running (~3-4 weeks of daily
+  running from 2026-10-14 to cover the 90-day window); the oldest days leave the window before they are filled.
 - `npm audit`: 1 high in a dev-only dependency (`source-map-js` via the test/build tools, also on `main`); production
   dependencies: 0.
 - NWS Lambda: a run that hits the 5 min timeout sends no SNS email (only the Lambda error in its logs). It doesn't seed
@@ -355,11 +347,9 @@ Security (low; from the security review of Stages 1–2, compose and workflows):
       `sync-atlas` copies it to local Mongo at watcher startup and daily; warning + `sync_stale` run if the last sync is > 7 days old
 - [x] `restore:nws`: NWS forecasts and alerts of a window from the 30-day S3 raw archive (collector transforms reused,
       insert-only, dry run unless `--apply`); restored the 2026-10-06 03:07 → 10-07 09:23 gap (2026-10-14)
-- [x] `om-gap-fill`: empty (model, city, target hour, lead day 1–7) slots of the 4 backfilled models from the Previous
-      Runs API, insert-only, `fetch_method: previous_runs`; `--dry-run` / `--validate`; step 2 of `refresh:snapshot`;
-      `om-gap-supersede` in the pipeline excludes a filled row once a collected row lands in its slot (2026-10-14)
-- [ ] Fill the 2026-07-12 → 10-09 accuracy gaps: **on hold**, the validation is over 0.1 °F for ECMWF (−0.21) and HRRR
-      (−0.13); decide the lead definition first (`docs/analysis/previous-runs-validation.md`)
+- [x] `om-gap-fill` (Previous Runs into empty accuracy slots, `--dry-run` / `--validate`, gate): **not used: failed
+      validation (ECMWF -0.21 °F, HRRR -0.13 °F)**; kept as a documented experiment, run by hand only, in no schedule
+      (`docs/analysis/previous-runs-validation.md`, 2026-10-14)
 - [x] **Start collecting forecasts today** (accuracy data needed by Friday): `fetcher` service in Docker Compose
       (`restart: unless-stopped`); on start it warns and records a `gap_detected` run if the newest snapshot is > 6 h old
 

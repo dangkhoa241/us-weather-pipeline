@@ -31,10 +31,20 @@ doesn't report which run each value comes from. Not investigated further (time-b
 
 ## Decision
 
-**Not filled.** Two models are over the gate, and filling would make ECMWF look about 0.2 °F better than it is on
-the filled days. The fill code, the dry run and the validation stay. `om-gap-fill` (also step 2 of `refresh:snapshot`)
-checks the latest validation run and writes nothing until one has passed for every model. Options for later:
+**Not used: failed validation (ECMWF -0.21 °F, HRRR -0.13 °F).** Filling would make ECMWF look about 0.2 °F better
+than it is on the filled days. Decision (2026-10-14): leave accuracy to the Single Runs backfill and fill no model from
+Previous Runs. The code stays as a documented experiment: `node fetchWeather.js om-gap-fill` (with `--dry-run` or
+`--validate`) runs by hand only, is in no schedule and not in `refresh:snapshot`, and writes nothing unless the latest
+validation passed for every model. Its supersede pass (which excludes a filled row once a collected row lands in its
+slot) runs only inside a fill, not in the pipeline: even with no filled rows its check scans the whole collection
+(11 s), too much for every 3-hour run.
+
+The Single Runs API keeps runs back to 2026-04-02 for all 4 models (probed 2026-10-14; 2026-04-01 is "not
+available"), so the backfill can still reach every day of the 90-day window; 64,689 runs were left, about 3-4 weeks of
+daily running.
+
+Options that were considered:
 - compare Previous Runs day N with collected rows of lead 24·N … 24·N + 5 h only, and fill as a separate lead
   definition;
 - fill only the models that pass (GFS, ICON), which would need its own gate per model;
-- leave accuracy to the Single Runs backfill (needs the Docker stack on until it catches up, ~18 days at the full budget).
+- leave accuracy to the Single Runs backfill (chosen).

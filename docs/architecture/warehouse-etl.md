@@ -26,10 +26,6 @@ forecast snapshots for accuracy scoring, alerts, and daily and monthly rollups i
 - **Tables.** All tables use `ReplacingMergeTree` keyed by the natural key, so loading the same row twice keeps one.
   Reads use `FINAL`. `hourly_weather` is partitioned by month and ordered by `(location_id, time)`;
   `forecast_snapshots` is ordered by `(location_id, model, kind, target_time, issued_at)`.
-- **Accuracy view.** `forecast_accuracy` joins hourly forecast rows with observations on `(location_id, target_time)`
-  and skips rows with `exclude_from_accuracy = 1`. Previous Runs gap-fill rows that a collected row has superseded
-  carry that flag (set in the raw store before the load, see [ingestion](ingestion.md)), and the row's new `stored_at`
-  makes the next incremental load replace it, so each (model, city, target hour, lead day) is scored from one source.
 - **Rollups.** After loading, `weather_daily` and `weather_monthly` are recomputed only for the cities and local days
   the run touched (whole months for the monthly table).
 - **Run log.** Each run is logged in the raw store's `pipeline_runs` and mirrored into the warehouse's
