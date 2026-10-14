@@ -1,5 +1,7 @@
 # Public email sign-ups for NWS alerts
 
+Design-stage document. For the values as deployed, see [docs/architecture/alerts-and-signups.md](../architecture/alerts-and-signups.md).
+
 Goal: a visitor picks one city and one or more alert types on the dashboard and gets NWS alerts for them by email.
 Nothing is sent until they confirm the email address (SNS double opt-in), and every email has an unsubscribe link.
 

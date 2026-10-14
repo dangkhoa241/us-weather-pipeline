@@ -151,7 +151,7 @@ async function watch(opts) {
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
 
-  // Has the laptop been off so long that Atlas (14-day retention) may have deleted unsynced NWS data?
+  // Has the laptop been off so long that Atlas (7-day retention) may have deleted unsynced NWS data?
   if (opts.modes.includes("sync-atlas")) await checkSyncFreshness(store, notifier);
 
   // Was collection down (Docker stopped, laptop off)? Warn and record the gap before catching up.
