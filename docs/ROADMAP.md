@@ -132,10 +132,10 @@ Cost follow-ups:
 - Static demo (as of 2026-10-09): 3,768 KB snapshot (665 KB gzipped): daily data for all 53 cities from 2023-01-01 to 2026-10-09, no gaps
   (monthly values derived in the browser), forecasts, NWS periods/alerts and accuracy details; live recent history,
   forecasts and alerts from CloudFront; 26/26 demo checks, 0 CSP violations under a strict policy.
-- Forecast accuracy (as of 2026-10-09: last 90 days, 2026-07-12 to 2026-10-09, 33–36 scored days, ~55,000 pairs per
-  model, 53 cities, lead day 1): ECMWF 2.00°F average error, ICON 2.23°F, HRRR 2.84°F, GFS 2.97°F; the best-match
-  baseline 2.47°F. Error grows ~0.28°F per extra lead day. NWS not ranked yet (11 days); head-to-head on 3,222
-  city-hours: ECMWF 1.58°F vs NWS 1.93°F.
+- Forecast accuracy (as of 2026-10-09, refreshed 2026-10-14: last 90 days, 2026-07-12 to 2026-10-09, 33–36 scored
+  days, ~70,000 pairs per model (62,000 HRRR), 53 cities, lead day 1): ECMWF 2.02°F average error, ICON 2.21°F, HRRR
+  2.86°F, GFS 2.97°F; the best-match baseline 2.45°F. Error grows ~0.28°F per extra lead day. NWS not ranked yet
+  (11 days); head-to-head on 3,224 city-hours: ECMWF 1.58°F vs NWS 1.94°F.
 - AWS (Free plan, $0): NWS collection on Lambda + EventBridge (~960 runs / month, ~2% of the free GB-s; forecast run
   106 requests → ~9,000 rows in ~88 s at 168 MB), SNS alerts, 30-day S3 archive (~33% of free PUTs, ≤ 40% by hard caps);
   one SAM stack, permissions boundary on every role, removed by `npm run aws:teardown`.

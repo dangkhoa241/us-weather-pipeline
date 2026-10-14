@@ -5,11 +5,11 @@
 [![CI](https://github.com/dangkhoa241/us-weather-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/dangkhoa241/us-weather-pipeline/actions/workflows/ci.yml)
 ![Tests](https://img.shields.io/badge/tests-468%20passing-brightgreen)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Live demo](https://img.shields.io/badge/live%20demo-vercel-black?logo=vercel)](https://us-weather-pipeline.vercel.app)
+[![Live app](https://img.shields.io/badge/live%20app-vercel-black?logo=vercel)](https://us-weather-pipeline.vercel.app)
 
-### ▶ [Live demo: us-weather-pipeline.vercel.app](https://us-weather-pipeline.vercel.app)
+### ▶ [Live app: us-weather-pipeline.vercel.app](https://us-weather-pipeline.vercel.app)
 
-The demo updates itself from AWS (badge "Live · history through …"; the Forecast and Accuracy pages show when the forecast was updated and the last scored day): a scheduled Lambda publishes recent history, forecasts
+The live app updates itself from AWS (badge "Live · history through …"; the Forecast and Accuracy pages show when the forecast was updated and the last scored day): a scheduled Lambda publishes recent history, forecasts
 and alerts to S3 behind CloudFront (Part 4). If CloudFront is unreachable, it falls back to the bundled snapshot
 ("Snapshot · history through …").
 
@@ -21,14 +21,14 @@ and alerts to S3 behind CloudFront (Part 4). If CloudFront is unreachable, it fa
 
 | Model (lead day 1) | Average error | Bias |
 |---|---|---|
-| 🥇 ECMWF | **2.0 °F** | none |
+| 🥇 ECMWF | **2.0 °F** | 0.2 °F too warm |
 | 🥈 ICON | 2.2 °F | none |
-| 🥉 HRRR | 2.8 °F | 0.5 °F too cold |
+| 🥉 HRRR | 2.9 °F | 0.1 °F too cold |
 | GFS | 3.0 °F | 0.9 °F too warm |
 | *Best-match blend (baseline)* | *2.5 °F* | *none* |
 | NWS | not ranked yet | scored on 11 days so far |
 
-As of 2026-10-09: error grows by about 0.28 °F for each extra day of lead time. The scores compare hourly forecasts with observed temperatures: about 55,000 pairs per model on 33–36 scored days, from 53 cities, 2026-07-12 to 2026-10-09. A model is ranked only after 30 days of scores. NWS has 11 so far: on the 3,222 city-hours both were scored on, ECMWF missed by 1.58 °F and NWS by 1.93 °F. Method: [How this is measured](#how-accuracy-is-measured).
+As of 2026-10-09: error grows by about 0.28 °F for each extra day of lead time. The scores compare hourly forecasts with observed temperatures: about 70,000 pairs per model (62,000 for HRRR) on 33–36 scored days, from 53 cities, 2026-07-12 to 2026-10-09. A model is ranked only after 30 days of scores. NWS has 11 so far: on the 3,224 city-hours both were scored on, ECMWF missed by 1.58 °F and NWS by 1.94 °F. Method: [How this is measured](#how-accuracy-is-measured).
 
 ## Design decisions
 
@@ -122,7 +122,7 @@ flowchart LR
 
 Interactive version, with what each part does and why: [/how-it-works](https://us-weather-pipeline.vercel.app/how-it-works). Live pipeline status: [/ops](https://us-weather-pipeline.vercel.app/ops).
 
-- **Stage 1** collects raw data with retries, rate limits and a weighted Open-Meteo call budget. NWS forecasts and alerts are collected on AWS (Lambda → Atlas) and copied home by `sync-atlas`, so the laptop can be off for up to a week.
+- **Stage 1** collects raw data with retries, rate limits and a weighted Open-Meteo call budget. NWS forecasts and alerts are collected on AWS (Lambda → Atlas) and copied home by `sync-atlas`, so the laptop can be off for up to a week (up to 30 days with `npm run restore:nws`, which restores them from the S3 raw archive).
 - **Stage 2** loads only new rows (watermark) into `ReplacingMergeTree` tables. Daily and monthly rollups use each city's local time.
 - **Stage 3** puts a versioned cache in front of the warehouse. The landing page's queries are pre-warmed after each load.
 - **Stage 4** serves the API: one Zod definition per route drives validation, the OpenAPI docs and the dashboard's TypeScript types.
@@ -278,7 +278,7 @@ For each key feature, Claude Code built **3 implementations** on separate branch
 - **CSP everywhere:**
   - The API sends `default-src 'none'`.
   - The `/docs` page loads a pinned Swagger UI version.
-  - The demo runs under a strict CSP with no `eval` (Zod runs "jitless").
+  - The live app runs under a strict CSP with no `eval` (Zod runs "jitless").
   - React escapes all data, and nothing uses `dangerouslySetInnerHTML`.
   - `connect-src` lists only the two exact Open-Meteo hosts the forecast replay calls (no wildcards). Those requests
     send no cookies and no referrer.
@@ -310,7 +310,7 @@ For each key feature, Claude Code built **3 implementations** on separate branch
 | Dashboard | React 19, TypeScript, Vite, d3-geo / d3-scale / d3-shape, ECharts (sparklines), TanStack Query + Table, Zustand, Tailwind CSS, shadcn/ui |
 | Quality | Vitest, React Testing Library, Playwright (demo checks, GIF), Docker Compose |
 | Cloud (AWS) | Lambda, EventBridge, S3, CloudFront, SNS, DynamoDB, SSM Parameter Store, IAM, CloudWatch Logs, CloudFormation / SAM |
-| Hosting | Vercel (static demo), GitHub Actions CI |
+| Hosting | Vercel (live app, static build), GitHub Actions CI |
 
 Each storage layer sits behind an adapter (`RawStore`, `CacheStore`, `Warehouse`, `Scheduler`, `Notifier`). A cloud service such as BigQuery or DynamoDB can be added as one new file.
 
@@ -333,7 +333,7 @@ cd dashboard && npm run dev       # Stage 5: dashboard on http://localhost:5173
 npm test                          # backend tests (no Docker needed)
 ```
 
-More: [cloud collection setup](docs/SETUP_CLOUD_COLLECTION.md), [Vercel demo](docs/DEPLOY_VERCEL.md), [roadmap](docs/ROADMAP.md).
+More: [cloud collection setup](docs/SETUP_CLOUD_COLLECTION.md), [Vercel live app](docs/DEPLOY_VERCEL.md), [roadmap](docs/ROADMAP.md).
 
 ## $0 budget: free-tier design
 
@@ -367,7 +367,7 @@ None of these needs a credit card. Every external service has its limits and ove
 
 ## Known limitations
 
-- As of 2026-10-09, model scores cover 33–36 days of the last 90 (the past-runs backfill is still catching up, and the last 30 days have only 7 scored days because the laptop was off). NWS has been scored only since 2026-09-29 and joins the ranking after 30 days; the 33 cities added on 2026-10-01 don't have 30 days of model scores yet, so their states are hatched on the accuracy map.
+- As of 2026-10-09, model scores cover 33–36 days of the last 90 (the past-runs backfill is still catching up, and the last 30 days have only 7 scored days because the laptop was off). The backfill runs only while the Docker stack is on: about 3–4 weeks of daily running from 2026-10-14 to cover the window. Filling the gaps from Open-Meteo's Previous Runs API was tried and not used, because it failed validation ([previous-runs-validation.md](docs/analysis/previous-runs-validation.md)). NWS has been scored only since 2026-09-29 and joins the ranking after 30 days; the 33 cities added on 2026-10-01 don't have 30 days of model scores yet, so their states are hatched on the accuracy map.
 - Recent history, forecasts and alerts are live (CloudFront); forecast accuracy comes from the bundled snapshot and exists only for preset ranges, and some accuracy views only for all US over the last 90 days.
 - Collection of Open-Meteo forecasts needs the local Docker stack running. NWS is collected in the cloud.
 

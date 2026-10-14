@@ -169,8 +169,8 @@ numbers before merging the winner (the compare-3-and-review process from my earl
 - **Alternatives considered:** ranking every model from day one; hiding new models until they qualify.
 - **Trade-off:** NWS, the official forecast, isn't ranked yet. The head-to-head note shows how it compares without
   claiming a rank.
-- **Evidence:** as of 2026-10-09, NWS had **11** scored days, under the 30 needed. On the **3,222** city-hours both
-  were scored on, ECMWF missed by 1.58 °F and NWS by 1.93 °F. Source: [ROADMAP.md](ROADMAP.md), resume numbers.
+- **Evidence:** as of 2026-10-09, NWS had **11** scored days, under the 30 needed. On the **3,224** city-hours both
+  were scored on, ECMWF missed by 1.58 °F and NWS by 1.94 °F. Source: [ROADMAP.md](ROADMAP.md), resume numbers.
 
 ---
 
