@@ -28,7 +28,7 @@ and alerts to S3 behind CloudFront (Part 4). If CloudFront is unreachable, it fa
 | *Best-match blend (baseline)* | *2.5 °F* | *none* |
 | NWS | not ranked yet | scored on 11 days so far |
 
-As of 2026-10-09: error grows by about 0.28 °F for each extra day of lead time. The scores compare hourly forecasts with observed temperatures: about 70,000 pairs per model (62,000 for HRRR) on 33–36 scored days, from 53 cities, 2026-07-12 to 2026-10-09. A model is ranked only after 30 days of scores. NWS has 11 so far: on the 3,224 city-hours both were scored on, ECMWF missed by 1.58 °F and NWS by 1.94 °F. Method: [How this is measured](#how-accuracy-is-measured).
+As of 2026-10-09: error grows by about 0.30 °F for each extra day of lead time (the mean of (day-6 MAE − day-1 MAE) / 5 for ECMWF, ICON and GFS; source: `dashboard/public/data/snapshot-2026-10-09/accuracy.json`, range 2026-07-12 to 2026-10-09). The scores compare hourly forecasts with observed temperatures: about 70,000 pairs per model (62,000 for HRRR) on 33–36 scored days, from 53 cities, 2026-07-12 to 2026-10-09. A model is ranked only after 30 days of scores. NWS has 11 so far: on the 3,224 city-hours both were scored on, ECMWF missed by 1.58 °F and NWS by 1.94 °F. Method: [How this is measured](#how-accuracy-is-measured).
 
 ## Design decisions
 

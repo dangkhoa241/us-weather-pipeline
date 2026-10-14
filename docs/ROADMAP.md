@@ -134,7 +134,8 @@ Cost follow-ups:
   forecasts and alerts from CloudFront; 26/26 demo checks, 0 CSP violations under a strict policy.
 - Forecast accuracy (as of 2026-10-09, refreshed 2026-10-14: last 90 days, 2026-07-12 to 2026-10-09, 33–36 scored
   days, ~70,000 pairs per model (62,000 HRRR), 53 cities, lead day 1): ECMWF 2.02°F average error, ICON 2.21°F, HRRR
-  2.86°F, GFS 2.97°F; the best-match baseline 2.45°F. Error grows ~0.28°F per extra lead day. NWS not ranked yet
+  2.86°F, GFS 2.97°F; the best-match baseline 2.45°F. Error grows ~0.30°F per extra lead day (mean of (day-6 MAE − day-1 MAE) / 5 for ECMWF, ICON and GFS;
+  source: `dashboard/public/data/snapshot-2026-10-09/accuracy.json`, range 2026-07-12 to 2026-10-09). NWS not ranked yet
   (11 days); head-to-head on 3,224 city-hours: ECMWF 1.58°F vs NWS 1.94°F.
 - AWS (Free plan, $0): NWS collection on Lambda + EventBridge (~960 runs / month, ~2% of the free GB-s; forecast run
   106 requests → ~9,000 rows in ~88 s at 168 MB), SNS alerts, 30-day S3 archive (~33% of free PUTs, ≤ 40% by hard caps);
