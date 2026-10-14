@@ -5,10 +5,10 @@ import { PAGES, pageHref, useFilters, type Page } from "@/store/filters";
 export function NavTabs() {
   const f = useFilters();
   return (
-    <nav aria-label="Pages" className="flex gap-1 rounded-full bg-muted p-1">
+    <nav aria-label="Pages" className="flex flex-wrap justify-center gap-1 rounded-3xl bg-muted p-1">
       {(Object.keys(PAGES) as Page[]).map((p) => (
         <a key={p} href={pageHref(f, p)} aria-current={f.page === p ? "page" : undefined}
-          className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${f.page === p ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+          className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors sm:px-4 ${f.page === p ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
           onClick={(e) => {
             if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;   // let the browser open new tabs
             e.preventDefault();

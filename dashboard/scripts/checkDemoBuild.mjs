@@ -169,6 +169,34 @@ try {
     `${opsSource}; ${jobLabels.join(", ")}`);
   await shot(page, "dashboard-demo-ops.png", { fullPage: true });
 
+  // How it works (lazy-loaded): 10 parts, keyboard open/close, AWS view, bundled-status badges, no horizontal scroll on phones.
+  await page.goto(`${base}how-it-works`, { waitUntil: "load" });
+  await page.waitForSelector("[data-flow-node]", { timeout: 15_000 }).catch(() => {});
+  await page.waitForTimeout(1000);
+  const flowNodes = await page.locator("[data-flow-node]").count();
+  await page.locator('[data-flow-node="redis"]').focus();
+  await page.keyboard.press("Enter");
+  const panelOpen = await page.locator('[data-flow-panel="redis"]').isVisible().catch(() => false);
+  await page.keyboard.press("Escape");
+  const panelClosed = (await page.locator("[data-flow-panel]").count()) === 0;
+  const howBadges = await page.locator("[data-flow-badge]").allTextContents();
+  await page.locator('[data-flow-toggle="aws"]').click();
+  const awsNodes = await page.locator("[data-flow-node]").count();
+  // Expected badges from the bundled status.json: one per badge node whose job has a recorded run.
+  const bundledJobs = JSON.parse(readFileSync(join(DIST, "data", "status.json"), "utf8")).jobs;
+  const ran = (...ids) => ids.some((id) => bundledJobs.find((j) => j.id === id)?.lastRunAt);
+  const expectedBadges = Number(ran("alerts", "forecast")) + Number(ran("publisher"));
+  check("how it works: 10 + 12 parts, Enter/Escape panel, snapshot badges", flowNodes === 10 && awsNodes === 12 && panelOpen && panelClosed
+    && howBadges.length === expectedBadges && howBadges.every((b) => b.endsWith("(snapshot)")),
+    `${flowNodes}/${awsNodes} parts; panel ${panelOpen}/${panelClosed}; ${howBadges.length} of ${expectedBadges} badges: ${howBadges.join(", ")}`);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(`${base}how-it-works`, { waitUntil: "load" });
+  await page.waitForSelector("[data-flow-node]", { timeout: 15_000 }).catch(() => {});
+  const [scrollW, innerW] = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
+  const phoneLayout = await page.getAttribute("[data-flow-view]", "data-flow-layout");
+  check("how it works at phone width: stacked layout, no horizontal scroll", phoneLayout === "mobile" && scrollW <= innerW, `${phoneLayout}; ${scrollW} / ${innerW} px`);
+  await page.setViewportSize({ width: 1400, height: 1000 });
+
   // Dark mode follows the system by default: same page with a dark color scheme.
   const dark = await browser.newPage({ viewport: { width: 1400, height: 1000 }, colorScheme: "dark" });
   await blockLive(dark);

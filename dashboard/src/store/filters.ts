@@ -11,10 +11,10 @@ export const METRICS = { temp_c: "Temperature", precip_mm: "Precipitation" } as 
 export type Metric = keyof typeof METRICS;
 export const COMPARES: Record<Compare, string> = { none: "No comparison", previous: "Previous period", last_year: "Same period last year" };
 
-// Pages have real paths (/forecast, /accuracy, /ops); the filters stay in the query string on every page.
-export const PAGES = { overview: "Overview", forecast: "Forecast", accuracy: "Accuracy", ops: "Ops" } as const;
+// Pages have real paths (/forecast, /accuracy, /ops, /how-it-works); the filters stay in the query string on every page.
+export const PAGES = { overview: "Overview", forecast: "Forecast", accuracy: "Accuracy", ops: "Ops", how: "How it works" } as const;
 export type Page = keyof typeof PAGES;
-export const PAGE_PATH: Record<Page, string> = { overview: "/", forecast: "/forecast", accuracy: "/accuracy", ops: "/ops" };
+export const PAGE_PATH: Record<Page, string> = { overview: "/", forecast: "/forecast", accuracy: "/accuracy", ops: "/ops", how: "/how-it-works" };
 export const pageFromPath = (pathname: string): Page =>
   (Object.keys(PAGE_PATH) as Page[]).find((p) => p !== "overview" && pathname.replace(/\/+$/, "") === PAGE_PATH[p]) ?? "overview";
 

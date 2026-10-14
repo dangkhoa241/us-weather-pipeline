@@ -52,6 +52,10 @@ export const GLOSSARY = {
   Cooldown: { full: "Alert email cooldown", text: "At most one email per city and alert category every 24 hours, unless the alert was upgraded." },
   "Not new": { full: "Not a new alert", text: "NWS re-issued an alert with nothing new (same level, no later end time), so no email was sent." },
   Incident: { full: "Incident", text: "A job that failed for a city (or as a whole) in one or more runs in a row, until a run succeeded again." },
+  // How it works page
+  ETL: { full: "Extract, transform, load", text: "Copying data from one store to another and reshaping it on the way, here raw documents into warehouse tables." },
+  CDN: { full: "Content delivery network", text: "Servers around the world that keep copies of files close to visitors, so pages load fast." },
+  "Serverless function": { full: "Serverless function (AWS Lambda)", text: "Code that runs only when triggered, on servers the cloud provider manages; no machine to keep running." },
 } as const satisfies Record<string, GlossaryEntry>;
 
 export type GlossaryKey = keyof typeof GLOSSARY;
