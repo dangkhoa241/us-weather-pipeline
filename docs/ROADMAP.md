@@ -119,8 +119,8 @@ Cost follow-ups:
 
 - Stage 3 cache (10 dashboard queries, local Docker): warm p95 **35.4 → 2.9 ms** (12× faster), cold p95 **62.2 → 32.3 ms**;
   373 KB of Redis for 20 cities (the fully pre-warmed variant needed 3.2 MB). Method and data: `docs/analysis/caching.md`.
-- Data: 53 cities × hourly observations from 2023-01-01 (1,742,640 rows), 3,051,637 forecast snapshots (5 models +
-  best_match baseline + NWS; backfill still running), loaded incrementally into ClickHouse in seconds.
+- Data: 53 cities × hourly observations from 2023-01-01 (1,742,640 rows), 3,051,637 forecast snapshots (4 Open-Meteo
+  models, the best_match baseline and NWS, plus a few legacy gfs_seamless / icon_seamless rows; backfill still running), loaded incrementally into ClickHouse in seconds.
 - API (Hono, 12 dashboard requests, 10 connections): ~1,600 req/s, p95 12.7 ms, 0 errors; 22/22 security checks.
   Compared with Express + Zod and Fastify + JSON Schema: same throughput within noise, Hono lowest memory (~150 MB vs
   up to 282 MB) and smallest dependency tree (116 vs 168–174 packages). Method and data: `docs/analysis/api-layer.md`.

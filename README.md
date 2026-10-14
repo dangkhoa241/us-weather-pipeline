@@ -128,6 +128,22 @@ Interactive version, with what each part does and why: [/how-it-works](https://u
 - **Stage 4** serves the API: one Zod definition per route drives validation, the OpenAPI docs and the dashboard's TypeScript types.
 - **Stage 5** is the dashboard: React + TypeScript, with hand-rolled d3 for the map and charts. It ships a snapshot exported from the API when I redeploy, and lays the live files from CloudFront over it.
 
+### Where each page's data comes from
+
+"Live" means the JSON files the publisher Lambda writes to S3 behind CloudFront. "Snapshot" means the files bundled
+with the site, exported from the local stack when I redeploy (now: data through 2026-10-02). Every live file falls
+back to its bundled copy if CloudFront can't be reached.
+
+| Page | Data | Updates |
+|---|---|---|
+| Overview (KPIs, map, state table) | **Both:** bundled daily history, with the last 60 days replaced by live `recent.json`; the KPI accuracy figure is from the snapshot | live history once a day (06:35 UTC; the archive runs ~5 days behind); snapshot at redeploy |
+| City (drill-down charts) | **Both:** the same daily files with the live 60-day overlay | same as Overview |
+| Accuracy | **Snapshot only:** scoring needs the local ClickHouse forecast history | at redeploy |
+| Forecast (NWS cards, next 48 h, model spread, alerts) | **Live:** `forecasts.json` and `alerts.json` | every 3 h |
+| Replay (in a city's day view) | **Neither:** the browser calls Open-Meteo directly (Previous Runs + archive APIs); a bundled 3-city sample if it can't | on request, once per page load |
+| Ops | **Live:** `status.json`; "accuracy scored through" from the snapshot | every 3 h |
+| How it works | **Both:** the diagram ships with the site; the "last run" badges come from live `status.json` | badges every 3 h; diagram at redeploy |
+
 ## AWS deployment
 
 Deployed on AWS: one SAM stack (`infra/template.yaml`) in us-east-2 on the AWS **Free plan**. It collects NWS data

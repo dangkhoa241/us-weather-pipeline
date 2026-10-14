@@ -20,8 +20,8 @@ numbers before merging the winner (the compare-3-and-review process from my earl
   - an always-free VM: Oracle Cloud Always Free requires a credit card to sign up.
 - **Trade-off:** the warehouse, cache and API live on a laptop, so Open-Meteo collection and ETL run only while the
   laptop is on. Every service needs its own usage caps so it can never outgrow its free tier.
-- **Evidence:** the NWS collector uses about **2% of Lambda's free GB-seconds** (~6,800 of 400,000 a month), and the
-  AWS bill is $0. Source: [ROADMAP.md](ROADMAP.md), free-tier table.
+- **Evidence:** the NWS collector uses about **2% of Lambda's free GB-seconds** (~6,800 of 400,000 a month), with
+  $0.00 billed. Source: [ROADMAP.md](ROADMAP.md), free-tier table.
 
 ## 2. Collect NWS data in the cloud, buffer it in Atlas, keep the rest local
 
@@ -89,7 +89,8 @@ numbers before merging the winner (the compare-3-and-review process from my earl
 - **Evidence:**
   - peak memory **~150 MB** against up to 282 MB (Fastify);
   - **116** packages against 168–174;
-  - p95 **12.7 ms** under load.
+  - **1,617 requests/s** at p95 **12.7 ms** after the merge (10 connections, 15 s, 0 errors; measured 2026-09-30 with
+    `node scripts/loadTestApi.js final`, data in `analysis/data/api-final-load.json`).
   - Source: [analysis/api-layer.md](analysis/api-layer.md).
 
 ## 6. The public site reads static JSON from S3 + CloudFront, not a live API
