@@ -64,7 +64,7 @@ npm install
 npm run seed:locations      # upsert cities + resolve NWS grid points
 npm run fetch               # Stage 1 (all modes); see `node fetchWeather.js --help`
 npm run fetch:watch         # Stage 1 watcher outside Docker (don't run it while the fetcher container runs)
-npm run sync:atlas          # copy NWS data collected by GitHub Actions on Atlas (setup: docs/SETUP_CLOUD_COLLECTION.md)
+npm run sync:atlas          # copy NWS data collected by the AWS collector Lambda on Atlas (setup: docs/SETUP_CLOUD_COLLECTION.md)
 npm run check:secrets       # pre-push check: secrets in history/working tree, tracked .env, commit emails
 npm run etl:clickhouse      # Stage 2
 npm run etl:redis           # Stage 3

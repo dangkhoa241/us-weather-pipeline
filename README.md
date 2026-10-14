@@ -32,17 +32,21 @@ Error grows by about 0.27 °F for each extra day of lead time. The scores compar
 
 ## Design decisions
 
-I designed the product and its features. Claude Code implemented them under my direction, using a compare-3-implementations-and-review process from my earlier ExpenseTracker project.
+I designed the product and its features. Claude Code implemented them under my direction: for each key feature it
+built 3 implementations, and I compared them with measured numbers before merging the winner. The strongest decisions:
 
-- **City drill-down:** click a city → 12 months → click a month → daily values, with a year selector.
-- **Map and state table side by side, linked:** hovering or clicking one highlights the other.
-- **Twin Temperature + Rain charts** with a moving average, an average line and ▲ max / ▼ min markers (inspired by BI dashboards I built at FPT Telecom).
-- **Charts appear only when you click a city.** The default is an "All US" overview.
-- **Period filters:** Week / Month / Quarter / Half-Year / Year.
-- **One city per state,** so the whole map is covered.
-- **Forecast-accuracy leaderboard** to answer "which weather model is most accurate?".
-- **$0 budget:** everything runs on free tiers.
-- **Compare & review:** 3 implementations per key feature, and a security review every stage.
+- **$0 and hybrid by design:** NWS data is collected on AWS (Lambda + EventBridge) into a 7-day Atlas buffer, so the
+  laptop can be off; the warehouse, cache and API run in Docker on the laptop. The collector uses ~2% of Lambda's free tier.
+- **Static files for the public site:** a publisher Lambda writes JSON to S3 behind CloudFront. Small attack surface:
+  no code runs per page view.
+- **Measured, not guessed:** Redis cache warm p95 35.4 → 2.9 ms; Hono over Express and Fastify (~150 MB vs up to
+  282 MB peak memory); a hand-rolled d3 map at +47 KB vs +71 / +83 KB.
+- **Alert emails only on a real change:** a replay of the stored heat alerts sends 5 emails instead of 17, with a hard
+  cap of 900 subscriber emails a month.
+
+All 10 decisions, with the alternatives, trade-offs and the source of every number:
+[docs/DESIGN_DECISIONS.md](docs/DESIGN_DECISIONS.md). Product choices (city drill-down, linked map and state table, twin
+charts, period filters, one city per state) are under [Features](#features).
 
 ## Features
 
@@ -80,32 +84,65 @@ high 1 to 7 days before, against the observed high, with a plain-words summary l
 
 ```mermaid
 flowchart LR
-  subgraph Sources["Free public APIs"]
+  subgraph EXT["External services"]
     NWS["NWS API<br/>forecasts + alerts"]
-    OM["Open-Meteo<br/>history + 5 models"]
+    OM["Open-Meteo<br/>history + 4 models"]
+    ATLAS[("MongoDB Atlas M0<br/>7-day buffer")]
+    UI["Dashboard on Vercel<br/>React + TypeScript"]
   end
-  subgraph Cloud["Cloud collection (AWS Free plan + Atlas M0)"]
-    LAMBDA["AWS Lambda + EventBridge<br/>NWS alerts hourly, forecasts every 3 h"] --> ATLAS[("MongoDB Atlas M0<br/>7-day buffer")]
+  subgraph AWSP["AWS (production)"]
+    EB["EventBridge<br/>schedules"]
+    COL["NWS collector<br/>Lambda"]
+    PUB["Dashboard publisher<br/>Lambda"]
+    S3[("S3<br/>live JSON files")]
+    CF["CloudFront<br/>CDN"]
+    EB --> COL
+    EB --> PUB
+    PUB --> S3 --> CF
   end
-  subgraph Local["Docker Compose (self-hosted)"]
-    F["Stage 1<br/>fetchWeather.js<br/>(Open-Meteo)"] --> M[("MongoDB<br/>raw")]
-    M -->|"Stage 2<br/>incremental ETL"| CH[("ClickHouse<br/>warehouse + rollups")]
-    CH -->|"Stage 3<br/>versioned cache"| R[("Redis")]
+  subgraph LOCAL["Local laptop (Docker)"]
+    RAW[("MongoDB raw<br/>Stage 1 fetcher")]
+    CH[("ClickHouse<br/>warehouse + rollups")]
+    R[("Redis<br/>cache")]
+    API["Hono API + OpenAPI"]
+    RAW -->|"Stage 2: ETL"| CH
+    CH -->|"Stage 3: versioned cache"| R
+    R -->|"Stage 4"| API
+    CH -.->|cache miss| API
   end
-  NWS --> LAMBDA
-  OM --> F
-  ATLAS -->|sync-atlas| M
-  R --> API["Stage 4<br/>Hono API + OpenAPI"]
-  CH -.->|cache miss| API
-  API --> UI["Stage 5<br/>React dashboard"]
-  API -->|export:snapshot| SNAP["Static JSON snapshot"] --> VERCEL["Vercel demo"]
+  NWS -->|"hourly + every 3 h"| COL
+  COL --> ATLAS
+  ATLAS -->|"sync, when the laptop is on"| RAW
+  OM -->|"Stage 1 fetcher"| RAW
+  ATLAS -.->|"NWS forecasts + alerts"| PUB
+  OM -.->|"history + 4 models"| PUB
+  CF -->|"live JSON"| UI
+  API -->|"snapshot, exported when I redeploy"| UI
 ```
 
-- **Stage 1** collects raw data with retries, rate limits and a weighted Open-Meteo call budget. NWS forecasts and alerts are collected in the cloud (Lambda → Atlas) and copied home by `sync-atlas`, so the laptop can be off.
+Interactive version, with what each part does and why: [/how-it-works](https://us-weather-pipeline.vercel.app/how-it-works). Live pipeline status: [/ops](https://us-weather-pipeline.vercel.app/ops).
+
+- **Stage 1** collects raw data with retries, rate limits and a weighted Open-Meteo call budget. NWS forecasts and alerts are collected on AWS (Lambda → Atlas) and copied home by `sync-atlas`, so the laptop can be off for up to a week.
 - **Stage 2** loads only new rows (watermark) into `ReplacingMergeTree` tables. Daily and monthly rollups use each city's local time.
 - **Stage 3** puts a versioned cache in front of the warehouse. The landing page's queries are pre-warmed after each load.
 - **Stage 4** serves the API: one Zod definition per route drives validation, the OpenAPI docs and the dashboard's TypeScript types.
-- **Stage 5** is the dashboard: React + TypeScript, with hand-rolled d3 for the map and charts.
+- **Stage 5** is the dashboard: React + TypeScript, with hand-rolled d3 for the map and charts. It ships a snapshot exported from the API when I redeploy, and lays the live files from CloudFront over it.
+
+### Where each page's data comes from
+
+"Live" means the JSON files the publisher Lambda writes to S3 behind CloudFront. "Snapshot" means the files bundled
+with the site, exported from the local stack when I redeploy (now: data through 2026-10-02). Every live file falls
+back to its bundled copy if CloudFront can't be reached.
+
+| Page | Data | Updates |
+|---|---|---|
+| Overview (KPIs, map, state table) | **Both:** bundled daily history, with the last 60 days replaced by live `recent.json`; the KPI accuracy figure is from the snapshot | live history once a day (06:35 UTC; the archive runs ~5 days behind); snapshot at redeploy |
+| City (drill-down charts) | **Both:** the same daily files with the live 60-day overlay | same as Overview |
+| Accuracy | **Snapshot only:** scoring needs the local ClickHouse forecast history | at redeploy |
+| Forecast (NWS cards, next 48 h, model spread, alerts) | **Live:** `forecasts.json` and `alerts.json` | every 3 h |
+| Replay (in a city's day view) | **Neither:** the browser calls Open-Meteo directly (Previous Runs + archive APIs); a bundled 3-city sample if it can't | on request, once per page load |
+| Ops | **Live:** `status.json`; "accuracy scored through" from the snapshot | every 3 h |
+| How it works | **Both:** the diagram ships with the site; the "last run" badges come from live `status.json` | badges every 3 h; diagram at redeploy |
 
 ## AWS deployment
 
@@ -115,40 +152,59 @@ collector, the dashboard publisher (behind CloudFront), alert emails and a 30-da
 
 ```mermaid
 flowchart LR
-  EB["EventBridge<br/>hourly + every 3 h"] --> L["Lambda<br/>NWS collector"]
-  NWS["NWS API"] --> L
-  SSM["SSM Parameter Store<br/>SecureString: Atlas URI"] -.->|cold start| L
-  L --> ATLAS[("MongoDB Atlas M0<br/>7-day buffer")]
-  L --> S3[("S3<br/>raw archive, 30 days")]
-  L -->|failed runs, heat alerts| SNS["SNS<br/>email"]
-  ATLAS -->|sync-atlas| LOCAL["Local Docker stack<br/>Stage 1–4"]
-  LOCAL -->|Open-Meteo raw copy| S3
-  LOCAL -->|pipeline failures| SNS
-  LOCAL -->|export:snapshot| VERCEL["Vercel dashboard<br/>(static snapshot)"]
-  BOUND["IAM permissions boundary"] -.->|caps the Lambda roles| L
-  subgraph P4["Part 4: live dashboard data"]
-    EB2["EventBridge<br/>every 3 h + daily"] --> P["Lambda<br/>dashboard publisher"]
-    P -->|recent / forecasts / alerts JSON| S3D[("S3 raw bucket<br/>dashboard/ prefix")]
-    S3D -->|"Origin Access Control"| CF["CloudFront"]
+  subgraph EXT["External services"]
+    NWS["NWS API"]
+    ATLAS[("MongoDB Atlas M0<br/>7-day buffer")]
+    UI["Dashboard on Vercel"]
+    TS["Cloudflare Turnstile<br/>bot check"]
   end
-  ATLAS -.->|NWS forecasts + alerts| P
-  OM["Open-Meteo"] -.->|history + 4 models| P
-  CF -.->|"live JSON, falls back to the snapshot"| VERCEL
-  subgraph P5["Part 5: public email alerts"]
-    FORM["'Get alerts' form<br/>(Vercel + Turnstile)"] -->|POST| URL["Lambda Function URL<br/>sign-up"]
-    URL --> DDB[("DynamoDB<br/>limits + budget")]
-    URL -->|email subscription + filter| PUB["SNS public topic"]
+  subgraph AWSP["AWS (production): one SAM stack, Free plan"]
+    EB["EventBridge<br/>4 schedules"]
+    COL["Lambda<br/>NWS collector"]
+    PUB["Lambda<br/>dashboard publisher"]
+    S3[("S3<br/>30-day raw archive<br/>+ live JSON files")]
+    CF["CloudFront<br/>Origin Access Control"]
+    SNSO["SNS owner topic<br/>pipeline emails"]
+    SNSP["SNS subscriber topic<br/>alert emails"]
+    SIGN["Lambda + Function URL<br/>sign-up"]
+    DDB[("DynamoDB<br/>limits + email budget")]
+    SSM["SSM Parameter Store<br/>SecureStrings"]
   end
-  L -->|"subscriber alerts (city, category)"| PUB
+  subgraph LOCAL["Local laptop (Docker)"]
+    DOCKER["Stages 1-4"]
+  end
+  EB -->|"hourly + every 3 h"| COL
+  EB -->|"every 3 h + daily"| PUB
+  NWS --> COL
+  COL -->|"NWS data"| ATLAS
+  ATLAS --> PUB
+  COL -->|"raw copy"| S3
+  PUB -->|"live files"| S3
+  S3 -->|"private origin"| CF
+  CF -->|"live JSON"| UI
+  COL -->|"failures, heat alerts"| SNSO
+  COL -->|"new alerts per city + category"| SNSP
+  UI -->|"sign-up form"| SIGN
+  SIGN -->|verify| TS
+  SIGN -->|limits| DDB
+  SIGN -->|subscribe| SNSP
+  SSM -.->|"secrets at cold start"| COL
+  SSM -.-> PUB
+  SSM -.-> SIGN
+  ATLAS -->|sync| DOCKER
+  DOCKER -->|"Open-Meteo raw copy"| S3
+  DOCKER -->|"pipeline failures"| SNSO
 ```
+
+Every role the stack creates carries an IAM permissions boundary (see [Security](#security)).
 
 | Service | Job | Free-tier allowance | Our use (measured / expected per month) |
 |---|---|---|---|
 | Lambda `weather-pipeline-nws-collector` | NWS alerts (hourly) and forecasts (every 3 h) → Atlas + S3 | 1 M requests, 400,000 GB-s | ~960 runs, ~6,800 GB-s (2%); 256 MB; alerts ~8 s, forecasts ~88 s, 168 MB peak |
-| Lambda `weather-pipeline-dashboard-publisher` | `recent.json` daily, `forecasts.json` + `alerts.json` every 3 h → S3 `dashboard/` | (shared with the collector) | 8 runs / day; 256 MB |
+| Lambda `weather-pipeline-dashboard-publisher` | `recent.json` daily; `forecasts.json`, `alerts.json` + `status.json` every 3 h → S3 `dashboard/` | (shared with the collector) | 8 runs / day; 256 MB |
 | EventBridge | 4 schedule rules | scheduled rules free | 40 invocations / day |
-| S3 raw archive | gzipped raw responses (deleted after 30 days) + the 3 dashboard files | 5 GB, 2,000 PUT, 20,000 GET (12 months) | ~1,170 PUTs (59%; ≤ 1,333 = 67% by hard caps: collector 16 / day, local 10 / day, publisher 17 / day); ~175 MB held by the 30-day rule |
-| CloudFront | serves the 3 dashboard files (OAC, PriceClass_100, CORS only for the Vercel origin) | 1 TB out, 10 M requests (always free) | cache misses only reach S3 (~3,000 GETs, 15%) |
+| S3 raw archive | gzipped raw responses (deleted after 30 days) + the 4 dashboard files | 5 GB, 2,000 PUT, 20,000 GET (12 months) | ~1,410 PUTs (~71%; ≤ 82% by hard caps: collector 16 / day, local 10 / day, publisher 17 + 10 for `status.json` / day); ~175 MB held by the 30-day rule |
+| CloudFront | serves the 4 dashboard files (OAC, PriceClass_100, CORS only for the Vercel origin) | 1 TB out, 10 M requests (always free) | cache misses only reach S3 (~3,000 GETs, 15%) |
 | SNS | email on failed runs and new, upgraded or extended heat alerts | 1 M publishes, 1,000 emails | < 150 emails |
 | Lambda `weather-pipeline-signup` + Function URL | public email sign-ups: validation, Turnstile, limits, SNS email subscription | (shared with the collector) | < 1,000 requests; 128 MB, 8 s timeout |
 | SNS public topic | subscriber alert emails, one message per city + category (filter policies) | shares the 1,000 emails above | ≤ 900 / month (hard cap), ≤ 100 subscriptions |
@@ -172,11 +228,20 @@ is in [docs/analysis/live-dashboard.md](docs/analysis/live-dashboard.md).
 
 | Adapter interface | Local implementation | AWS |
 |---|---|---|
-| `Notifier` | console | **SNS** (deployed) |
-| `RawStore` | MongoDB | MongoDB + **S3 archive copy** (deployed) |
-| `Scheduler` | node-cron | **EventBridge** for NWS collection (deployed) |
-| `CacheStore` | Redis | not planned (Part 4 serves static files instead) |
-| `CounterStore` | in memory | **DynamoDB** for the email sign-ups (deployed) |
+| `Notifier` | console | **Deployed:** SNS (owner topic + subscriber topic) |
+| `RawStore` | MongoDB | **Deployed:** a 30-day S3 archive copy (MongoDB stays the raw store) |
+| `Scheduler` | node-cron (local fetcher) | **Deployed:** EventBridge rules in the SAM stack for the Lambdas (node-cron stays for the local jobs) |
+| `CounterStore` | in memory | **Deployed:** DynamoDB (sign-up limits, email budget, cooldowns) |
+| `CacheStore` | Redis | **Not built:** a DynamoDB cache. The live site reads static files instead |
+| `Warehouse` | ClickHouse | **Not built:** a BigQuery adapter (the free sandbox expires tables after 60 days) |
+
+**What I would add with a budget** (each needs a paid plan, so none is built):
+- **A cloud warehouse** (BigQuery beyond the sandbox, or ClickHouse Cloud), so ETL, cache and API run without the
+  laptop. Today ClickHouse is self-hosted (ClickHouse Cloud is trial only).
+- **An always-on VM** for the Docker stack. The always-free option (Oracle Cloud) needs a credit card.
+- **A query-style API on AWS** (DynamoDB + Lambda Function URL, design A in
+  [live-dashboard.md](docs/analysis/live-dashboard.md)), for views that static files can't pre-build.
+- **AWS WAF and a custom domain** on CloudFront (the distribution has neither: `infra/template.yaml`).
 
 ## By the numbers
 
@@ -190,7 +255,7 @@ is in [docs/analysis/live-dashboard.md](docs/analysis/live-dashboard.md).
 | Demo snapshot | 3.0 MB (557 KB gzipped) for 53 cities × 3.75 years (2023-01-01 to 2026-10-02) |
 | Compare & review | **5** features × 3 implementations (15 design branches on GitHub) |
 | AWS Lambda | 256 MB; alerts run ~8 s, forecast run ~88 s (106 NWS requests, ~9,000 rows, 168 MB peak); ~960 runs / month ≈ 2% of the free GB-s |
-| AWS S3 | ~660 PUTs / month (33% of 2,000; ≤ 40% by hard caps); ~175 MB stored with 30-day expiry (3.5% of 5 GB) |
+| AWS S3 | ~1,410 PUTs / month expected (~71% of 2,000; ≤ 82% by hard caps); ~175 MB stored with 30-day expiry (3.5% of 5 GB) |
 | AWS bill | **$0** (Free plan) |
 | Budget | **$0** |
 
@@ -244,7 +309,7 @@ For each key feature, Claude Code built **3 implementations** on separate branch
 | API | Hono, @hono/zod-openapi, Zod, Swagger UI |
 | Dashboard | React 19, TypeScript, Vite, d3-geo / d3-scale / d3-shape, ECharts (sparklines), TanStack Query + Table, Zustand, Tailwind CSS, shadcn/ui |
 | Quality | Vitest, React Testing Library, Playwright (demo checks, GIF), Docker Compose |
-| Cloud (AWS) | Lambda, EventBridge, S3, SNS, SSM Parameter Store, IAM, CloudWatch Logs, CloudFormation / SAM, CloudFront |
+| Cloud (AWS) | Lambda, EventBridge, S3, CloudFront, SNS, DynamoDB, SSM Parameter Store, IAM, CloudWatch Logs, CloudFormation / SAM |
 | Hosting | Vercel (static demo), GitHub Actions CI |
 
 Each storage layer sits behind an adapter (`RawStore`, `CacheStore`, `Warehouse`, `Scheduler`, `Notifier`). A cloud service such as BigQuery or DynamoDB can be added as one new file.
@@ -282,8 +347,7 @@ More: [cloud collection setup](docs/SETUP_CLOUD_COLLECTION.md), [Vercel demo](do
 | GitHub Actions | Free on public repos | CI (+ manual collection fallback) |
 | Cloudflare Turnstile | Free plan, unlimited verifications | 1 widget (email sign-up form) |
 | MongoDB, ClickHouse, Redis | Self-hosted in Docker | Local disk only |
-
-| AWS (Lambda, S3, SNS, SSM, EventBridge, CloudWatch Logs) | Free plan + always-free allowances | ≤ 2% of Lambda, ~33% of S3 PUTs (table above) |
+| AWS (Lambda, S3, CloudFront, SNS, DynamoDB, SSM, EventBridge, CloudWatch Logs) | Free plan + always-free allowances | ~2% of Lambda, ~71% of S3 PUTs (table above) |
 
 **Cost so far: $0.** The AWS account is on the **Free plan** (until 2027-04-02): usage above the always-free
 allowances is paid from sign-up credits, never billed to a card. A **zero-spend budget alert** emails on any charge,

@@ -1,11 +1,15 @@
-# Setup: cloud collection of NWS data (GitHub Actions → MongoDB Atlas)
+# Setup: cloud collection of NWS data (MongoDB Atlas; GitHub Actions as a manual fallback)
 
-NWS forecasts and alerts can only be collected live. Two scheduled GitHub Actions workflows collect them into a free
+> **Since Stage 6a part 3 (2026-10-02), the AWS collector Lambda (EventBridge, hourly + every 3 h) collects NWS data into
+> Atlas** ([SETUP_AWS.md](SETUP_AWS.md), step 10). The two GitHub workflows below no longer run on a schedule: they are
+> `workflow_dispatch` only, a manual fallback. The Atlas setup in this guide is still what the Lambda uses.
+
+NWS forecasts and alerts can only be collected live. Two GitHub Actions workflows (originally scheduled) collect them into a free
 MongoDB Atlas cluster, so no laptop has to stay on. When the laptop is on, the `fetcher` container copies the data into
 local Mongo (`sync-atlas`). Everything here is free: Atlas M0 needs no credit card, and Actions minutes are free on
 public repositories.
 
-| Workflow | Schedule (UTC) | Writes |
+| Workflow | Schedule (UTC), before the Lambda took over | Writes |
 |---|---|---|
 | `NWS forecasts` (`.github/workflows/nws-forecasts.yml`) | every 3 h at minute 7 | `forecast_snapshots`, `pipeline_runs` |
 | `NWS alerts` (`.github/workflows/nws-alerts.yml`) | every hour at minute 23 | `alerts`, `pipeline_runs` |

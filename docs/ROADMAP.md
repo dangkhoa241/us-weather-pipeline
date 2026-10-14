@@ -30,7 +30,7 @@ Approved free stack:
 | Open-Meteo | Non-commercial only. 600 / min, 5,000 / hour, 10,000 / day *weighted* calls (a request counts extra per 10 variables and per 14 days) | 429 until the window resets | No | ~2,400 / day steady (24%: ~1,100 history/backfill/baseline + ~1,270 om-forecast every 6 h); our cap 2,000 / h and 6,000 / day, backfill ≤ 75% of it | catch-up below |
 | Open-Meteo from the browser (forecast replay, checked 2026-10-05) | Same limits, counted per visitor's IP (CORS `*`); non-commercial | 429 → the panel shows "Live data unavailable" + the bundled sample | No | 2 requests (~5 weighted calls) per city + day a visitor opens; cached for the page load, never retried | only on request |
 | Vercel Hobby (dashboard demo, static) | 100 GB Fast Data Transfer / month, 100 deployments / day, 45 min / build; non-commercial only | Project paused (Hobby is never billed) | No | ~0.5 MB gzipped per visit (≈ 200k visits / month) | static snapshot, size independent of traffic |
-| MongoDB Atlas M0 (NWS via GitHub Actions) | 512 MB storage | Writes fail | No | ~48 MB / day; 7-day TTL ≈ 335 MB data, ~370 MB with indexes (72%) | if > 430 MB: retention 5 days |
+| MongoDB Atlas M0 (NWS via the collector Lambda) | 512 MB storage | Writes fail | No | ~48 MB / day; 7-day TTL ≈ 335 MB data, ~370 MB with indexes (72%) | if > 430 MB: retention 5 days |
 | Discord webhook | ~30 messages / min per webhook | 429 | No | a few / day | a few / day |
 | GitHub Actions | Free on public repos (private: 2,000 min / month) | Jobs stop running | No | — | — |
 | MongoDB, ClickHouse, Redis (Docker) | Self-hosted; limited only by disk | Disk full | No | ~32 MB / day on disk (≈ 12 GB / year), mostly forecast snapshots | local disk only |
@@ -119,8 +119,8 @@ Cost follow-ups:
 
 - Stage 3 cache (10 dashboard queries, local Docker): warm p95 **35.4 → 2.9 ms** (12× faster), cold p95 **62.2 → 32.3 ms**;
   373 KB of Redis for 20 cities (the fully pre-warmed variant needed 3.2 MB). Method and data: `docs/analysis/caching.md`.
-- Data: 53 cities × hourly observations from 2023-01-01 (1,742,640 rows), 3,051,637 forecast snapshots (5 models +
-  best_match baseline + NWS; backfill still running), loaded incrementally into ClickHouse in seconds.
+- Data: 53 cities × hourly observations from 2023-01-01 (1,742,640 rows), 3,051,637 forecast snapshots (4 Open-Meteo
+  models, the best_match baseline and NWS, plus a few legacy gfs_seamless / icon_seamless rows; backfill still running), loaded incrementally into ClickHouse in seconds.
 - API (Hono, 12 dashboard requests, 10 connections): ~1,600 req/s, p95 12.7 ms, 0 errors; 22/22 security checks.
   Compared with Express + Zod and Fastify + JSON Schema: same throughput within noise, Hono lowest memory (~150 MB vs
   up to 282 MB) and smallest dependency tree (116 vs 168–174 packages). Method and data: `docs/analysis/api-layer.md`.
@@ -207,8 +207,9 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
 - Live `om-forecast` reads the run time from `meta.json` before fetching; if a model publishes a new run mid-fetch the run is
   marked partial and some snapshots may mix runs.
 - NWS sometimes serves old forecasts (e.g. Philadelphia issued the day before); stored as-is with their `issued_at`.
-- GitHub Actions cron runs can start 10–30+ min late or be skipped (first night: 5 of ~7 forecast runs and 4 of ~20 alert
-  runs happened); alerts are checked hourly at best, so short alerts can be missed.
+- Alerts are checked hourly, so short alerts can be missed. (NWS collection first ran on GitHub Actions cron, whose runs
+  started 10–30+ min late or were skipped: first night, 5 of ~7 forecast runs and 4 of ~20 alert runs happened. Since
+  Stage 6a part 3, EventBridge runs the collector Lambda on schedule; the workflows are a manual fallback only.)
 - Observed history lags ~5 days (archive), so accuracy for the most recent days fills in later.
 - Rollups include partial days (e.g. the last archive day); the `hours` column tells complete days apart.
 - Forecast accuracy covers temperature on hourly forecasts only (NWS 12-hour periods and precipitation skill not yet).
@@ -491,13 +492,13 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
 
 - [x] `pipeline.js` orchestrator (1 → 2 → 3, stop on failure) scheduled by node-cron in the fetcher (every 3 h at :50);
       parent run with steps in `pipeline_runs`, failures sent to the Notifier
-- [ ] Heat-wave alerts + pipeline-failure alerts via Notifier (Sat)
+- [x] Heat-wave alerts + pipeline-failure alerts via Notifier (SNS, Stage 6a)
 - [ ] Docker Compose: add API service (Wed)
-- [ ] Unit tests (Sat) — started: Vitest, 31 tests (12 cache + 19 API; `npm test`)
+- [x] Unit tests: Vitest, 398 tests (205 backend + 193 dashboard; `npm test`, `npm run test:dashboard`)
 - [ ] Testcontainers integration tests (Sat) *(cut first if short on time)*
-- [ ] GitHub Actions CI (Sat)
-- [ ] README with Mermaid architecture diagram (Sun)
-- [ ] Screenshots + demo GIF, polish (Sun)
+- [x] GitHub Actions CI (`.github/workflows/ci.yml`)
+- [x] README with Mermaid architecture diagrams (data flow + AWS)
+- [x] Screenshots + demo GIF (`docs/images/`)
 
 ## Optional later phase – cloud (free tiers only, $1 budget alert first)
 
@@ -507,8 +508,8 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
 - [ ] BigQueryWarehouse (deploy target, free tier): one new file in `src/adapters/warehouse/` with its own SQL;
       sandbox tables expire after 60 days
 - [ ] RawStore → S3 (a 30-day raw *archive* copy exists since Stage 6a part 2; MongoDB stays the raw store)
-- [ ] CacheStore → DynamoDB
-- [ ] Scheduler → EventBridge
+- [ ] CacheStore → DynamoDB (not planned: the live site reads static files from CloudFront since Part 4)
+- [x] Scheduler → EventBridge (rules in the SAM stack run the Lambdas since Stage 6a part 3; node-cron stays for local jobs)
 - [x] Notifier → SNS (Stage 6a part 1)
 
 ## Schedule

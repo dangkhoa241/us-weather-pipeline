@@ -1,4 +1,4 @@
-# Public email sign-ups for NWS alerts (design only, Stage A)
+# Public email sign-ups for NWS alerts
 
 Goal: a visitor picks one city and one or more alert types on the dashboard and gets NWS alerts for them by email.
 Nothing is sent until they confirm the email address (SNS double opt-in), and every email has an unsubscribe link.
@@ -8,7 +8,7 @@ tag `Project=us-weather-pipeline`, everything in `infra/template.yaml` so `npm r
 Facts checked 2026-10-08. Measurements come from a read-only replay of the 2,940 NWS alerts in Atlas
 (2026-09-30 → 2026-10-08).
 
-**Status: built on branch `feature/email-signups` (Stage B, 2026-10-08), not deployed.** Decisions taken (owner,
+**Status: deployed 2026-10-08 (Stage C, end-to-end tested; see the ROADMAP).** Built in Stage B on `feature/email-signups`. Decisions taken (owner,
 2026-10-08): 24 h public cooldown per city + category (Upgraded always sent): yes. Subscriber cap: **100**. One
 implementation. Reserved concurrency: **off** for now (account limit 10, increase requested), switchable with the
 stack parameter `SignupReservedConcurrency`. The **[decide]** marks below are the original questions, kept for the record.
