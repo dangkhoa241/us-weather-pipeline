@@ -1,4 +1,7 @@
-# Live dashboard without the laptop (Stage 6a part 4, design only)
+# Live dashboard without the laptop (Stage 6a part 4)
+
+**Status: design B built and live since 2026-10-07.** `status.json` (the Ops page) was added on 2026-10-13; S3 PUTs
+are now ~71% of the free 2,000 a month ([ROADMAP](../ROADMAP.md)).
 
 Goal: the Vercel dashboard shows data that stays fresh while the local Docker stack is off. Today it shows a static
 snapshot (`dashboard/public/data/`, ~3.1 MB raw / ~0.4 MB gzipped, 60 files) that `npm run export:snapshot` writes
@@ -114,4 +117,4 @@ fixed by lowering the archive's alerts cadence. A has more resume value, but it 
 to serve the same files. That API could be added later on top of B's data if a query-style endpoint is ever needed.
 
 **Decision (2026-10-01): B.** The raw archive stores NWS alerts every 3 h instead of hourly, so S3 PUTs stay at
-~900 / month (~45% of 2,000). Not built yet.
+~900 / month (~45% of 2,000). Built and deployed 2026-10-07.
