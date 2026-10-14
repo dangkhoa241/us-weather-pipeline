@@ -7,9 +7,11 @@
 // overall (ledger in api_usage).
 // Credentials come from the AWS SDK's default chain (AWS_PROFILE → ~/.aws). A failed upload is logged and
 // swallowed: the archive must never break the pipeline.
+// Reading back (listKeys / readObject) is for restores only (scripts/restoreNws.js): the runtime user may only write,
+// so the restore passes a client with read credentials.
 
-import { gzipSync } from "node:zlib";
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { gunzipSync, gzipSync } from "node:zlib";
+import { GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { ApiBudget, BudgetExceeded } from "../../lib/apiBudget.js";
 import { redact } from "../notifier/snsNotifier.js";
 
@@ -87,6 +89,35 @@ export class S3RawArchive {
         else console.warn(`[archive:s3] ${source}: upload failed (${err.name ?? "Error"}): ${redact(err.message)}`);
       }
     }
+  }
+
+  /**
+   * Keys of one source's objects for the UTC days `fromDay`..`toDay` (YYYY-MM-DD), oldest first.
+   * One LIST request per day (a day holds at most 24 objects per source).
+   */
+  async listKeys(source, fromDay, toDay) {
+    if (!SOURCE.test(source)) throw new Error(`invalid archive source "${source}"`);
+    const keys = [];
+    for (let day = Date.parse(`${fromDay}T00:00:00Z`); day <= Date.parse(`${toDay}T00:00:00Z`); day += 86_400_000) {
+      const prefix = `${source}/${new Date(day).toISOString().slice(0, 10).replace(/-/g, "/")}/`;
+      let token;
+      do {
+        const res = await this.client.send(new ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix, ContinuationToken: token }));
+        keys.push(...(res.Contents ?? []).map((o) => o.Key));
+        token = res.IsTruncated ? res.NextContinuationToken : undefined;
+      } while (token);
+    }
+    return keys.sort();
+  }
+
+  /** One archived run: its NDJSON lines as [{ url, fetched_at: Date, body }]. */
+  async readObject(key) {
+    const res = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    const text = gunzipSync(Buffer.from(await res.Body.transformToByteArray())).toString("utf8");
+    return text.split("\n").filter(Boolean).map((line) => {
+      const { url, fetched_at, body } = JSON.parse(line);
+      return { url, fetched_at: new Date(fetched_at), body };
+    });
   }
 
   close() {

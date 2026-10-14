@@ -31,6 +31,7 @@ Bring raw weather data into one local MongoDB raw store, from which every later 
   | `om-forecast` | latest Open-Meteo forecast per model → `forecast_snapshots` | `40 2,8,14,20 * * *` (every 6 h) |
   | `om-backfill` | past model runs from the Single Runs API → `forecast_snapshots` (last 90 days, resumable per model and city) | `15 * * * *` |
   | `om-baseline` | best_match baseline from the Previous Runs API → `forecast_snapshots` | `45 6 * * *` |
+  | `om-gap-fill` | not used (failed validation): empty accuracy slots from the Previous Runs API → `forecast_snapshots` | by hand only |
   | `sync-atlas` | NWS data from Atlas → `forecast_snapshots`, `alerts`, `pipeline_runs` | inside the pipeline run |
   | `forecast`, `alerts` | NWS → `forecast_snapshots`, `alerts` | `"off"` in `docker-compose.yml`: the Lambda collects them |
 
@@ -46,6 +47,12 @@ Bring raw weather data into one local MongoDB raw store, from which every later 
   reserve the cost before each request and stop cleanly at the budget, then resume on their next run. The defaults are
   2,000 an hour and 6,000 a day, under Open-Meteo's 5,000 and 10,000. The backfill may use at most 75% of the budget,
   so live forecasts always have room.
+- **Accuracy coverage.** Model accuracy comes from the Single Runs backfill, run by run, oldest first, so it needs the
+  stack on until it catches up. Filling the empty slots from the Previous Runs API instead (`om-gap-fill`: insert-only,
+  `--dry-run`, `--validate`, and a gate that writes only after a validation passed for every model) was tried and is
+  not used: Previous Runs "day 1" scored 0.21 °F better for ECMWF and 0.13 °F for HRRR than our lead day 1, above the
+  0.1 °F gate (see [docs/analysis/previous-runs-validation.md](../analysis/previous-runs-validation.md)). It is in no
+  schedule and runs only by hand.
 - **Raw store adapter.** Pipeline code uses the `RawStore` interface (`src/adapters/rawStore/`), and `RAW_STORE=mongo`
   picks MongoDB. `ensureCollections()` creates the unique keys and indexes; a TTL index is added only when
   `RAW_RETENTION_DAYS` is above 0 (it is 0 locally, so the local raw store keeps everything).
@@ -87,6 +94,8 @@ Bring raw weather data into one local MongoDB raw store, from which every later 
 | Local Docker disk ~32 MB a day (≈ 12 GB a year), mostly forecast snapshots | [ROADMAP.md](../ROADMAP.md), free-tier table |
 | 1.75 M hourly observations and 3.42 M forecast snapshots loaded (as of 2026-10-09) | [README.md](../../README.md), "By the numbers" |
 | Local fetcher S3 archive: ~6 PUTs a day expected, cap 10 a day | [SETUP_AWS.md](../SETUP_AWS.md), S3 PUT budget table |
+| Single Runs backfill left on 2026-10-14: 64,689 runs (calls) for the 90-day window, ~3-4 weeks of daily running; Single Runs keeps runs back to 2026-04-02 | [ROADMAP.md](../ROADMAP.md), Weekly refresh |
+| Previous Runs validation (not used): 379 calls; ECMWF -0.21 °F, HRRR -0.13 °F, ICON -0.09 °F, GFS -0.08 °F | [docs/analysis/previous-runs-validation.md](../analysis/previous-runs-validation.md) |
 
 ## Where in the code
 
@@ -96,9 +105,10 @@ Bring raw weather data into one local MongoDB raw store, from which every later 
 | Stage 1 → 2 → 3 orchestration | `pipeline.js` |
 | Mode runner and run log | `src/stage1/runMode.js`, `src/lib/runLog.js` |
 | Open-Meteo jobs | `src/stage1/openMeteoHistory.js`, `openMeteoForecast.js`, `openMeteoBackfill.js`, `openMeteoBaseline.js` |
+| Previous Runs gap fill experiment (not used) | `src/stage1/openMeteoGapFill.js` |
 | Atlas sync, forecast-gap check | `src/stage1/atlasSync.js`, `src/stage1/forecastGap.js` |
 | HTTP and API budget | `src/lib/http.js`, `src/lib/apiBudget.js` |
 | Collections and keys | `src/collections.js` |
-| Raw store adapters | `src/adapters/rawStore/mongoRawStore.js`, `src/adapters/rawStore/s3RawArchive.js` |
+| Raw store adapters (`upsertMany`, insert-only `insertMissing`) | `src/adapters/rawStore/mongoRawStore.js`, `src/adapters/rawStore/s3RawArchive.js` |
 | Scheduler adapter | `src/adapters/scheduler/cronScheduler.js` |
 | Container | `docker-compose.yml` (`fetcher`) |

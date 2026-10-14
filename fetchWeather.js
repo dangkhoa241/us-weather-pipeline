@@ -27,6 +27,10 @@ Modes (default: all):
                (lead_days exact, issued_at approximate); last ${config.stage1.omBackfillDays} days, resumes per location
   om-forecast  latest Open-Meteo forecasts, one per model (every 6 h, after the model runs):
                ${config.stage1.openMeteoForecastModels.join(", ")}
+  om-gap-fill  NOT USED (failed validation, docs/analysis/previous-runs-validation.md); by hand only:
+               fill empty accuracy slots (model, city, target hour, lead day 1..7) from the Previous Runs API:
+               ${config.stage1.omBackfillModels.join(", ")}; insert-only, never where a collected row exists;
+               default target days: last ${config.stage1.omBackfillDays} days up to yesterday (--from/--to to change)
   alerts       NWS active alerts for tracked states → alerts
   sync-atlas   copy NWS forecasts, alerts and run logs collected by GitHub Actions on Atlas into the local store
   all          sync-atlas, history, forecast, om-backfill, om-baseline and alerts
@@ -36,6 +40,9 @@ Options:
   --from <YYYY-MM-DD>    history backfill start (turns off incremental mode)
   --to <YYYY-MM-DD>      history backfill end (default and max: ${archiveEndDay()}, the archive lag limit)
   --days <n>             om-backfill / om-baseline: how many days back (default ${config.stage1.omBackfillDays})
+  --dry-run              om-gap-fill: print the planned requests and weighted calls; no API calls, nothing written
+                         (with --validate: the validation's plan)
+  --validate             om-gap-fill: compare lead-day-1 MAE of collected rows vs Previous Runs; nothing written
   --watch                keep running on a schedule:
                            forecast "${config.stage1.forecastCron}", alerts "${config.stage1.alertsCron}",
                            om-forecast "${config.stage1.openMeteoForecastCron}",
@@ -48,10 +55,11 @@ Examples:
   node fetchWeather.js
   node fetchWeather.js history --location stockton-ca --from 2023-01-01 --to 2023-12-31
   node fetchWeather.js om-backfill --location stockton-ca --days 3
+  node fetchWeather.js om-gap-fill --from 2026-07-12 --to 2026-10-09 --validate
   node fetchWeather.js --watch
 `;
 
-const MODES = ["history", "forecast", "om-backfill", "om-baseline", "om-forecast", "alerts", "sync-atlas"];
+const MODES = ["history", "forecast", "om-backfill", "om-baseline", "om-forecast", "om-gap-fill", "alerts", "sync-atlas"];
 // "all" and --watch. Live Open-Meteo forecasts (om-forecast) feed the Forecast page; om-backfill fills past runs for
 // accuracy. Both draw from the same Open-Meteo budget (om-backfill takes at most 75% of it).
 const DEFAULT_MODES = ["sync-atlas", "history", "forecast", "om-forecast", "om-backfill", "om-baseline", "alerts"];
@@ -68,6 +76,8 @@ function parseCli() {
       to: { type: "string" },
       days: { type: "string" },
       watch: { type: "boolean", default: false },
+      "dry-run": { type: "boolean", default: false },
+      validate: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
     },
   });
@@ -83,11 +93,14 @@ function parseCli() {
   const days = values.days == null ? undefined : Number(values.days);
   if (days !== undefined && !(Number.isInteger(days) && days > 0 && days <= 180)) throw new Error("--days must be 1..180");
   if (values.from && values.to && values.from > values.to) throw new Error("--from is after --to");
+  if ((values["dry-run"] || values.validate) && mode !== "om-gap-fill") throw new Error("--dry-run and --validate are for om-gap-fill");
   return {
     help: values.help,
     watch: values.watch,
     modes: mode === "all" ? DEFAULT_MODES : [mode],
     days,
+    dryRun: values["dry-run"],
+    validate: values.validate,
     locationIds: values.location?.split(",").map((s) => s.trim()).filter(Boolean),
     range: { from: values.from, to: values.to },
   };

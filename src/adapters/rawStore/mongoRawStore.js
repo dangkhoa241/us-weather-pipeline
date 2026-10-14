@@ -82,6 +82,25 @@ export class MongoRawStore extends RawStore {
     return totals;
   }
 
+  async insertMissing(collection, docs, keyFields) {
+    const col = this.db.collection(collection);
+    const totals = { inserted: 0, unchanged: 0 };
+    const storedAt = new Date();
+
+    for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+      const ops = docs.slice(i, i + BATCH_SIZE).map((doc) => {
+        const { _id, first_seen_at, stored_at, ...fields } = doc;
+        const filter = Object.fromEntries(keyFields.map((k) => [k, doc[k]]));
+        // $setOnInsert only: a document that already exists is matched and left untouched.
+        return { updateOne: { filter, update: { $setOnInsert: { ...fields, stored_at: storedAt, first_seen_at: first_seen_at ?? storedAt } }, upsert: true } };
+      });
+      const res = await col.bulkWrite(ops, { ordered: false });
+      totals.inserted += res.upsertedCount;
+      totals.unchanged += res.matchedCount;
+    }
+    return totals;
+  }
+
   async insertOne(collection, doc) {
     const res = await this.db.collection(collection).insertOne(doc);
     return res.insertedId;
@@ -93,6 +112,11 @@ export class MongoRawStore extends RawStore {
 
   async updateOne(collection, filter, fields) {
     await this.db.collection(collection).updateOne(filter, { $set: fields });
+  }
+
+  async updateMany(collection, filter, fields) {
+    const res = await this.db.collection(collection).updateMany(filter, { $set: fields });
+    return res.modifiedCount;
   }
 
   async find(collection, filter = {}, { sort, limit, projection } = {}) {

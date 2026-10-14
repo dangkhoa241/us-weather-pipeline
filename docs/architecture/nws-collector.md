@@ -12,7 +12,8 @@ buffer, and the local stack copies the buffer home with `sync-atlas`.
 ## Requirements
 
 - Run on time: alerts every hour, forecasts every 3 hours, for all 53 tracked cities.
-- Keep running while the laptop is off, for up to 7 days without data loss.
+- Keep running while the laptop is off: up to 7 days with no action (the Atlas buffer), up to 30 days with a restore
+  from the S3 raw archive.
 - Stay inside the AWS Free plan and the Atlas M0 free tier (512 MB), with no VPC and so no NAT Gateway.
 - Send the NWS API a `User-Agent` with a contact, as NWS requires.
 - Never send the same failure email twice for one run.
@@ -46,6 +47,10 @@ Laptop (when on): fetcher container ── sync-atlas ──► local MongoDB ra
   TTL index, so Atlas deletes documents after 7 days.
 - **Raw archive.** Each run's raw responses are gzipped into one NDJSON object per source and uploaded to S3.
   Alerts are archived once per 3-hour UTC slot, not every hour.
+- **Restore from the archive.** `npm run restore:nws -- --from <time> --to <time>` rebuilds the documents of a window
+  that never reached the laptop from the S3 raw archive, with the collector's own transforms (`toSnapshot`, `toAlert`),
+  and inserts only the ones missing locally (insert-only by natural key, so a second run changes nothing). It is a dry
+  run unless `--apply` is given. Alerts can only come back for the 3-hour slots that were archived.
 - **Sync home.** On the laptop, `sync-atlas` copies `forecast_snapshots`, `alerts` and finished `pipeline_runs` from
   Atlas into the local MongoDB. It runs as the first step of `pipeline.js` (default `PIPELINE_CRON` every 3 hours at
   :50) and once at watcher startup. It is incremental (a marker per collection) and upserts by natural key.
@@ -80,7 +85,8 @@ whole pipeline to the cloud (too big for the free tiers). The free-tier constrai
 - **Archive failures.** A failed S3 upload only logs a warning; the run goes on.
 - **Laptop off too long.** At startup the watcher warns (log, email, and a `sync_stale` entry in `pipeline_runs`)
   when the last successful sync is older than `SYNC_WARN_DAYS` (4). Data older than 7 days that was never synced is
-  lost.
+  deleted from Atlas but stays in the S3 archive for 30 days: `npm run restore:nws` brings it back (all forecast runs;
+  alerts only from the 3-hourly archived slots, so alerts that started and ended between two slots stay lost).
 
 ## Security
 
@@ -94,6 +100,9 @@ whole pipeline to the cloud (too big for the free tiers). The free-tier constrai
 - **Atlas access.** A database user with `readWrite` on the `weather` database only. Network access is `0.0.0.0/0`
   because Lambda and GitHub runners have changing IPs; TLS is always on with `mongodb+srv://`.
 - **Logs.** 7-day retention on `/aws/lambda/weather-pipeline-nws-collector`.
+- **Restore reads.** The runtime user may only write to the archive bucket, so `restore:nws` reads it with the deploy
+  profile (`AWS_DEPLOY_PROFILE`, `~/.aws`), as `aws:deploy` does: it only lists and gets objects. It never writes to AWS.
+  Source names are checked against `^[a-z0-9-]+$` before they become an S3 prefix.
 
 ## Numbers
 
@@ -105,6 +114,7 @@ whole pipeline to the cloud (too big for the free tiers). The free-tier constrai
 | Atlas buffer ~370 MB with indexes of the 512 MB free (72%), ~48 MB a day | [ROADMAP.md](../ROADMAP.md), free-tier table |
 | S3 archive cap: 16 PUTs a day (8 alerts slots + 8 forecast runs) | `infra/template.yaml` (`RAW_ARCHIVE_MAX_PUTS_PER_DAY`) |
 | GitHub Actions cron on the first night: 5 of ~7 forecast runs and 4 of ~20 alert runs happened | [DESIGN_DECISIONS.md](../DESIGN_DECISIONS.md), decision 2 |
+| Restore of the 2026-10-06 03:07 → 10-07 09:23 gap: 11 forecast runs → 59,431 forecast documents, 11 alert slots → 184 alerts; ~18% of alert ids are only seen between slots | [ROADMAP.md](../ROADMAP.md), Known limitations |
 
 ## Where in the code
 
@@ -118,6 +128,8 @@ whole pipeline to the cloud (too big for the free tiers). The free-tier constrai
 | HTTP retry, rate limit, User-Agent | `src/lib/http.js` |
 | Collections, unique keys, TTL indexes | `src/collections.js` |
 | Atlas → local copy, stale-sync warning | `src/stage1/atlasSync.js` |
-| S3 archive copy | `src/adapters/rawStore/s3RawArchive.js` |
+| S3 archive copy, and its read methods for restores | `src/adapters/rawStore/s3RawArchive.js` |
+| Restore from the archive (insert-only) | `src/stage1/nwsRestore.js`, `scripts/restoreNws.js` |
+| Archive reader with the deploy profile | `src/adapters/rawStore/archiveReader.js` |
 | Function, role, schedules, log group | `infra/template.yaml` (`NwsCollector*`) |
 | Manual fallback workflows | `.github/workflows/nws-forecasts.yml`, `.github/workflows/nws-alerts.yml` |

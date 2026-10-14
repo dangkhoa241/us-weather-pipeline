@@ -10,6 +10,7 @@ import { backfillOpenMeteoRuns } from "./openMeteoBackfill.js";
 import { backfillBestMatchBaseline } from "./openMeteoBaseline.js";
 import { fetchAlerts } from "./nwsAlerts.js";
 import { syncFromAtlas } from "./atlasSync.js";
+import { fillForecastGaps } from "./openMeteoGapFill.js";
 
 export async function loadLocations(store, locationIds) {
   const filter = locationIds ? { id: { $in: locationIds } } : {};
@@ -30,6 +31,7 @@ export const JOBS = {
   "om-baseline": (store, locations, run, opts) => backfillBestMatchBaseline(store, locations, run, { days: opts.days }),
   alerts: (store, locations, run, opts) => fetchAlerts(store, locations, run, opts.notifier, opts.publicAlerts),
   "sync-atlas": (store, locations, run) => syncFromAtlas(store, run),
+  "om-gap-fill": (store, locations, run, opts) => fillForecastGaps(store, locations, run, { range: opts.range, dryRun: opts.dryRun, validate: opts.validate }),
 };
 
 /** Run one mode with its own run log; returns the run summary. */
