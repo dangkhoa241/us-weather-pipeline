@@ -14,7 +14,8 @@ function useCities() {
 
 function Field({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
   return (
-    <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+    // min-w-0 + max-w-full: a field never pushes the page wider than a phone screen.
+    <label className="flex min-w-0 max-w-full flex-col gap-1 text-xs font-medium text-muted-foreground">
       {label}
       {children}
     </label>
@@ -48,14 +49,16 @@ export function FilterBar({ fields = ALL }: { fields?: FilterField[] }) {
       </Field>}
 
       {show("period") && <Field label="Period">
-        <ToggleGroup type="single" variant="outline" size="sm" value={f.period} aria-label="Period"
+        {/* flex-wrap: on a phone the buttons continue on a second line instead of widening the page. */}
+        <ToggleGroup type="single" variant="outline" size="sm" value={f.period} aria-label="Period" className="max-w-full flex-wrap"
           onValueChange={(v) => v && f.setFilters({ period: v as Period })}>
           {Object.entries(PERIODS).map(([value, label]) => <ToggleGroupItem key={value} value={value}>{label}</ToggleGroupItem>)}
         </ToggleGroup>
       </Field>}
 
       {show("range") && <Field label="Date range">
-        <div className="flex items-center gap-2">
+        {/* Wraps on a phone instead of widening the page; one line on wider screens. */}
+        <div className="flex flex-wrap items-center gap-2">
           <Select value={f.preset} onValueChange={(v) => f.setFilters(v === "custom" ? { preset: "custom", ...range } : { preset: v as Preset })}>
             <SelectTrigger className="w-40" aria-label="Date range preset"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -113,7 +116,7 @@ export function FilterBar({ fields = ALL }: { fields?: FilterField[] }) {
       </Field>}
 
       {show("lead") && <Field label={<Term k="Lead day" />}>
-        <ToggleGroup type="single" variant="outline" size="sm" value={f.lead} aria-label="Lead day"
+        <ToggleGroup type="single" variant="outline" size="sm" value={f.lead} aria-label="Lead day" className="max-w-full flex-wrap"
           onValueChange={(v) => v && f.setFilters({ lead: v })}>
           {["1", "2", "3", "4", "5", "6", "7"].map((d) => <ToggleGroupItem key={d} value={d} aria-label={`${d} day${d === "1" ? "" : "s"} ahead`}>{d}</ToggleGroupItem>)}
         </ToggleGroup>

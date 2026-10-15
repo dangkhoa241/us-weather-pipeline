@@ -212,6 +212,28 @@ try {
   check("no /api requests (static demo)", apiCalls.length === 0, apiCalls.slice(0, 2).join(" "));
   check("no page errors", errors.length === 0, errors.slice(0, 2).join(" | "));
   const notFound = await fetch(`${base}data/../../vercel.json`).then((r) => r.status);
+  // Phone width: no page may scroll sideways at 360 px (the narrowest common phone). Replay is opened with Open-Meteo
+  // blocked, so it shows the bundled sample and the check stays deterministic.
+  {
+    const phone = await browser.newPage({ viewport: { width: 360, height: 800 } });
+    await blockLive(phone);
+    await phone.route((url) => /open-meteo\.com$/.test(url.hostname), (route) => route.abort());
+    const wide = [];
+    for (const [name, path] of [["Overview", ""], ["City", "?city=stockton-ca&year=2025"], ["Accuracy", "accuracy"], ["Forecast", "forecast?city=stockton-ca"],
+      ["Replay", "?city=stockton-ca&year=2025&month=09"], ["Ops", "ops"], ["How it works", "how-it-works"]]) {
+      await phone.goto(`${base}${path}`, { waitUntil: "load" });
+      await phone.waitForTimeout(1200);
+      if (name === "Replay") {
+        await phone.getByRole("button", { name: "Replay forecasts" }).click();
+        await phone.waitForTimeout(1200);
+      }
+      const width = await phone.evaluate(() => document.documentElement.scrollWidth);
+      if (width > 360) wide.push(`${name} ${width}px`);
+    }
+    check("phone 360 px: no page scrolls sideways", wide.length === 0, wide.join(", ") || "7 pages fit");
+    await phone.close();
+  }
+
   check("no path traversal out of dist", notFound !== 200 || !(await fetch(`${base}data/../../vercel.json`).then((r) => r.text())).includes("buildCommand"), notFound);
 } finally {
   await browser.close();

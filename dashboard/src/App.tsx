@@ -18,7 +18,8 @@ export default function App() {
   return (
     <div className="mx-auto flex min-h-screen max-w-7xl flex-col gap-5 p-4 sm:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+        {/* Wraps on a narrow phone: the data badge moves under the title instead of widening the page. */}
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
           <h1 className="text-xl font-semibold">US Weather Pipeline</h1>
           <DataBadge />
         </div>
