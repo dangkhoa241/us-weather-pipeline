@@ -69,7 +69,7 @@ data is down.
 |---|---|
 | Snapshot 3,768 KB (665 KB gzipped) for 53 cities × 3.77 years, data through 2026-10-09 | [README.md](../../README.md), "By the numbers" |
 | ~0.5 MB gzipped per visit; Vercel Hobby allows 100 GB a month (≈ 200,000 visits) | [DEPLOY_VERCEL.md](../DEPLOY_VERCEL.md), [ROADMAP.md](../ROADMAP.md) free-tier table |
-| 26 checks on the demo build, 0 CSP violations | [ROADMAP.md](../ROADMAP.md), "Resume numbers" |
+| 27 checks on the demo build (one: no page scrolls sideways at 360 px), 0 CSP violations | [ROADMAP.md](../ROADMAP.md), "Resume numbers" |
 | Map +47 KB gzipped; drill-down chart +10 KB | [DESIGN_DECISIONS.md](../DESIGN_DECISIONS.md), decision 7 |
 | Live fetch timeout 4 s | `dashboard/src/lib/snapshot.ts` (`LIVE_TIMEOUT_MS`) |
 

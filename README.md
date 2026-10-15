@@ -251,7 +251,7 @@ is in [docs/analysis/live-dashboard.md](docs/analysis/live-dashboard.md).
 | Rows loaded (as of 2026-10-09) | **1.75 M** hourly observations (53 cities, full history from 2023-01-01), **3.42 M** forecast snapshots |
 | Cache, warm p95 | **35.4 → 2.9 ms** (12× faster); cold p95 62.2 → 32.3 ms |
 | API | ~1,600 req/s, p95 12.7 ms, 0 errors; 22/22 security probe checks |
-| Tests | **468** Vitest tests (269 backend + 199 dashboard) and 26 checks on the demo build |
+| Tests | **468** Vitest tests (269 backend + 199 dashboard) and 27 checks on the demo build (one at phone width) |
 | Demo snapshot | 3,768 KB (665 KB gzipped) for 53 cities × 3.77 years (2023-01-01 to 2026-10-09) |
 | Compare & review | **5** features × 3 implementations (15 design branches on GitHub) |
 | AWS Lambda | 256 MB; alerts run ~8 s, forecast run ~88 s (106 NWS requests, ~9,000 rows, 168 MB peak); ~960 runs / month ≈ 2% of the free GB-s |
