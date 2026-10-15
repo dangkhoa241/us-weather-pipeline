@@ -4,7 +4,7 @@
 // → hover "ECMWF" so its glossary tooltip shows for ~2 s. The replay is live from Open-Meteo (2 requests).
 // Served at localhost:4173, an origin the CloudFront CORS policy allows, so the header shows "Live · history through …".
 // Fails on any CSP violation, or when:
-// - opening frame: the header badge isn't "Live · history through …" (CloudFront data) or the overview isn't "All US · 53 cities";
+// - opening frame: the header badge isn't "Live · history through …" (CloudFront data) or the overview isn't "All US · <every tracked city> cities";
 // - final frame: the replay's source label isn't "Live …" (with data) or the ECMWF tooltip isn't open. The header badge
 //   has scrolled out of view by then, so the final frame doesn't need it.
 // Usage: npm run build:snapshot && node scripts/recordDemo.mjs [--screenshots]   (writes docs/images/demo.gif)
@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import ffmpeg from "ffmpeg-static";
 import { chromium } from "playwright";
+import { CITIES } from "../../src/locations/cities.js";
 
 const ROOT = new URL("../..", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1");
 const IMAGES = join(ROOT, "docs", "images");
@@ -55,7 +56,7 @@ try {
     subject: await page.locator("[data-kpi-subject]").textContent(),
   };
   if (!/^Live · /.test(opening.badge ?? "")) throw new Error(`opening frame: no live dashboard data (badge "${opening.badge}", CloudFront ${JSON.stringify(liveData)})`);
-  if (!/^All US · 53 cities$/.test(opening.subject ?? "")) throw new Error(`opening frame: overview shows "${opening.subject}", not all 53 cities`);
+  if (opening.subject !== `All US · ${CITIES.length} cities`) throw new Error(`opening frame: overview shows "${opening.subject}", not all ${CITIES.length} cities`);
   await wait(1500);                                                   // All US KPIs
 
   await scroll(page, 420);                                            // the map + states table

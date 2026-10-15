@@ -25,7 +25,8 @@ function StatesTable({ rows, valueLabel, hovered, zoomed, onHover, onZoom }: {
   const columns = useMemo(() => [
     column.accessor("state", { header: "State" }),
     column.accessor("region", { header: "Region" }),
-    column.accessor("cities", { header: "Cities" }),
+    // A state's value is the mean of its cities: say how many when there is more than one ("4 cities").
+    column.accessor("cities", { header: "Cities", cell: (c) => (c.getValue() > 1 ? `${c.getValue()} cities` : c.getValue()) }),
     column.accessor("value", { header: valueLabel, cell: (c) => fmt(c.getValue()), sortUndefined: "last" }),
   ], [valueLabel]);
   const table = useReactTable({

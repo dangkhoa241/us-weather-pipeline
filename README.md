@@ -1,9 +1,9 @@
 # US Weather Pipeline
 
-**Which weather model forecasts the US best? An end-to-end data pipeline and dashboard that collects forecasts from 5 models, scores them against what actually happened, and explains 3 years of weather for 53 US cities, on a $0 budget.**
+**Which weather model forecasts the US best? An end-to-end data pipeline and dashboard that collects forecasts from 5 models, scores them against what actually happened, and explains 3 years of weather for 55 US cities, on a $0 budget.**
 
 [![CI](https://github.com/dangkhoa241/us-weather-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/dangkhoa241/us-weather-pipeline/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-468%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-480%20passing-brightgreen)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Live app](https://img.shields.io/badge/live%20app-vercel-black?logo=vercel)](https://us-weather-pipeline.vercel.app)
 
@@ -46,14 +46,14 @@ built 3 implementations, and I compared them with measured numbers before mergin
 
 All 10 decisions, with the alternatives, trade-offs and the source of every number:
 [docs/DESIGN_DECISIONS.md](docs/DESIGN_DECISIONS.md). Product choices (city drill-down, linked map and state table, twin
-charts, period filters, one city per state) are under [Features](#features).
+charts, period filters, the largest city in each state, plus DC, Stockton, Miami, San Francisco and San Jose) are under [Features](#features).
 
 ## Features
 
 | | |
 |---|---|
-| ![Overview: US map with 53 city dots and the linked, sortable state table](docs/images/readme-overview.png) | ![City drill-down in dark mode: twin temperature and rain charts with synced crosshair](docs/images/readme-city-dark.png) |
-| **Overview:** a map with 53 city dots and a linked, sortable state table, below All US KPIs compared with the previous period. | **City history (dark mode):** years → months → days, twin charts with a synced crosshair, and PNG/CSV download. |
+| ![Overview: US map with 55 city dots and the linked, sortable state table](docs/images/readme-overview.png) | ![City drill-down in dark mode: twin temperature and rain charts with synced crosshair](docs/images/readme-city-dark.png) |
+| **Overview:** a map with 55 city dots and a linked, sortable state table, below All US KPIs compared with the previous period. | **City history (dark mode):** years → months → days, twin charts with a synced crosshair, and PNG/CSV download. |
 | ![Forecast accuracy leaderboard and charts](docs/images/readme-accuracy.png) | ![Forecast page in dark mode: 7-day cards, 48-hour charts, model spread](docs/images/readme-forecast-dark.png) |
 | **Accuracy:** the leaderboard by lead day, error vs lead time, bias by month, the best model per state and the biggest misses. | **Forecast:** 7-day NWS cards, the next 48 hours, a "Models disagree?" spread chart and active NWS alerts. |
 
@@ -247,12 +247,12 @@ is in [docs/analysis/live-dashboard.md](docs/analysis/live-dashboard.md).
 
 | | |
 |---|---|
-| Cities | **53** (the largest city in each state, plus DC and Stockton) |
+| Cities | **55** (the largest city in each state, plus DC, Stockton, Miami, San Francisco and San Jose) |
 | Rows loaded (as of 2026-10-09) | **1.75 M** hourly observations (53 cities, full history from 2023-01-01), **3.42 M** forecast snapshots |
 | Cache, warm p95 | **35.4 → 2.9 ms** (12× faster); cold p95 62.2 → 32.3 ms |
 | API | ~1,600 req/s, p95 12.7 ms, 0 errors; 22/22 security probe checks |
-| Tests | **468** Vitest tests (269 backend + 199 dashboard) and 27 checks on the demo build (one at phone width) |
-| Demo snapshot | 3,768 KB (665 KB gzipped) for 53 cities × 3.77 years (2023-01-01 to 2026-10-09) |
+| Tests | **480** Vitest tests (269 backend + 211 dashboard) and 28 checks on the demo build (phone width, map labels) |
+| Demo snapshot | 3,877 KB (680 KB gzipped) for 55 cities × 3.78 years (2023-01-01 to 2026-10-10) |
 | Compare & review | **5** features × 3 implementations (15 design branches on GitHub) |
 | AWS Lambda | 256 MB; alerts run ~8 s, forecast run ~88 s (106 NWS requests, ~9,000 rows, 168 MB peak); ~960 runs / month ≈ 2% of the free GB-s |
 | AWS S3 | ~1,410 PUTs / month expected (~71% of 2,000; ≤ 82% by hard caps); ~175 MB stored with 30-day expiry (3.5% of 5 GB) |
@@ -322,7 +322,7 @@ Requirements: Node.js 18+ and Docker Desktop.
 npm install && (cd dashboard && npm install)
 cp .env.example .env              # set NWS_USER_AGENT to your contact
 docker compose up -d              # MongoDB, ClickHouse, Redis + fetcher (collects on a schedule)
-npm run seed:locations            # 53 cities + NWS grid points
+npm run seed:locations            # 55 cities + NWS grid points
 
 npm run fetch                     # Stage 1: APIs → MongoDB
 npm run etl:clickhouse            # Stage 2: MongoDB → ClickHouse

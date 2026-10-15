@@ -1,6 +1,7 @@
 // src/locations/cities.js
 // Cities tracked by the pipeline. `npm run seed:locations` loads them into the `locations` collection
-// and resolves each one's NWS grid point. The largest city of every state, plus Washington DC, Stockton and Miami (53).
+// and resolves each one's NWS grid point. The largest city in each state, plus DC, Stockton, Miami, San Francisco and
+// San Jose (55).
 
 // US Census regions.
 const REGIONS = {
@@ -39,6 +40,8 @@ const CITY_ROWS = [
   ["Las Vegas", "NV", 36.1699, -115.1398, "America/Los_Angeles"],
   ["Los Angeles", "CA", 34.0522, -118.2437, "America/Los_Angeles"],
   ["Stockton", "CA", 37.9577, -121.2908, "America/Los_Angeles"],
+  ["San Francisco", "CA", 37.7749, -122.4194, "America/Los_Angeles"],   // added 2026-10-15 (Bay Area)
+  ["San Jose", "CA", 37.3382, -121.8863, "America/Los_Angeles"],
   ["Seattle", "WA", 47.6062, -122.3321, "America/Los_Angeles"],
   ["Anchorage", "AK", 61.2181, -149.9003, "America/Anchorage"],
   ["Honolulu", "HI", 21.3069, -157.8583, "Pacific/Honolulu"],

@@ -8,7 +8,7 @@ import { DEFAULTS, useFilters } from "@/store/filters";
 vi.mock("@/lib/api", () => ({
   api: {
     map: async () => ({ data: [
-      { state: "CA", region: "West", cities: 1, temp_avg_c: 24.6, temp_max_c: 40, precip_mm_per_city: 1.2 },
+      { state: "CA", region: "West", cities: 4, temp_avg_c: 24.6, temp_max_c: 40, precip_mm_per_city: 1.2 },
       { state: "TX", region: "South", cities: 1, temp_avg_c: 29.3, temp_max_c: 41, precip_mm_per_city: 0 },
     ] }),
     locations: async () => ({ data: [
@@ -34,6 +34,15 @@ describe("MapPanel: map and table are linked", () => {
     await user.unhover(row);
     await user.hover(screen.getByRole("button", { name: /^California:/ }));
     expect(container.querySelector('[data-row-state="CA"]')?.className).toContain("bg-muted");
+  });
+
+  it("the table says how many cities a state's value is the mean of, when there are several", async () => {
+    renderPanel();
+    const ca = await screen.findByRole("row", { name: /^CA West/ });
+    expect(ca).toHaveTextContent("4 cities");
+    const tx = screen.getByRole("row", { name: /^TX South/ });
+    expect(tx).not.toHaveTextContent("cities");
+    expect(tx.querySelectorAll("td")[2]).toHaveTextContent(/^1$/);
   });
 
   it("clicking a row zooms the map like clicking the state", async () => {

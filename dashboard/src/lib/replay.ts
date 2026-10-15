@@ -29,7 +29,7 @@ const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 export type ReplayCity = { id: string; name: string; state: string; lat: number; lon: number; timezone: string };
 // cities.js is plain JS (rows typed loosely by inference); each row has exactly these fields.
 const CITY_BY_ID = new Map((CITIES as unknown as ReplayCity[]).map((c) => [c.id, c]));
-/** One of the 53 tracked cities, or null (a Map lookup: ids like "__proto__" find nothing). */
+/** One of the 55 tracked cities, or null (a Map lookup: ids like "__proto__" find nothing). */
 export const replayCity = (id: string) => CITY_BY_ID.get(id) ?? null;
 
 /** Days that can be replayed: from FIRST_REPLAY_DAY to today (UTC) − REPLAY_LAG_DAYS. */

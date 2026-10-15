@@ -14,7 +14,7 @@ Bring raw weather data into one local MongoDB raw store, from which every later 
 
 - Free APIs only, inside their free limits: Open-Meteo is free for non-commercial use with weighted per-minute,
   per-hour and per-day limits; NWS has no published quota but needs a `User-Agent` with a contact.
-- Loop over the `locations` collection (53 cities); nothing is tied to one city.
+- Loop over the `locations` collection (55 cities); nothing is tied to one city.
 - Idempotent writes: every collection has a natural unique key, and re-running a fetch updates instead of
   duplicating.
 - Missing measurements stay `null`, never `0`. Times are stored in UTC.
@@ -89,7 +89,7 @@ Bring raw weather data into one local MongoDB raw store, from which every later 
 
 | Number | Source |
 |---|---|
-| 53 cities | [README.md](../../README.md), "By the numbers" |
+| 55 cities | [README.md](../../README.md), "By the numbers" |
 | Open-Meteo use ~2,400 weighted calls a day (24% of the free 10,000); our caps 2,000 / hour and 6,000 / day | [ROADMAP.md](../ROADMAP.md), free-tier table |
 | Local Docker disk ~32 MB a day (≈ 12 GB a year), mostly forecast snapshots | [ROADMAP.md](../ROADMAP.md), free-tier table |
 | 1.75 M hourly observations and 3.42 M forecast snapshots loaded (as of 2026-10-09) | [README.md](../../README.md), "By the numbers" |

@@ -12,6 +12,7 @@ import { STATE_BY_FIPS } from "@/lib/states";
 import { Term } from "@/components/Term";
 import { fmt } from "@/lib/units";
 import { metricLabel, stateValue, type MapProps } from "./types";
+import { crowdedDots, labelSides } from "@/lib/mapLabels";
 
 const W = 975;
 const H = 610;
@@ -23,6 +24,12 @@ const path = geoPath(projection);
 const statePaths = states.map((f) => ({ f, code: STATE_BY_FIPS[String(f.id)], d: path(f) ?? "" }));
 const borders = path(mesh(topology, topology.objects.states, (a, b) => a !== b)) ?? "";   // shared state lines
 const outline = path(mesh(topology, topology.objects.states, (a, b) => a === b)) ?? "";   // the US outline
+
+/** City dots in unzoomed viewBox units (cities outside the projection, none today, are left out). */
+const projectedPoints = (locations: MapProps["locations"]) => locations.flatMap((c) => {
+  const p = projection([c.lon, c.lat]);
+  return p ? [{ id: c.id, name: c.name, x: p[0], y: p[1] }] : [];
+});
 
 /** Transform that fits a state's projected bounds into the view (with padding). */
 function zoomTo(f: Feature | undefined) {
@@ -62,6 +69,13 @@ export function UsMap({ states: rows, locations, metric, unit, selectedLocation,
   const label = metricLabel(metric, unit);
   const valueUnit = metric === "precip_mm" ? "mm" : `°${unit}`;
   const cityCount = locations.filter((l) => l.state === selectedState).length;
+  const citiesIn = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const l of locations) counts.set(l.state, (counts.get(l.state) ?? 0) + 1);
+    return counts;
+  }, [locations]);
+  /** ", mean of 4 cities" for a state with several tracked cities (its value is their mean). */
+  const meanOf = (code: string) => ((citiesIn.get(code) ?? 0) > 1 ? `, mean of ${citiesIn.get(code)} cities` : "");
 
   const [counties, setCounties] = useState<Counties>([]);
   useEffect(() => {
@@ -82,6 +96,18 @@ export function UsMap({ states: rows, locations, metric, unit, selectedLocation,
 
   const dots = locations.map((c) => ({ c, p: projection([c.lon, c.lat]) })).filter((d) => d.p != null);
   const r = 1 / t.k;   // one screen pixel in map units
+  // US zoom: dots whose click areas overlap (Bay Area, New York/Newark, …) zoom to their state on click instead of
+  // picking a city that may not be the one meant. Keyboard focus is per dot, so Enter still selects that city.
+  const points = useMemo(() => projectedPoints(locations), [locations]);
+  const crowded = useMemo(() => crowdedDots(points), [points]);
+  // State zoom: a label goes left of its dot when the right side would cover another dot or label.
+  const zoomK = t.k;
+  const sides = useMemo(() => {
+    if (!selectedState) return new Map<string, "left" | "right">();
+    const all = points.map((d) => ({ ...d, x: d.x * zoomK, y: d.y * zoomK }));
+    const inState = new Set(locations.filter((l) => l.state === selectedState).map((l) => l.id));
+    return labelSides(all.filter((d) => inState.has(d.id)), all);
+  }, [points, locations, selectedState, zoomK]);
 
   return (
     <div data-map data-map-level={selectedState ? "state" : "us"} role="group" aria-label={`US map: ${label}`} className="flex flex-col gap-2">
@@ -108,8 +134,9 @@ export function UsMap({ states: rows, locations, metric, unit, selectedLocation,
             const row = byState.get(code);
             const name = String(f.properties?.name ?? code);
             const override = stateFill?.get(code);
-            const text = stateFill ? `${name}: ${override?.label ?? "no data"}`
-              : `${name}: ${value == null ? "no data" : `${fmt(value)} ${valueUnit}`}${row ? `, ${row.cities} tracked ${row.cities === 1 ? "city" : "cities"}` : ""}`;
+            const text = stateFill ? `${name}: ${override?.label ?? "no data"}${meanOf(code)}`
+              : `${name}: ${value == null ? "no data" : `${fmt(value)} ${valueUnit}`}${(citiesIn.get(code) ?? 0) > 1 ? meanOf(code)
+                : row ? `, ${row.cities} tracked ${row.cities === 1 ? "city" : "cities"}` : ""}`;
             const click = () => (onStateClick ? onStateClick(code) : setZoom(code));
             return (
               <path key={code} d={d} data-state={code} data-hover={hovered === code || undefined}
@@ -138,12 +165,15 @@ export function UsMap({ states: rows, locations, metric, unit, selectedLocation,
             const loading = value == null;
             const selected = c.id === selectedLocation;
             const color = colorFor(value, range, palette);
-            const tip = `${c.name}, ${c.state}: ${loading ? "Data loading" : `${fmt(value)} ${valueUnit}`}`;
+            const zoomFirst = !selectedState && !onStateClick && crowded.has(c.id);
+            const tip = `${c.name}, ${c.state}: ${loading ? "Data loading" : `${fmt(value)} ${valueUnit}`}${zoomFirst ? " (click to zoom in)" : ""}`;
             return (
               <g key={c.id} data-location={c.id} data-loading={loading || undefined} transform={`translate(${p![0]},${p![1]})`}
                 tabIndex={inView ? 0 : -1} role="button" aria-hidden={inView ? undefined : true}
                 aria-label={`Select ${c.name}, ${c.state}${loading ? ": data loading" : `: ${fmt(value)} ${valueUnit}`}`} aria-pressed={selected}
-                className="cursor-pointer outline-none" onClick={() => onSelectLocation(c.id)} onKeyDown={activate(() => onSelectLocation(c.id))}>
+                data-crowded={zoomFirst || undefined}
+                className="cursor-pointer outline-none" onClick={() => (zoomFirst ? setZoom(c.state) : onSelectLocation(c.id))}
+                onKeyDown={activate(() => onSelectLocation(c.id))}>
                 <title>{tip}</title>
                 {loading ? (
                   <circle r={3 * r} fill="none" strokeWidth={1.4 * r} style={{ stroke: "var(--muted-foreground)" }} opacity={0.8} />
@@ -156,7 +186,8 @@ export function UsMap({ states: rows, locations, metric, unit, selectedLocation,
                 )}
                 {selected && <circle r={10 * r} fill="none" strokeWidth={2 * r} style={{ stroke: "var(--foreground)" }} />}
                 {selectedState && c.state === selectedState && (
-                  <text x={12 * r} y={4 * r} fontSize={13 * r} fontWeight={selected ? 700 : 500} paintOrder="stroke" strokeWidth={3.5 * r}
+                  <text x={(sides.get(c.id) === "left" ? -12 : 12) * r} y={4 * r} textAnchor={sides.get(c.id) === "left" ? "end" : "start"}
+                    data-label-side={sides.get(c.id) ?? "right"} fontSize={13 * r} fontWeight={selected ? 700 : 500} paintOrder="stroke" strokeWidth={3.5 * r}
                     style={{ stroke: "var(--card)", fill: "var(--foreground)" }}>{c.name}</text>
                 )}
               </g>

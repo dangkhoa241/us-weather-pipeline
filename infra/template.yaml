@@ -415,7 +415,7 @@ Resources:
       Runtime: nodejs22.x
       Architectures: [arm64]
       MemorySize: 256
-      Timeout: 240             # ~53 history + 53 forecast Open-Meteo requests at ≥ 250 ms each, plus Atlas reads
+      Timeout: 240             # ~55 history + 55 forecast Open-Meteo requests at ≥ 250 ms each, plus Atlas reads
       Role: !GetAtt DashboardPublisherRole.Arn
       LoggingConfig:
         LogGroup: !Ref DashboardPublisherLogGroup

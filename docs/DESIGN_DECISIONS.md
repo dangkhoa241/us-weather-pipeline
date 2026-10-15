@@ -182,6 +182,6 @@ with evidence:
 - twin temperature and rain charts;
 - charts only after a city is clicked;
 - the period filters;
-- one city per state.
+- the largest city in each state, plus DC, Stockton, Miami, San Francisco and San Jose.
 
 They are listed in the README's Features section.

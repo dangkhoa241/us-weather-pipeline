@@ -101,7 +101,7 @@ describe("ForecastReplayPanel", () => {
     expect(f).not.toHaveBeenCalled();
   });
 
-  it("refuses a location that isn't one of the 53 cities without calling the network", () => {
+  it("refuses a location that isn't one of the 55 cities without calling the network", () => {
     const f = openMeteoFetch();
     vi.stubGlobal("fetch", f);
     render(panel(client(), { city: "all", cityName: "All US" }));
