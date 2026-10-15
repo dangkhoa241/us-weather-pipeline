@@ -7,7 +7,7 @@
 //   4. export:snapshot         dashboard/public/data/<snapshot>/ + manifest.json (from the API)
 //   5. export:status           dashboard/public/data/status.json (from Atlas)
 //   6. build:snapshot          the static demo build
-//   7. check:demo              the 27 demo-build checks
+//   7. check:demo              the 28 demo-build checks
 // At the end it prints the new "data as of" dates. It never commits or pushes: review the diff, then commit.
 // Usage: npm run refresh:snapshot
 

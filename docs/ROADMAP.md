@@ -24,7 +24,7 @@ Approved free stack:
 
 ### Free-tier limits of services in use (checked 2026-09-29)
 
-| Service | Free limit | When exceeded | Card? | Our use: 53 cities (current) | Note |
+| Service | Free limit | When exceeded | Card? | Our use: 55 cities (current) | Note |
 |---|---|---|---|---|---|
 | NWS API | No published quota; needs a `User-Agent` with contact | Temporary block (403/429) | No | ~106 forecast req / 3 h (~40 s), 1 alerts req / h | fine |
 | Open-Meteo | Non-commercial only. 600 / min, 5,000 / hour, 10,000 / day *weighted* calls (a request counts extra per 10 variables and per 14 days) | 429 until the window resets | No | ~2,400 / day steady (24%: ~1,100 history/backfill/baseline + ~1,270 om-forecast every 6 h); our cap 2,000 / h and 6,000 / day, backfill ≤ 75% of it | catch-up below |
@@ -86,7 +86,7 @@ Cost follow-ups:
 - National Weather Service (`api.weather.gov`): 7-day + hourly forecasts, active alerts. No key; requires a `User-Agent` header.
 - Open-Meteo: archive API for history (last ~5 days are null or model-filled → skip them); forecast API for multi-model snapshots.
 
-**Scope:** 53 US cities: the largest city of every state, Washington DC, Stockton (CA) and Miami (FL). A `locations` collection/table
+**Scope:** 55 US cities: the largest city in each state, plus DC, Stockton, Miami, San Francisco and San Jose. A `locations` collection/table
 (`id, name, state, region, lat, lon, timezone, nws_office, grid_x, grid_y`; `timezone` is IANA, e.g. `America/Los_Angeles`); region is Northeast / Midwest / South / West. Every stage loops over it.
 
 ---
@@ -101,6 +101,10 @@ Cost follow-ups:
       (legacy `etlToClickHouse.js`, `clickhouseToRedis.js`, `backend/config/clickhouse.js` still do until Stages 2–4 rewrite them)
 - [x] Seed `locations` with 20 test cities
 - [x] Expand `locations` to 53 cities (largest per state + DC + Stockton + Miami)
+- [x] Bay Area (2026-10-15): San Francisco and San Jose added (55 cities); history backfilled from 2023-01-01
+      (2 × 33,096 hourly rows, 256 weighted calls) and the 90-day best_match baseline; state values stay the mean of
+      their cities ("mean of 4 cities" in the state tooltip, "4 cities" in the state table); at US zoom a click on
+      overlapping dots zooms to the state; at state zoom a label goes left of its dot when the right side is taken
 
 ## Known bugs
 
@@ -129,9 +133,9 @@ Cost follow-ups:
 - City drill-down chart (3 implementations compared): hand-rolled d3-scale/d3-shape SVG adds 10 KB gzipped (vs 17 KB
   ECharts, 108 KB Recharts), first render 185 ms, every month/day a keyboard-focusable button; drill state in the URL.
   Method: `docs/analysis/drilldown-chart.md`.
-- Static demo (as of 2026-10-09): 3,768 KB snapshot (665 KB gzipped): daily data for all 53 cities from 2023-01-01 to 2026-10-09, no gaps
+- Static demo (as of 2026-10-10): 3,877 KB snapshot (680 KB gzipped): daily data for all 55 cities from 2023-01-01 to 2026-10-10, no gaps
   (monthly values derived in the browser), forecasts, NWS periods/alerts and accuracy details; live recent history,
-  forecasts and alerts from CloudFront; 27/27 demo checks (incl. no sideways scroll at 360 px), 0 CSP violations under a strict policy.
+  forecasts and alerts from CloudFront; 28/28 demo checks (incl. no sideways scroll at 360 px, no overlapping map labels), 0 CSP violations under a strict policy.
 - Forecast accuracy (as of 2026-10-09, refreshed 2026-10-14: last 90 days, 2026-07-12 to 2026-10-09, 33–36 scored
   days, ~70,000 pairs per model (62,000 HRRR), 53 cities, lead day 1): ECMWF 2.02°F average error, ICON 2.21°F, HRRR
   2.86°F, GFS 2.97°F; the best-match baseline 2.45°F. Error grows ~0.30°F per extra lead day (mean of (day-6 MAE − day-1 MAE) / 5 for ECMWF, ICON and GFS;
@@ -140,7 +144,7 @@ Cost follow-ups:
 - AWS (Free plan, $0): NWS collection on Lambda + EventBridge (~960 runs / month, ~2% of the free GB-s; forecast run
   106 requests → ~9,000 rows in ~88 s at 168 MB), SNS alerts, 30-day S3 archive (~33% of free PUTs, ≤ 40% by hard caps);
   one SAM stack, permissions boundary on every role, removed by `npm run aws:teardown`.
-- Tests: 468 Vitest tests (269 backend + 199 dashboard), no Docker needed, run in GitHub Actions CI; 27 automated checks on the static demo build.
+- Tests: 480 Vitest tests (269 backend + 211 dashboard), no Docker needed, run in GitHub Actions CI; 28 automated checks on the static demo build.
 
 ## Weekly refresh (at least every 7 days)
 
@@ -235,6 +239,11 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
   with different attributes"): the user sees "check your inbox" but gets no email (logged as `subscribe_failed`).
   Re-signing up within 24 h is also silently skipped by the per-email cooldown (`email_cooldown`). Both are by design of
   the generic answer; for testing, use a `+alias` address.
+- California's map, table and accuracy-map value is the mean of its 4 cities (LA, Stockton, San Francisco, San Jose),
+  so it leans to Northern California; other states with several cities (FL) work the same way.
+- San Francisco and San Jose (added 2026-10-15): model accuracy builds up from the Single Runs backfill (+2,880 runs on
+  the backlog), so their city accuracy shows "not enough data" for at least 30 days; NWS forecasts for them start
+  only after both are seeded in Atlas (the collector Lambda reads its cities from Atlas).
 - Ops page: the publisher's run count covers only the runs since its run records started (first record 2026-10-14
   00:35 UTC, deployed 2026-10-13), so it shows fewer than 7 days of runs until the 2026-10-21 00:35 UTC run.
 - Ops page: the alert-email counts start at the first alerts run after deploy ("Not recorded yet" before), and
@@ -286,7 +295,7 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
 - Observed history lags ~5 days (archive), so accuracy for the most recent days fills in later.
 - Rollups include partial days (e.g. the last archive day); the `hours` column tells complete days apart.
 - Forecast accuracy covers temperature on hourly forecasts only (NWS 12-hour periods and precipitation skill not yet).
-- `forecast_accuracy` is a plain view computed at query time; fine at 53 cities, may need materializing if it slows down.
+- `forecast_accuracy` is a plain view computed at query time; fine at 55 cities, may need materializing if it slows down.
 - `cityForecast` still shows the first day's live `icon_seamless` and `best_match` snapshots as extra "models".
 - The popular (pre-warmed) and benchmark queries use fixed dates; they should become relative ("last 7 days") in Stage 4.
 - Cache hit/miss counters are cumulative (never reset); per-day counters can come with the Pipeline Ops page.
@@ -584,7 +593,7 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       parent run with steps in `pipeline_runs`, failures sent to the Notifier
 - [x] Heat-wave alerts + pipeline-failure alerts via Notifier (SNS, Stage 6a)
 - [ ] Docker Compose: add API service (Wed)
-- [x] Unit tests: Vitest, 468 tests (269 backend + 199 dashboard; `npm test`, `npm run test:dashboard`)
+- [x] Unit tests: Vitest, 480 tests (269 backend + 211 dashboard; `npm test`, `npm run test:dashboard`)
 - [ ] Testcontainers integration tests (Sat) *(cut first if short on time)*
 - [x] GitHub Actions CI (`.github/workflows/ci.yml`)
 - [x] README with Mermaid architecture diagrams (data flow + AWS)

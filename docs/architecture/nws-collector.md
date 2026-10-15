@@ -11,7 +11,7 @@ buffer, and the local stack copies the buffer home with `sync-atlas`.
 
 ## Requirements
 
-- Run on time: alerts every hour, forecasts every 3 hours, for all 53 tracked cities.
+- Run on time: alerts every hour, forecasts every 3 hours, for all 55 tracked cities.
 - Keep running while the laptop is off: up to 7 days with no action (the Atlas buffer), up to 30 days with a restore
   from the S3 raw archive.
 - Stay inside the AWS Free plan and the Atlas M0 free tier (512 MB), with no VPC and so no NAT Gateway.

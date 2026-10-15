@@ -122,8 +122,9 @@ cluster (SSM parameter, [SETUP_AWS.md](SETUP_AWS.md) step 10) or the stack is to
 - **Laptop off for more than 7 days.** Atlas deletes documents after 7 days, so unsynced NWS data is lost. After
   4 days without a successful sync, the watcher logs a warning, emails it through the notifier and records a
   `sync_stale` entry in `pipeline_runs`.
-- **Atlas storage.** M0 has 512 MB. With 53 cities, NWS adds ~48 MB a day (9,010 snapshots of ~660 bytes per run,
-  8 runs), so 7 days are ~335 MB of data, ~370 MB with indexes and alerts. If **Data Size** passes ~430 MB, lower the
+- **Atlas storage.** M0 has 512 MB. With 55 cities, NWS adds ~50 MB a day (~9,350 snapshots of ~660 bytes per run,
+  8 runs), so 7 days are ~350 MB of data, ~385 MB with indexes and alerts (estimate scaled from 53 cities; measured
+  2026-10-15 with 53: 252 MB). If **Data Size** passes ~430 MB, lower the
   retention to 5 days: `RAW_RETENTION_DAYS: "5"` in `infra/template.yaml` (collector Lambda) and in both workflow
   files, and `SYNC_WARN_DAYS=3` locally.
 - **Workflows disabled after 60 days.** GitHub disables scheduled workflows in public repositories after 60 days
