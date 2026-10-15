@@ -131,7 +131,7 @@ Cost follow-ups:
   Method: `docs/analysis/drilldown-chart.md`.
 - Static demo (as of 2026-10-09): 3,768 KB snapshot (665 KB gzipped): daily data for all 53 cities from 2023-01-01 to 2026-10-09, no gaps
   (monthly values derived in the browser), forecasts, NWS periods/alerts and accuracy details; live recent history,
-  forecasts and alerts from CloudFront; 26/26 demo checks, 0 CSP violations under a strict policy.
+  forecasts and alerts from CloudFront; 27/27 demo checks (incl. no sideways scroll at 360 px), 0 CSP violations under a strict policy.
 - Forecast accuracy (as of 2026-10-09, refreshed 2026-10-14: last 90 days, 2026-07-12 to 2026-10-09, 33–36 scored
   days, ~70,000 pairs per model (62,000 HRRR), 53 cities, lead day 1): ECMWF 2.02°F average error, ICON 2.21°F, HRRR
   2.86°F, GFS 2.97°F; the best-match baseline 2.45°F. Error grows ~0.30°F per extra lead day (mean of (day-6 MAE − day-1 MAE) / 5 for ECMWF, ICON and GFS;
@@ -140,7 +140,7 @@ Cost follow-ups:
 - AWS (Free plan, $0): NWS collection on Lambda + EventBridge (~960 runs / month, ~2% of the free GB-s; forecast run
   106 requests → ~9,000 rows in ~88 s at 168 MB), SNS alerts, 30-day S3 archive (~33% of free PUTs, ≤ 40% by hard caps);
   one SAM stack, permissions boundary on every role, removed by `npm run aws:teardown`.
-- Tests: 468 Vitest tests (269 backend + 199 dashboard), no Docker needed, run in GitHub Actions CI; 26 automated checks on the static demo build.
+- Tests: 468 Vitest tests (269 backend + 199 dashboard), no Docker needed, run in GitHub Actions CI; 27 automated checks on the static demo build.
 
 ## Weekly refresh (at least every 7 days)
 
@@ -235,6 +235,8 @@ Accepted for now (personal project: good enough beats perfect). Revisit only if 
   with different attributes"): the user sees "check your inbox" but gets no email (logged as `subscribe_failed`).
   Re-signing up within 24 h is also silently skipped by the per-email cooldown (`email_cooldown`). Both are by design of
   the generic answer; for testing, use a `+alias` address.
+- Ops page: the publisher's run count covers only the runs since its run records started (first record 2026-10-14
+  00:35 UTC, deployed 2026-10-13), so it shows fewer than 7 days of runs until the 2026-10-21 00:35 UTC run.
 - Ops page: the alert-email counts start at the first alerts run after deploy ("Not recorded yet" before), and
   the publisher card shows its previous completed run (status.json is written before its own run record finishes).
   A Lambda killed by its timeout leaves its run as "running"; after 30 min the page counts it as failed ("timeout").
@@ -571,6 +573,10 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       DEPLOY_VERCEL.md reorganized as rebuild guides (Objective … Troubleshooting; step numbers kept), out-of-date facts
       fixed. New root test checks each doc's sections and code paths and every relative link and anchor in docs/.
       48 new tests (42 backend + 6 dashboard)
+- [x] Phone layout (2026-10-15, health check): the filter bar (date range row, Period and Lead day buttons) and the
+      header's data badge now wrap at phone width; before, Overview, City, Accuracy and Replay scrolled sideways at
+      390 px (500 px wide). Desktop layout unchanged (same geometry at 768–1440 px). New `check:demo` check: no page
+      scrolls sideways at 360 px. `shadcn` (a CLI) moved to devDependencies: dashboard `npm audit --omit=dev` 6 high → 0
 
 ## Cross-cutting
 
