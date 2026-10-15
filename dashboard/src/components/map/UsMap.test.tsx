@@ -67,7 +67,7 @@ describe("UsMap (d3-geo)", () => {
   it("renders every state as a labelled button with its value in display units", () => {
     renderMap();
     expect(screen.getAllByRole("button").length).toBeGreaterThanOrEqual(50);
-    expect(screen.getByRole("button", { name: "California: 76.3 °F, 2 tracked cities" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "California: 76.3 °F, mean of 2 cities" })).toBeInTheDocument();   // several cities: their mean
     expect(screen.getByRole("button", { name: /^Nevada: no data$/ })).toBeInTheDocument();   // missing data is not 0
   });
 
@@ -91,5 +91,50 @@ describe("UsMap (d3-geo)", () => {
     expect(onSelect).toHaveBeenCalledWith("los-angeles-ca");
     await user.click(screen.getByRole("button", { name: "← United States" }));
     expect(screen.getByRole("group", { name: /US map/ })).toHaveAttribute("data-map-level", "us");
+  });
+
+  describe("Bay Area: crowded dots and label sides", () => {
+    const bay: LocationRow[] = [
+      ...locations,
+      { id: "san-francisco-ca", name: "San Francisco", state: "CA", region: "West", lat: 37.7749, lon: -122.4194, timezone: "America/Los_Angeles" },
+      { id: "san-jose-ca", name: "San Jose", state: "CA", region: "West", lat: 37.3382, lon: -121.8863, timezone: "America/Los_Angeles" },
+    ];
+    const renderBay = (onSelectLocation = vi.fn()) => render(<UsMap states={states} locations={bay} metric="temp_c" unit="F" selectedLocation=""
+      onSelectLocation={onSelectLocation} />);
+
+    it("a click on an overlapping dot at US zoom zooms to the state instead of picking a city", async () => {
+      const user = userEvent.setup();
+      const onSelect = vi.fn();
+      const { container } = renderBay(onSelect);
+      const sf = container.querySelector('[data-location="san-francisco-ca"]')!;
+      expect(sf).toHaveAttribute("data-crowded", "true");
+      expect(container.querySelector('[data-location="los-angeles-ca"]')).not.toHaveAttribute("data-crowded");
+      expect(sf.querySelector("title")?.textContent).toMatch(/\(click to zoom in\)$/);
+      await user.click(sf);
+      expect(onSelect).not.toHaveBeenCalled();
+      expect(container.querySelector("[data-map]")).toHaveAttribute("data-map-level", "state");
+      await user.click(container.querySelector('[data-location="san-francisco-ca"]')!);   // zoomed in: the click selects
+      expect(onSelect).toHaveBeenCalledWith("san-francisco-ca");
+    });
+
+    it("keyboard Enter on an overlapping dot still selects that city (focus is per dot)", async () => {
+      const user = userEvent.setup();
+      const onSelect = vi.fn();
+      const { container } = renderBay(onSelect);
+      (container.querySelector('[data-location="san-jose-ca"]') as SVGElement).focus();
+      await user.keyboard("{Enter}");
+      expect(onSelect).toHaveBeenCalledWith("san-jose-ca");
+    });
+
+    it("at state zoom, San Francisco's label goes left so it doesn't run through Stockton", async () => {
+      const user = userEvent.setup();
+      const { container } = renderBay();
+      await user.click(screen.getByRole("button", { name: /^California:/ }));
+      const side = (id: string) => container.querySelector(`[data-location="${id}"] text`)?.getAttribute("data-label-side");
+      expect(side("san-francisco-ca")).toBe("left");
+      expect(container.querySelector('[data-location="san-francisco-ca"] text')).toHaveAttribute("text-anchor", "end");
+      expect(side("stockton-ca")).toBe("right");
+      expect(side("los-angeles-ca")).toBe("right");
+    });
   });
 });

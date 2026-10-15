@@ -10,7 +10,7 @@ const DAY = "2026-09-20";
 const stockton = replayCity("stockton-ca")!;
 
 describe("input validation", () => {
-  it("accepts one of the 53 cities and a day inside the range", () => {
+  it("accepts one of the 55 cities and a day inside the range", () => {
     expect(replayRange(NOW)).toEqual({ from: "2024-03-01", to: "2026-09-28" });
     expect(checkReplayInput("stockton-ca", "2026-09-28", NOW).timezone).toBe("America/Los_Angeles");
   });

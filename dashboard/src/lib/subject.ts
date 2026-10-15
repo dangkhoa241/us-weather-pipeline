@@ -1,4 +1,4 @@
-// What the KPIs and the trend describe: "All US · 53 cities" (US-wide average) or "Stockton, CA".
+// What the KPIs and the trend describe: "All US · 55 cities" (US-wide average) or "Stockton, CA".
 import { useQuery } from "@tanstack/react-query";
 import { api, type StatsRow } from "@/lib/api";
 import { ALL_US, useFilters } from "@/store/filters";

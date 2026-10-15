@@ -39,7 +39,7 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(import.meta.dirname, "src"),
       // API schemas shared with the backend (src/api/schemas.js): one definition for validation and types.
       "@shared": path.resolve(import.meta.dirname, "../src/api"),
-      // The 53 tracked cities (id, lat, lon, IANA zone): the forecast replay validates against them.
+      // The 55 tracked cities (id, lat, lon, IANA zone): the forecast replay validates against them.
       "@cities": path.resolve(import.meta.dirname, "../src/locations/cities.js"),
       // NWS alert categories + the disclaimer, shared with the collector and the sign-up Lambda.
       "@alerts": path.resolve(import.meta.dirname, "../src/stage1/alertCategories.js"),

@@ -11,6 +11,7 @@ import { extname, join, normalize } from "node:path";
 import { chromium } from "playwright";
 import { insideDir } from "./insideDir.mjs";
 import { MAX_GAP_DAYS, historyProblems } from "../../src/publish/snapshotFormat.js";
+import { CITIES } from "../../src/locations/cities.js";
 
 const DIST = new URL("../dist/", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1");
 const vercel = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
@@ -91,7 +92,7 @@ try {
   const dotsWithData = await page.waitForFunction(() => document.querySelectorAll("[data-map] [data-location]:not([data-loading])").length >= 10, null, { timeout: 15_000 })
     .then(() => true).catch(() => false);
   const dots = await page.locator("[data-map] [data-location]").count();
-  check("53 city dots, most with values", dots === 53 && dotsWithData, `${dots} dots`);
+  check(`${CITIES.length} city dots (every tracked city), most with values`, dots === CITIES.length && dotsWithData, `${dots} dots`);
 
   await shot(page, "dashboard-demo.png", { fullPage: true });
 
@@ -232,6 +233,33 @@ try {
     }
     check("phone 360 px: no page scrolls sideways", wide.length === 0, wide.join(", ") || "7 pages fit");
     await phone.close();
+  }
+
+  // State zoom: in every state with several cities, no city label overlaps another label or another city's dot
+  // (San Francisco's label goes left of its dot, away from Stockton).
+  {
+    const multi = [...new Set(CITIES.map((c) => c.state))].filter((st) => CITIES.filter((c) => c.state === st).length > 1);
+    const clashes = [];
+    for (const st of multi) {
+      await page.goto(base, { waitUntil: "load" });
+      await page.waitForFunction(() => performance.getEntriesByName("map-ready").length > 0);
+      await page.locator(`[data-map] [data-state="${st}"]`).focus();
+      await page.keyboard.press("Enter");
+      await page.waitForTimeout(800);   // zoom transition 450 ms
+      clashes.push(...await page.evaluate((state) => {
+        const box = (el) => el.getBoundingClientRect();
+        const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+        const labels = [...document.querySelectorAll("[data-map] [data-location] text")].map((t) => ({ id: t.parentElement.dataset.location, r: box(t) }));
+        const dots = [...document.querySelectorAll("[data-map] [data-location]")].map((g) => ({ id: g.dataset.location, r: box(g.querySelector("circle:last-of-type") ?? g) }));
+        const out = [];
+        for (const [i, a] of labels.entries()) {
+          for (const b of labels.slice(i + 1)) if (hit(a.r, b.r)) out.push(`${state}: labels ${a.id} / ${b.id}`);
+          for (const d of dots) if (d.id !== a.id && hit(a.r, d.r)) out.push(`${state}: label ${a.id} over dot ${d.id}`);
+        }
+        return out;
+      }, st));
+    }
+    check("state zoom: no city label overlaps a label or dot", clashes.length === 0, clashes.join("; ") || `${multi.join(", ")} checked`);
   }
 
   check("no path traversal out of dist", notFound !== 200 || !(await fetch(`${base}data/../../vercel.json`).then((r) => r.text())).includes("buildCommand"), notFound);

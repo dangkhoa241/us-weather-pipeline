@@ -29,7 +29,7 @@ const nodes = {
     id: "nws", label: "NWS API", sub: "forecasts + alerts", where: "external",
     what: "The US National Weather Service: official 7-day forecasts and active alerts for the tracked cities.",
     why: "Free and official, no API key (only a User-Agent with a contact).",
-    number: { value: "53 cities", source: "README.md" },
+    number: { value: "55 cities", source: "README.md" },
     doc: "docs/architecture/nws-collector.md",
   },
   openmeteo: {

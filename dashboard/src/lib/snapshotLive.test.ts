@@ -24,6 +24,12 @@ function mockFetch(live: Responses) {
   const bundled: Responses = {
     "/data/manifest.json": manifest,
     [`/data/${BUNDLED}/daily-chicago-il.json`]: daily("chicago-il", [10, 11, 12]),
+    [`/data/${BUNDLED}/daily-houston-tx.json`]: daily("houston-tx", [20, 21, 22]),
+    [`/data/${BUNDLED}/locations.json`]: [
+      { id: "chicago-il", name: "Chicago", state: "IL", region: "Midwest", lat: 41.88, lon: -87.63, timezone: "America/Chicago" },
+      { id: "houston-tx", name: "Houston", state: "TX", region: "South", lat: 29.76, lon: -95.37, timezone: "America/Chicago" },
+    ],
+    [`/data/${BUNDLED}/forecasts.json`]: {},
     [`/data/${BUNDLED}/alerts.json`]: bundledAlerts,
     [`/data/${BUNDLED}/accuracy.json`]: accuracy,
   };
@@ -100,5 +106,33 @@ describe("live data with bundled fallback", () => {
     await mod.initSnapshot();
     expect(mod.dataSource()?.kind).toBe("snapshot");
     expect(fetch.mock.calls.every(([url]) => !String(url).startsWith("https://"))).toBe(true);
+  });
+
+  it("ignores live data for cities the build doesn't know, and falls back for a known city the live file lacks", async () => {
+    // The publisher reads its cities from Atlas, so a live file can list a city before the bundled snapshot has it
+    // (san-jose-ca here), or lack a bundled one (houston-tx here).
+    const cityColumns = (avg: number[]) => ({ temp: { min: avg, max: avg, avg, n: [24, 24, 24] }, precip: { sum: [0, 0, 0], n: [24, 24, 24] } });
+    const liveRecent = { ...recent, cities: { "chicago-il": cityColumns([5, 6, 7]), "san-jose-ca": cityColumns([30, 31, 32]) } };
+    const hours = [[0, 18, 0, 10]];
+    const liveForecasts = {
+      format: 1, generated_at: "2026-10-02T09:35:00Z", periods: { "san-jose-ca": [] },
+      forecasts: {
+        "chicago-il": { nws: { issued_at: "2026-10-02 09:00:00", start: "2026-10-02 10:00:00", hours } },
+        "san-jose-ca": { nws: { issued_at: "2026-10-02 09:30:00", start: "2026-10-02 10:00:00", hours } },
+      },
+    };
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { dataSource, snapshotApi } = await load({ "recent.json": liveRecent, "forecasts.json": liveForecasts });
+
+    expect(dataSource()?.kind).toBe("live");
+    expect((await snapshotApi.locations()).data.map((l) => l.id)).toEqual(["chicago-il", "houston-tx"]);
+    const map = await snapshotApi.map({ from: "2026-09-24", to: "2026-09-28" });
+    expect(map.data.map((r) => r.state).sort()).toEqual(["IL", "TX"]);   // no row for the unknown city's state
+    const stats = (id: string) => snapshotApi.stats({ locations: id, metric: "temp_c", period: "day", from: "2026-09-24", to: "2026-09-28" });
+    expect((await stats("chicago-il")).data.map((r) => r.avg)).toEqual([10, 11, 5, 6, 7]);   // live laid over bundled
+    expect((await stats("houston-tx")).data.map((r) => r.avg)).toEqual([20, 21, 22]);         // not in the live file: bundled only
+    expect((await snapshotApi.forecast("chicago-il")).data).toHaveLength(1);
+    expect(errors).not.toHaveBeenCalled();
+    errors.mockRestore();
   });
 });
