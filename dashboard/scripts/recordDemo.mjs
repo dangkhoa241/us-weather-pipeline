@@ -1,15 +1,15 @@
 // Record the README demo GIF from the live site (and, with --screenshots, the readme-*.png screenshots); with --how,
 // record how-it-works.gif for posts instead. Free tools only: Playwright + ffmpeg-static.
-// Smoothness: frames come from the Chrome screencast (real timestamps, ~30 fps) and ffmpeg resamples them to a constant
-// 20 fps GIF with palettegen/paletteuse. Every page is visited once in the recording tab before capture (query cache and
+// Smoothness: frames come from the Chrome screencast (real timestamps, ~30 fps) and ffmpeg resamples them to a
+// constant-fps GIF with palettegen/paletteuse. Every page is visited once in the recording tab before capture (query cache and
 // lazy chunks loaded), so no loading state is recorded. The cursor is drawn by the page (headless capture has none) and
 // glides with easing. Every clip starts at the top of the page with the header and nav visible.
 // Tour → docs/images/demo.gif (1280x840 viewport, scaled to 960 px wide or narrower, see below): header + KPIs → US map → California → San Francisco history →
 //   Forecast → "Get alerts" dialog (one alert type ticked, never submitted) → Accuracy leaderboard → Ops.
 // How it works → how-it-works.gif (1280x960 → 960x720): the whole diagram (all three lanes), two node panels, AWS view.
 // Fails on any CSP violation, a POST outside the Turnstile widget (the sign-up form must never be sent), a header badge
-// that isn't "Live · …", an overview that isn't "All US · <every tracked city> cities", or a tour outside 14–21 s.
-// GIFs stay under 5 MB: narrower first (960 → 880 → 800 px), then fewer fps (18, 15).
+// that isn't "Live · …", an overview that isn't "All US · <every tracked city> cities", or a tour outside 25–31 s.
+// GIFs stay under 5 MB. Tour: 15 fps at 800 px (fails if bigger). How it works: 20 fps, narrower first (960 → 880 → 800 px), then fewer fps (18, 15).
 // Usage: node scripts/recordDemo.mjs [--screenshots]          (writes docs/images/demo.gif)
 //        node scripts/recordDemo.mjs --how [--out <dir>]     (writes <dir>/how-it-works.gif, default ~/Desktop/linkedin-media)
 
@@ -108,8 +108,8 @@ async function startCapture(context, page, dir) {
   };
 }
 
-function toGif(list, out) {
-  for (const [fps, width] of [[20, 960], [20, 880], [20, 800], [18, 800], [15, 800]]) {
+function toGif(list, out, steps) {
+  for (const [fps, width] of steps) {
     const vf = `fps=${fps},scale=${width}:-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=none:diff_mode=rectangle`;
     const res = spawnSync(ffmpeg, ["-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", list, "-vf", vf, "-loop", "0", out], { stdio: "inherit" });
     if (res.status !== 0) throw new Error("ffmpeg failed");
@@ -168,10 +168,10 @@ try {
     await wait(1900);
   } else {
     // ---- tour: header + KPIs → map → California → San Francisco → Forecast + alerts → Accuracy → Ops --------------------
-    await wait(1000);                                                   // header, filters and All US KPI cards
+    await wait(1800);                                                   // header, filters and All US KPI cards
     const mapCard = await page.locator("[data-map]").evaluate((e) => e.closest('[data-slot="card"]')?.getBoundingClientRect().top ?? e.getBoundingClientRect().top - 120);
     await d.scroll(Math.round(mapCard - 16), 800);                     // the whole map card, 55 city dots
-    await wait(700);
+    await wait(1500);
     const ca = page.locator('[data-map] [data-state="CA"]');
     const b = await ca.boundingBox();
     const pt = { x: b.x + b.width * 0.42, y: b.y + b.height * 0.42 };   // Central Valley, inside the shape
@@ -179,42 +179,42 @@ try {
     if (await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('[data-state="CA"]'), pt)) { await page.mouse.down(); await wait(90); await page.mouse.up(); }
     else { await ca.focus(); await page.keyboard.press("Enter"); }
     await page.waitForFunction(() => document.querySelector("[data-map]")?.getAttribute("data-map-level") === "state", null, { timeout: 10_000 });
-    await wait(700);
+    await wait(1400);
     await d.click(page.locator('[data-map] [data-location="san-francisco-ca"]'), 650);  // opens its history and scrolls to it
     await page.waitForSelector("[data-drill-panel] [data-chart]", { timeout: 15_000 });
     await wait(900);
     const chart = await page.locator("[data-drill-panel] [data-chart]").first().boundingBox();
     await d.glide(chart.x + chart.width * 0.3, chart.y + chart.height * 0.55, 500);
     await d.glide(chart.x + chart.width * 0.75, chart.y + chart.height * 0.5, 800);   // the tooltip follows the months
-    await wait(300);
+    await wait(1500);
 
     await d.glide(900, 180, 300);
     await d.scroll(0, 600);
     await d.click(nav("Forecast"), 600);                                // keeps San Francisco
     await page.waitForSelector("[data-day]", { timeout: 15_000 });
-    await wait(600);
+    await wait(1500);
     await d.click(page.locator("[data-signup-open]").first(), 550);    // "Get alerts": tick one type, close, never submit
     const dialog = page.locator("dialog[data-signup-dialog][open]");
     await dialog.waitFor({ timeout: 5_000 });
-    await d.park(); await wait(200);
+    await d.park(); await wait(500);
     await d.click(dialog.locator('input[name="category"]:not(:checked)').first(), 500);
-    await wait(800);
+    await wait(1600);
     await d.click(dialog.locator('button[aria-label="Close"]'), 450);
     await dialog.waitFor({ state: "detached", timeout: 5_000 }).catch(() => {});
-    await wait(250);
+    await wait(400);
     const hours = await page.locator("main > *").nth(2).evaluate((e) => e.getBoundingClientRect().bottom + scrollY);
     await d.scroll(Math.max(0, Math.round(hours - page.viewportSize().height + 16)), 500);  // the 48-hour charts in full
-    await wait(600);
+    await wait(1500);
     await d.scroll(0, 450);
 
     await d.click(nav("Accuracy"), 600);
     await page.waitForSelector("[data-leaderboard]", { timeout: 15_000 });
     await d.to(page.locator("[data-leaderboard] tr", { hasText: "ECMWF" }).first(), 600, -200);
-    await wait(1100);
+    await wait(2200);
     await d.click(nav("Ops"), 600);
     await page.waitForSelector("[data-ops-overall]", { timeout: 15_000 });
     await d.glide(900, 460, 500);
-    await wait(1300);                                                   // ends on the Ops status page
+    await wait(2500);                                                   // ends on the Ops status page
   }
 
   const { list, seconds } = await stop();
@@ -222,10 +222,10 @@ try {
   console.log(`[demo] opening: ${JSON.stringify(opening)}; CSP violations: ${csp.length}; POSTs: ${posts.length}`);
   if (csp.length) throw new Error(`CSP violations: ${csp.join("; ")}`);
   if (posts.length) throw new Error(`unexpected POST requests (the sign-up form must never be sent): ${posts.join(", ")}`);
-  if (!HOW && (seconds < 14 || seconds > 21)) throw new Error(`tour is ${seconds.toFixed(1)} s, outside 14–21 s`);
+  if (!HOW && (seconds < 25 || seconds > 31)) throw new Error(`tour is ${seconds.toFixed(1)} s, outside 25–31 s`);
   await context.close();
-  if (HOW) { mkdirSync(HOW_OUT, { recursive: true }); toGif(list, join(HOW_OUT, "how-it-works.gif")); }
-  else toGif(list, join(IMAGES, "demo.gif"));
+  if (HOW) { mkdirSync(HOW_OUT, { recursive: true }); toGif(list, join(HOW_OUT, "how-it-works.gif"), [[20, 960], [20, 880], [20, 800], [18, 800], [15, 800]]); }
+  else toGif(list, join(IMAGES, "demo.gif"), [[15, 800]]);
 
   // ---- README screenshots (light + dark), only with --screenshots ------------------------------------------------------
   if (SCREENSHOTS && !HOW) {
