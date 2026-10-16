@@ -17,18 +17,18 @@ and alerts to S3 behind CloudFront (Part 4). If CloudFront is unreachable, it fa
 
 ## Key finding
 
-> **ECMWF is the most accurate model: 2.0 °F average error one day ahead** (as of 2026-10-09).
+> **ECMWF is the most accurate model: 2.1 °F average error one day ahead** (as of 2026-10-11).
 
 | Model (lead day 1) | Average error | Bias |
 |---|---|---|
-| 🥇 ECMWF | **2.0 °F** | 0.2 °F too warm |
-| 🥈 ICON | 2.2 °F | none |
-| 🥉 HRRR | 2.9 °F | 0.1 °F too cold |
-| GFS | 3.0 °F | 0.9 °F too warm |
+| 🥇 ECMWF | **2.1 °F** | 0.3 °F too warm |
+| 🥈 ICON | 2.2 °F | 0.1 °F too warm |
+| 🥉 HRRR | 2.8 °F | none |
+| GFS | 3.1 °F | 1.0 °F too warm |
 | *Best-match blend (baseline)* | *2.5 °F* | *none* |
-| NWS | not ranked yet | scored on 11 days so far |
+| NWS | not ranked yet | scored on 13 days so far |
 
-As of 2026-10-09: error grows by about 0.30 °F for each extra day of lead time (the mean of (day-6 MAE − day-1 MAE) / 5 for ECMWF, ICON and GFS; source: `dashboard/public/data/snapshot-2026-10-09/accuracy.json`, range 2026-07-12 to 2026-10-09). The scores compare hourly forecasts with observed temperatures: about 70,000 pairs per model (62,000 for HRRR) on 33–36 scored days, from 53 cities, 2026-07-12 to 2026-10-09. A model is ranked only after 30 days of scores. NWS has 11 so far: on the 3,224 city-hours both were scored on, ECMWF missed by 1.58 °F and NWS by 1.94 °F. Method: [How this is measured](#how-accuracy-is-measured).
+As of 2026-10-11: error grows by about 0.30 °F for each extra day of lead time (the mean of (day-6 MAE − day-1 MAE) / 5 for ECMWF, ICON and GFS; source: `dashboard/public/data/snapshot-2026-10-11/accuracy.json`, range 2026-07-14 to 2026-10-11). The scores compare hourly forecasts with observed temperatures: about 86,000 pairs per model (77,000 for HRRR) on 31–34 scored days, from 55 cities, 2026-07-14 to 2026-10-11. A model is ranked only after 30 days of scores. NWS has 13 so far: on the 3,224 city-hours both were scored on, ECMWF missed by 1.58 °F and NWS by 1.94 °F. Method: [How this is measured](#how-accuracy-is-measured).
 
 ## Design decisions
 
@@ -131,7 +131,7 @@ Interactive version, with what each part does and why: [/how-it-works](https://u
 ### Where each page's data comes from
 
 "Live" means the JSON files the publisher Lambda writes to S3 behind CloudFront. "Snapshot" means the files bundled
-with the site, exported from the local stack when I redeploy (now: data through 2026-10-09). Every live file falls
+with the site, exported from the local stack when I redeploy (now: data through 2026-10-11). Every live file falls
 back to its bundled copy if CloudFront can't be reached.
 
 | Page | Data | Updates |
@@ -248,11 +248,11 @@ is in [docs/analysis/live-dashboard.md](docs/analysis/live-dashboard.md).
 | | |
 |---|---|
 | Cities | **55** (the largest city in each state, plus DC, Stockton, Miami, San Francisco and San Jose) |
-| Rows loaded (as of 2026-10-09) | **1.75 M** hourly observations (53 cities, full history from 2023-01-01), **3.42 M** forecast snapshots |
+| Rows loaded (as of 2026-10-11) | **1.82 M** hourly observations (55 cities, full history from 2023-01-01), **4.56 M** forecast snapshots |
 | Cache, warm p95 | **35.4 → 2.9 ms** (12× faster); cold p95 62.2 → 32.3 ms |
 | API | ~1,600 req/s, p95 12.7 ms, 0 errors; 22/22 security probe checks |
 | Tests | **480** Vitest tests (269 backend + 211 dashboard) and 28 checks on the demo build (phone width, map labels) |
-| Demo snapshot | 3,877 KB (680 KB gzipped) for 55 cities × 3.78 years (2023-01-01 to 2026-10-10) |
+| Demo snapshot | 3,925 KB (689 KB gzipped) for 55 cities × 3.78 years (2023-01-01 to 2026-10-11) |
 | Compare & review | **5** features × 3 implementations (15 design branches on GitHub) |
 | AWS Lambda | 256 MB; alerts run ~8 s, forecast run ~88 s (106 NWS requests, ~9,000 rows, 168 MB peak); ~960 runs / month ≈ 2% of the free GB-s |
 | AWS S3 | ~1,410 PUTs / month expected (~71% of 2,000; ≤ 82% by hard caps); ~175 MB stored with 30-day expiry (3.5% of 5 GB) |
@@ -367,7 +367,7 @@ None of these needs a credit card. Every external service has its limits and ove
 
 ## Known limitations
 
-- As of 2026-10-09, model scores cover 33–36 days of the last 90 (the past-runs backfill is still catching up, and the last 30 days have only 7 scored days because the laptop was off). The backfill runs only while the Docker stack is on: about 3–4 weeks of daily running from 2026-10-14 to cover the window. Filling the gaps from Open-Meteo's Previous Runs API was tried and not used, because it failed validation ([previous-runs-validation.md](docs/analysis/previous-runs-validation.md)). NWS has been scored only since 2026-09-29 and joins the ranking after 30 days; the 33 cities added on 2026-10-01 don't have 30 days of model scores yet, so their states are hatched on the accuracy map.
+- As of 2026-10-11, model scores cover 31–34 days of the last 90 (the past-runs backfill is still catching up, and the last 30 days have only 7 scored days because the laptop was off). The backfill runs only while the Docker stack is on: about 3–4 weeks of daily running from 2026-10-14 to cover the window. Filling the gaps from Open-Meteo's Previous Runs API was tried and not used, because it failed validation ([previous-runs-validation.md](docs/analysis/previous-runs-validation.md)). NWS has been scored only since 2026-09-29 and joins the ranking after 30 days; the 33 cities added on 2026-10-01 don't have 30 days of model scores yet, so their states are hatched on the accuracy map.
 - Recent history, forecasts and alerts are live (CloudFront); forecast accuracy comes from the bundled snapshot and exists only for preset ranges, and some accuracy views only for all US over the last 90 days.
 - Collection of Open-Meteo forecasts needs the local Docker stack running. NWS is collected in the cloud.
 

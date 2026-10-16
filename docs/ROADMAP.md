@@ -123,7 +123,7 @@ Cost follow-ups:
 
 - Stage 3 cache (10 dashboard queries, local Docker): warm p95 **35.4 → 2.9 ms** (12× faster), cold p95 **62.2 → 32.3 ms**;
   373 KB of Redis for 20 cities (the fully pre-warmed variant needed 3.2 MB). Method and data: `docs/analysis/caching.md`.
-- Data (as of 2026-10-09): 53 cities × hourly observations from 2023-01-01 (1,752,816 rows), 3,419,895 forecast snapshots in ClickHouse (4 Open-Meteo
+- Data (as of 2026-10-11): 55 cities × hourly observations from 2023-01-01 (1,821,600 rows), 4,555,451 forecast snapshots in ClickHouse (4 Open-Meteo
   models, the best_match baseline and NWS, plus a few legacy gfs_seamless / icon_seamless rows; backfill still running), loaded incrementally into ClickHouse in seconds.
 - API (Hono, 12 dashboard requests, 10 connections): ~1,600 req/s, p95 12.7 ms, 0 errors; 22/22 security checks.
   Compared with Express + Zod and Fastify + JSON Schema: same throughput within noise, Hono lowest memory (~150 MB vs
@@ -133,14 +133,14 @@ Cost follow-ups:
 - City drill-down chart (3 implementations compared): hand-rolled d3-scale/d3-shape SVG adds 10 KB gzipped (vs 17 KB
   ECharts, 108 KB Recharts), first render 185 ms, every month/day a keyboard-focusable button; drill state in the URL.
   Method: `docs/analysis/drilldown-chart.md`.
-- Static demo (as of 2026-10-10): 3,877 KB snapshot (680 KB gzipped): daily data for all 55 cities from 2023-01-01 to 2026-10-10, no gaps
+- Static demo (as of 2026-10-11): 3,925 KB snapshot (689 KB gzipped): daily data for all 55 cities from 2023-01-01 to 2026-10-11, no gaps
   (monthly values derived in the browser), forecasts, NWS periods/alerts and accuracy details; live recent history,
   forecasts and alerts from CloudFront; 28/28 demo checks (incl. no sideways scroll at 360 px, no overlapping map labels), 0 CSP violations under a strict policy.
-- Forecast accuracy (as of 2026-10-09, refreshed 2026-10-14: last 90 days, 2026-07-12 to 2026-10-09, 33–36 scored
-  days, ~70,000 pairs per model (62,000 HRRR), 53 cities, lead day 1): ECMWF 2.02°F average error, ICON 2.21°F, HRRR
-  2.86°F, GFS 2.97°F; the best-match baseline 2.45°F. Error grows ~0.30°F per extra lead day (mean of (day-6 MAE − day-1 MAE) / 5 for ECMWF, ICON and GFS;
-  source: `dashboard/public/data/snapshot-2026-10-09/accuracy.json`, range 2026-07-12 to 2026-10-09). NWS not ranked yet
-  (11 days); head-to-head on 3,224 city-hours: ECMWF 1.58°F vs NWS 1.94°F.
+- Forecast accuracy (as of 2026-10-11, refreshed 2026-10-16: last 90 days, 2026-07-14 to 2026-10-11, 31–34 scored
+  days, ~86,000 pairs per model (77,000 HRRR), 55 cities, lead day 1): ECMWF 2.09°F average error, ICON 2.21°F, HRRR
+  2.84°F, GFS 3.08°F; the best-match baseline 2.48°F. Error grows ~0.30°F per extra lead day (mean of (day-6 MAE − day-1 MAE) / 5 for ECMWF, ICON and GFS;
+  source: `dashboard/public/data/snapshot-2026-10-11/accuracy.json`, range 2026-07-14 to 2026-10-11). NWS not ranked yet
+  (13 days, 2.03°F on its own days); head-to-head on 3,224 city-hours: ECMWF 1.58°F vs NWS 1.94°F.
 - AWS (Free plan, $0): NWS collection on Lambda + EventBridge (~960 runs / month, ~2% of the free GB-s; forecast run
   106 requests → ~9,000 rows in ~88 s at 168 MB), SNS alerts, 30-day S3 archive (~33% of free PUTs, ≤ 40% by hard caps);
   one SAM stack, permissions boundary on every role, removed by `npm run aws:teardown`.
