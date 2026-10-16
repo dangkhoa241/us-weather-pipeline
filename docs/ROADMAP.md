@@ -463,8 +463,9 @@ caching, loading/error states), TanStack Table (tables), Zustand (filter state, 
       map (best model per state / one model's error), bias by month, biggest misses, "how this is measured"
 - [x] "All US" default (US-wide averages; `/stats?locations=all`), no default city
 - [x] README with demo GIF (`npm run demo:gif`: Playwright + ffmpeg-static), architecture, numbers, compare & review summary; MIT license; CI workflow
-  - 2026-10-15: README GIF replaced by a smoother 20 fps tour of the live site (map → California → San Francisco → Accuracy, 2.6 MB);
-    `npm run demo:gif` still records the older 8 fps replay story and would overwrite it.
+  - 2026-10-15: `npm run demo:gif` (dashboard/) records a 20 fps tour of the live site into docs/images/demo.gif (header + KPIs →
+    map → California → San Francisco → Forecast → Get alerts dialog, never submitted → Accuracy → Ops); `npm run demo:how` records
+    how-it-works.gif (whole diagram, two panels, AWS view) for posts. ffmpeg-static needs its binary: `node node_modules/ffmpeg-static/install.js`.
 - [ ] Statistics page
 
 **More pages (Sat)**

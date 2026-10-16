@@ -13,7 +13,7 @@ The live app updates itself from AWS (badge "Live · history through …"; the F
 and alerts to S3 behind CloudFront (Part 4). If CloudFront is unreachable, it falls back to the bundled snapshot
 ("Snapshot · history through …").
 
-![Demo: US map with 55 cities → zoom into California → San Francisco history charts → Accuracy leaderboard (ECMWF first)](docs/images/demo.gif)
+![Demo: header and KPI cards → US map with 55 cities → zoom into California → San Francisco history charts → Forecast → Get alerts dialog → Accuracy leaderboard (ECMWF first) → Ops status](docs/images/demo.gif)
 
 ## Key finding
 

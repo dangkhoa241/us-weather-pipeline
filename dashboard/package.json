@@ -14,7 +14,8 @@
     "bundle:size": "node scripts/bundleSize.mjs",
     "build:snapshot": "tsc -b && vite build --mode snapshot",
     "check:demo": "node scripts/checkDemoBuild.mjs",
-    "demo:gif": "node scripts/recordDemo.mjs"
+    "demo:gif": "node scripts/recordDemo.mjs",
+    "demo:how": "node scripts/recordDemo.mjs --how"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
